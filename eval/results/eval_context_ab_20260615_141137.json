@@ -1,0 +1,497 @@
+{
+  "mode": "context_ab",
+  "top_k": 5,
+  "num_queries": 10,
+  "num_total_queries": 10,
+  "baseline": {
+    "name": "hybrid_retriever_raw_query",
+    "aggregated": {
+      "hit_rate": 0.5,
+      "mrr": 0.37,
+      "precision": 0.19,
+      "recall": 0.4166666666666667
+    }
+  },
+  "context_layer": {
+    "name": "hybrid_retriever_openviking_context_query",
+    "aggregated": {
+      "hit_rate": 0.5,
+      "mrr": 0.35333333333333333,
+      "precision": 0.15166666666666667,
+      "recall": 0.31666666666666665
+    }
+  },
+  "delta": {
+    "hit_rate": 0.0,
+    "mrr": -0.016667,
+    "precision": -0.038333,
+    "recall": -0.1
+  },
+  "context_routing": {
+    "resource_hit_rate": 0.7,
+    "skill_hit_rate": 0.8333333333333334,
+    "avg_context_hits": 1.5,
+    "avg_viking_prompt_chars": 408.0,
+    "avg_context_query_chars": 271.0,
+    "resource_eval_count": 10,
+    "skill_eval_count": 6
+  },
+  "details": [
+    {
+      "question": "我在公司干了三年，老板突然说不续签合同了，我能拿到补偿吗？",
+      "corpus_status": "in_corpus",
+      "baseline_query": "我在公司干了三年，老板突然说不续签合同了，我能拿到补偿吗？",
+      "context_query": "原始问题：我在公司干了三年，老板突然说不续签合同了，我能拿到补偿吗？\n\nOpenViking 上下文目录提示：\n- viking://skills/legal/contract_review_checklist/ | 合同审查清单：主体、标的、价款、履行、违约、解除、争议解决。 | 流程：按主体资格、核心义务、付款节点、验收标准、违约责任、解除条件、管辖和补充材料逐项审查，并输出风险等级和修改建议。\n- viking://resources/laws/civil_code/contract/ | 民法典合同编资源入口，覆盖租赁、借款、买卖、违约责任和押金争议。 | 用于定位合同和租赁争议。重点检查合同约定、履行情况、违约事实、证据材料、损失计算和解除/返还请求。",
+      "expected_resource_uris": [
+        "viking://resources/laws/labor/"
+      ],
+      "expected_skill_uris": [
+        "viking://skills/legal/labor_arbitration_workflow/"
+      ],
+      "viking_context_hits": [
+        {
+          "context_type": "skill",
+          "uri": "viking://skills/legal/contract_review_checklist/",
+          "layer": "L0/L1",
+          "score": 0.6,
+          "abstract": "合同审查清单：主体、标的、价款、履行、违约、解除、争议解决。"
+        },
+        {
+          "context_type": "resource",
+          "uri": "viking://resources/laws/civil_code/contract/",
+          "layer": "L0/L1",
+          "score": 0.57,
+          "abstract": "民法典合同编资源入口，覆盖租赁、借款、买卖、违约责任和押金争议。"
+        }
+      ],
+      "baseline_retrieved_ids": [
+        "劳动法_第二十八条",
+        "劳动合同法_第五十条",
+        "劳动合同法_第九十七条",
+        "民法典_第五百八十三条",
+        "劳动法_第二十三条"
+      ],
+      "context_retrieved_ids": [
+        "劳动合同法_第四十六条",
+        "劳动合同法_第五十条",
+        "合同法_历史版本_第一百零七条",
+        "民法典_第五百六十三条",
+        "民法典_第五百六十六条"
+      ],
+      "baseline_hit": false,
+      "context_hit": true,
+      "baseline_reciprocal_rank": 0.0,
+      "context_reciprocal_rank": 1.0,
+      "baseline_precision": 0.0,
+      "context_precision": 0.2,
+      "baseline_recall": 0.0,
+      "context_recall": 0.5,
+      "resource_hit": false,
+      "skill_hit": false
+    },
+    {
+      "question": "租的房子到期了房东不退押金，说墙上有钉子眼要扣钱，合理吗？",
+      "corpus_status": "in_corpus",
+      "baseline_query": "租的房子到期了房东不退押金，说墙上有钉子眼要扣钱，合理吗？",
+      "context_query": "原始问题：租的房子到期了房东不退押金，说墙上有钉子眼要扣钱，合理吗？\n\nOpenViking 上下文目录提示：\n- viking://skills/legal/deposit_dispute_workflow/ | 押金退还纠纷流程：确认合同、交接、损坏和证据，再给维权路径。 | 流程：1. 确认租赁合同和押金条款；2. 确认退租交接、房屋损坏和扣款理由；3. 收集转账记录、聊天记录、照片视频、交接单；4. 判断协商、投诉、起诉路径。\n- viking://resources/laws/civil_code/contract/ | 民法典合同编资源入口，覆盖租赁、借款、买卖、违约责任和押金争议。 | 用于定位合同和租赁争议。重点检查合同约定、履行情况、违约事实、证据材料、损失计算和解除/返还请求。",
+      "expected_resource_uris": [
+        "viking://resources/laws/civil_code/contract/"
+      ],
+      "expected_skill_uris": [
+        "viking://skills/legal/deposit_dispute_workflow/"
+      ],
+      "viking_context_hits": [
+        {
+          "context_type": "skill",
+          "uri": "viking://skills/legal/deposit_dispute_workflow/",
+          "layer": "L0/L1",
+          "score": 0.7,
+          "abstract": "押金退还纠纷流程：确认合同、交接、损坏和证据，再给维权路径。"
+        },
+        {
+          "context_type": "resource",
+          "uri": "viking://resources/laws/civil_code/contract/",
+          "layer": "L0/L1",
+          "score": 0.66,
+          "abstract": "民法典合同编资源入口，覆盖租赁、借款、买卖、违约责任和押金争议。"
+        }
+      ],
+      "baseline_retrieved_ids": [
+        "民法典_第七百五十九条",
+        "民法典_第七百五十八条"
+      ],
+      "context_retrieved_ids": [
+        "民法典_第七百五十八条",
+        "合同法_历史版本_第二百四十八条",
+        "民法典_第七百五十二条",
+        "民法典_第七百三十四条",
+        "海商法_第一百四十九条"
+      ],
+      "baseline_hit": false,
+      "context_hit": false,
+      "baseline_reciprocal_rank": 0.0,
+      "context_reciprocal_rank": 0.0,
+      "baseline_precision": 0.0,
+      "context_precision": 0.0,
+      "baseline_recall": 0.0,
+      "context_recall": 0.0,
+      "resource_hit": true,
+      "skill_hit": true
+    },
+    {
+      "question": "网上买的衣服不喜欢，商家说打折商品不能退，这对吗？",
+      "corpus_status": "in_corpus",
+      "baseline_query": "网上买的衣服不喜欢，商家说打折商品不能退，这对吗？",
+      "context_query": "原始问题：网上买的衣服不喜欢，商家说打折商品不能退，这对吗？\n\nOpenViking 上下文目录提示：\n- viking://resources/laws/consumer_protection/ | 消费者权益保护资源入口，覆盖退换货、虚假宣传、食品安全和平台交易纠纷。 | 用于定位消费纠纷。重点确认交易凭证、商品或服务问题、沟通记录、平台规则和损失范围。",
+      "expected_resource_uris": [
+        "viking://resources/laws/consumer_protection/"
+      ],
+      "expected_skill_uris": [],
+      "viking_context_hits": [
+        {
+          "context_type": "resource",
+          "uri": "viking://resources/laws/consumer_protection/",
+          "layer": "L0/L1",
+          "score": 0.51,
+          "abstract": "消费者权益保护资源入口，覆盖退换货、虚假宣传、食品安全和平台交易纠纷。"
+        }
+      ],
+      "baseline_retrieved_ids": [
+        "消费者权益保护法_第五十四条",
+        "消费者权益保护法_第二十五条"
+      ],
+      "context_retrieved_ids": [
+        "消费者权益保护法_第四十四条",
+        "消费者权益保护法_第四十五条",
+        "消费者权益保护法_第五十四条",
+        "消费者权益保护法_第十三条",
+        "消费者权益保护法_第二条"
+      ],
+      "baseline_hit": true,
+      "context_hit": false,
+      "baseline_reciprocal_rank": 0.5,
+      "context_reciprocal_rank": 0.0,
+      "baseline_precision": 0.5,
+      "context_precision": 0.0,
+      "baseline_recall": 1.0,
+      "context_recall": 0.0,
+      "resource_hit": true,
+      "skill_hit": null
+    },
+    {
+      "question": "离婚的时候，婚前买的房子对方能分吗？",
+      "corpus_status": "in_corpus",
+      "baseline_query": "离婚的时候，婚前买的房子对方能分吗？",
+      "context_query": "原始问题：离婚的时候，婚前买的房子对方能分吗？\n\nOpenViking 上下文目录提示：\n- viking://resources/laws/marriage_family/ | 婚姻家事资源入口，覆盖离婚、子女抚养、夫妻财产和彩礼返还。 | 用于定位婚姻家事问题。重点确认婚姻状态、财产来源、登记情况、子女年龄和实际抚养情况。",
+      "expected_resource_uris": [
+        "viking://resources/laws/marriage_family/"
+      ],
+      "expected_skill_uris": [],
+      "viking_context_hits": [
+        {
+          "context_type": "resource",
+          "uri": "viking://resources/laws/marriage_family/",
+          "layer": "L0/L1",
+          "score": 0.51,
+          "abstract": "婚姻家事资源入口，覆盖离婚、子女抚养、夫妻财产和彩礼返还。"
+        }
+      ],
+      "baseline_retrieved_ids": [
+        "民法典_第一千零九十二条",
+        "民法典_第一千零六十六条",
+        "民法典_第一千零八十八条",
+        "民法典_第一千一百五十三条",
+        "民法典_第一千零八十七条"
+      ],
+      "context_retrieved_ids": [
+        "民法典_第一千零九十二条",
+        "民法典_第一千零六十六条",
+        "民法典_第一千零八十九条",
+        "民法典_第一千零六十五条",
+        "民法典_第一千零八十七条"
+      ],
+      "baseline_hit": true,
+      "context_hit": true,
+      "baseline_reciprocal_rank": 0.2,
+      "context_reciprocal_rank": 0.2,
+      "baseline_precision": 0.2,
+      "context_precision": 0.2,
+      "baseline_recall": 0.5,
+      "context_recall": 0.5,
+      "resource_hit": true,
+      "skill_hit": null
+    },
+    {
+      "question": "朋友借了我5万块钱，就写了个微信聊天记录说会还，现在不认账了怎么办？",
+      "corpus_status": "in_corpus",
+      "baseline_query": "朋友借了我5万块钱，就写了个微信聊天记录说会还，现在不认账了怎么办？",
+      "context_query": "原始问题：朋友借了我5万块钱，就写了个微信聊天记录说会还，现在不认账了怎么办？\n\nOpenViking 上下文目录提示：\n- viking://skills/legal/evidence_collection_checklist/ | 证据收集清单：围绕主体、事实、损失、沟通和时间线整理材料。 | 流程：把证据分为身份/关系、合同或约定、履行过程、损失后果、沟通记录、时间线六类；提醒用户保留原始载体和形成时间。",
+      "expected_resource_uris": [
+        "viking://resources/laws/civil_procedure/"
+      ],
+      "expected_skill_uris": [
+        "viking://skills/legal/evidence_collection_checklist/",
+        "viking://skills/legal/lawsuit_filing_workflow/"
+      ],
+      "viking_context_hits": [
+        {
+          "context_type": "skill",
+          "uri": "viking://skills/legal/evidence_collection_checklist/",
+          "layer": "L0/L1",
+          "score": 0.56,
+          "abstract": "证据收集清单：围绕主体、事实、损失、沟通和时间线整理材料。"
+        }
+      ],
+      "baseline_retrieved_ids": [
+        "民法典_第五百二十七条"
+      ],
+      "context_retrieved_ids": [
+        "民法典_第五百二十七条",
+        "刑事诉讼法_第五十九条",
+        "民法典_第六百七十五条",
+        "个人信息保护法_第六十九条"
+      ],
+      "baseline_hit": false,
+      "context_hit": true,
+      "baseline_reciprocal_rank": 0.0,
+      "context_reciprocal_rank": 0.3333333333333333,
+      "baseline_precision": 0.0,
+      "context_precision": 0.25,
+      "baseline_recall": 0.0,
+      "context_recall": 0.5,
+      "resource_hit": false,
+      "skill_hit": true
+    },
+    {
+      "question": "试用期三个月，公司只给我发八成工资合法吗",
+      "corpus_status": "in_corpus",
+      "baseline_query": "试用期三个月，公司只给我发八成工资合法吗",
+      "context_query": "原始问题：试用期三个月，公司只给我发八成工资合法吗\n\nOpenViking 上下文目录提示：\n- viking://resources/laws/labor/ | 劳动争议资源入口，覆盖劳动关系、工资、解除、试用期、社保和仲裁路径。 | 用于定位劳动纠纷相关资料。优先关注劳动关系是否成立、解除原因、工资基数、工作年限、合同和社保情况；法条引用仍必须通过本轮法律检索工具确认。\n- viking://skills/legal/labor_arbitration_workflow/ | 劳动仲裁咨询流程：补事实、列证据、检索法条、判断请求和风险。 | 流程：1. 先确认劳动关系、工作年限、工资和解除原因；2. 列劳动合同、工资流水、考勤、通知书、聊天记录等证据；3. 再检索劳动合同法和仲裁相关规则；4. 输出可主张请求、风险和下一步材料清单。",
+      "expected_resource_uris": [
+        "viking://resources/laws/labor/"
+      ],
+      "expected_skill_uris": [
+        "viking://skills/legal/labor_arbitration_workflow/"
+      ],
+      "viking_context_hits": [
+        {
+          "context_type": "resource",
+          "uri": "viking://resources/laws/labor/",
+          "layer": "L0/L1",
+          "score": 0.68,
+          "abstract": "劳动争议资源入口，覆盖劳动关系、工资、解除、试用期、社保和仲裁路径。"
+        },
+        {
+          "context_type": "skill",
+          "uri": "viking://skills/legal/labor_arbitration_workflow/",
+          "layer": "L0/L1",
+          "score": 0.63,
+          "abstract": "劳动仲裁咨询流程：补事实、列证据、检索法条、判断请求和风险。"
+        }
+      ],
+      "baseline_retrieved_ids": [
+        "劳动合同法_第二十条",
+        "劳动合同法_第八十二条",
+        "劳动合同法_第八十三条"
+      ],
+      "context_retrieved_ids": [
+        "劳动合同法_第二十条",
+        "劳动合同法_第十九条",
+        "劳动合同法_第八十二条",
+        "劳动合同法_第二十一条",
+        "劳动合同法_第八十三条"
+      ],
+      "baseline_hit": true,
+      "context_hit": true,
+      "baseline_reciprocal_rank": 1.0,
+      "context_reciprocal_rank": 1.0,
+      "baseline_precision": 0.3333333333333333,
+      "context_precision": 0.2,
+      "baseline_recall": 1.0,
+      "context_recall": 1.0,
+      "resource_hit": true,
+      "skill_hit": true
+    },
+    {
+      "question": "加班之后公司说只能调休不给加班费，这样对吗",
+      "corpus_status": "in_corpus",
+      "baseline_query": "加班之后公司说只能调休不给加班费，这样对吗",
+      "context_query": "原始问题：加班之后公司说只能调休不给加班费，这样对吗\n\nOpenViking 上下文目录提示：\n- viking://skills/legal/labor_arbitration_workflow/ | 劳动仲裁咨询流程：补事实、列证据、检索法条、判断请求和风险。 | 流程：1. 先确认劳动关系、工作年限、工资和解除原因；2. 列劳动合同、工资流水、考勤、通知书、聊天记录等证据；3. 再检索劳动合同法和仲裁相关规则；4. 输出可主张请求、风险和下一步材料清单。\n- viking://resources/laws/labor/ | 劳动争议资源入口，覆盖劳动关系、工资、解除、试用期、社保和仲裁路径。 | 用于定位劳动纠纷相关资料。优先关注劳动关系是否成立、解除原因、工资基数、工作年限、合同和社保情况；法条引用仍必须通过本轮法律检索工具确认。",
+      "expected_resource_uris": [
+        "viking://resources/laws/labor/"
+      ],
+      "expected_skill_uris": [
+        "viking://skills/legal/labor_arbitration_workflow/"
+      ],
+      "viking_context_hits": [
+        {
+          "context_type": "skill",
+          "uri": "viking://skills/legal/labor_arbitration_workflow/",
+          "layer": "L0/L1",
+          "score": 0.63,
+          "abstract": "劳动仲裁咨询流程：补事实、列证据、检索法条、判断请求和风险。"
+        },
+        {
+          "context_type": "resource",
+          "uri": "viking://resources/laws/labor/",
+          "layer": "L0/L1",
+          "score": 0.59,
+          "abstract": "劳动争议资源入口，覆盖劳动关系、工资、解除、试用期、社保和仲裁路径。"
+        }
+      ],
+      "baseline_retrieved_ids": [
+        "劳动合同法_第三十一条",
+        "劳动合同法_第八十五条",
+        "劳动法_第三十九条"
+      ],
+      "context_retrieved_ids": [
+        "劳动合同法_第三十一条",
+        "劳动合同法_第八十五条",
+        "劳动合同法_第六十二条"
+      ],
+      "baseline_hit": true,
+      "context_hit": true,
+      "baseline_reciprocal_rank": 1.0,
+      "context_reciprocal_rank": 1.0,
+      "baseline_precision": 0.6666666666666666,
+      "context_precision": 0.6666666666666666,
+      "baseline_recall": 0.6666666666666666,
+      "context_recall": 0.6666666666666666,
+      "resource_hit": true,
+      "skill_hit": true
+    },
+    {
+      "question": "我租的房子到期，房东不退押金说我墙面脏了，怎么办",
+      "corpus_status": "in_corpus",
+      "baseline_query": "我租的房子到期，房东不退押金说我墙面脏了，怎么办",
+      "context_query": "原始问题：我租的房子到期，房东不退押金说我墙面脏了，怎么办\n\nOpenViking 上下文目录提示：\n- viking://skills/legal/deposit_dispute_workflow/ | 押金退还纠纷流程：确认合同、交接、损坏和证据，再给维权路径。 | 流程：1. 确认租赁合同和押金条款；2. 确认退租交接、房屋损坏和扣款理由；3. 收集转账记录、聊天记录、照片视频、交接单；4. 判断协商、投诉、起诉路径。\n- viking://resources/laws/civil_code/contract/ | 民法典合同编资源入口，覆盖租赁、借款、买卖、违约责任和押金争议。 | 用于定位合同和租赁争议。重点检查合同约定、履行情况、违约事实、证据材料、损失计算和解除/返还请求。",
+      "expected_resource_uris": [
+        "viking://resources/laws/civil_code/contract/"
+      ],
+      "expected_skill_uris": [
+        "viking://skills/legal/deposit_dispute_workflow/"
+      ],
+      "viking_context_hits": [
+        {
+          "context_type": "skill",
+          "uri": "viking://skills/legal/deposit_dispute_workflow/",
+          "layer": "L0/L1",
+          "score": 0.7,
+          "abstract": "押金退还纠纷流程：确认合同、交接、损坏和证据，再给维权路径。"
+        },
+        {
+          "context_type": "resource",
+          "uri": "viking://resources/laws/civil_code/contract/",
+          "layer": "L0/L1",
+          "score": 0.66,
+          "abstract": "民法典合同编资源入口，覆盖租赁、借款、买卖、违约责任和押金争议。"
+        }
+      ],
+      "baseline_retrieved_ids": [
+        "合同法_历史版本_第二百二十二条",
+        "民法典_第七百一十四条",
+        "合同法_历史版本_第二百一十九条",
+        "民法典_第七百二十九条",
+        "合同法_历史版本_第二百三十一条"
+      ],
+      "context_retrieved_ids": [
+        "民法典_第七百五十八条",
+        "合同法_历史版本_第二百三十四条",
+        "城市房地产管理法_第五十四条",
+        "合同法_历史版本_第二百三十二条",
+        "合同法_历史版本_第二百一十九条"
+      ],
+      "baseline_hit": false,
+      "context_hit": false,
+      "baseline_reciprocal_rank": 0.0,
+      "context_reciprocal_rank": 0.0,
+      "baseline_precision": 0.0,
+      "context_precision": 0.0,
+      "baseline_recall": 0.0,
+      "context_recall": 0.0,
+      "resource_hit": true,
+      "skill_hit": true
+    },
+    {
+      "question": "网上买的水果到货坏了一半，商家只同意退坏的部分钱合理吗",
+      "corpus_status": "in_corpus",
+      "baseline_query": "网上买的水果到货坏了一半，商家只同意退坏的部分钱合理吗",
+      "context_query": "原始问题：网上买的水果到货坏了一半，商家只同意退坏的部分钱合理吗\n\nOpenViking 上下文目录提示：\n- viking://resources/laws/consumer_protection/ | 消费者权益保护资源入口，覆盖退换货、虚假宣传、食品安全和平台交易纠纷。 | 用于定位消费纠纷。重点确认交易凭证、商品或服务问题、沟通记录、平台规则和损失范围。",
+      "expected_resource_uris": [
+        "viking://resources/laws/consumer_protection/"
+      ],
+      "expected_skill_uris": [],
+      "viking_context_hits": [
+        {
+          "context_type": "resource",
+          "uri": "viking://resources/laws/consumer_protection/",
+          "layer": "L0/L1",
+          "score": 0.51,
+          "abstract": "消费者权益保护资源入口，覆盖退换货、虚假宣传、食品安全和平台交易纠纷。"
+        }
+      ],
+      "baseline_retrieved_ids": [],
+      "context_retrieved_ids": [
+        "消费者权益保护法_第十条",
+        "消费者权益保护法_第四十四条",
+        "消费者权益保护法_第五十二条",
+        "消费者权益保护法_第五十四条",
+        "反不正当竞争法_第三十条"
+      ],
+      "baseline_hit": false,
+      "context_hit": false,
+      "baseline_reciprocal_rank": 0.0,
+      "context_reciprocal_rank": 0.0,
+      "baseline_precision": 0.0,
+      "context_precision": 0.0,
+      "baseline_recall": 0.0,
+      "context_recall": 0.0,
+      "resource_hit": true,
+      "skill_hit": null
+    },
+    {
+      "question": "在小区遛狗没牵绳，被别人开车撞了，责任怎么分",
+      "corpus_status": "in_corpus",
+      "baseline_query": "在小区遛狗没牵绳，被别人开车撞了，责任怎么分",
+      "context_query": "原始问题：在小区遛狗没牵绳，被别人开车撞了，责任怎么分\n\nOpenViking 上下文目录提示：\n- viking://skills/legal/contract_review_checklist/ | 合同审查清单：主体、标的、价款、履行、违约、解除、争议解决。 | 流程：按主体资格、核心义务、付款节点、验收标准、违约责任、解除条件、管辖和补充材料逐项审查，并输出风险等级和修改建议。",
+      "expected_resource_uris": [
+        "viking://resources/laws/civil_code/contract/"
+      ],
+      "expected_skill_uris": [],
+      "viking_context_hits": [
+        {
+          "context_type": "skill",
+          "uri": "viking://skills/legal/contract_review_checklist/",
+          "layer": "L0/L1",
+          "score": 0.6,
+          "abstract": "合同审查清单：主体、标的、价款、履行、违约、解除、争议解决。"
+        }
+      ],
+      "baseline_retrieved_ids": [
+        "民法典_第一千二百四十六条",
+        "民法典_第一千二百四十七条",
+        "民法典_第一百七十七条",
+        "民法典_第一千二百五十条",
+        "民法典_第一千二百一十二条"
+      ],
+      "context_retrieved_ids": [
+        "道路交通安全法_第七十六条",
+        "治安管理处罚法_第八十九条",
+        "民法典_第一千二百五十条",
+        "民法典_第五百六十六条",
+        "民法典_第一千二百五十六条"
+      ],
+      "baseline_hit": true,
+      "context_hit": false,
+      "baseline_reciprocal_rank": 1.0,
+      "context_reciprocal_rank": 0.0,
+      "baseline_precision": 0.2,
+      "context_precision": 0.0,
+      "baseline_recall": 1.0,
+      "context_recall": 0.0,
+      "resource_hit": false,
+      "skill_hit": null
+    }
+  ],
+  "fast": true
+}

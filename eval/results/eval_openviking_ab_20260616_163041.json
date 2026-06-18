@@ -1,0 +1,2354 @@
+{
+  "mode": "openviking_ab",
+  "top_k": 5,
+  "num_queries": 10,
+  "num_total_queries": 10,
+  "baseline": {
+    "name": "hybrid_retriever_raw_query",
+    "aggregated": {
+      "hit_rate": 0.5,
+      "mrr": 0.32,
+      "precision": 0.22333333333333333,
+      "recall": 0.36666666666666664
+    }
+  },
+  "openviking": {
+    "name": "real_openviking_resource_article_scoped_rerank",
+    "aggregated": {
+      "hit_rate": 0.6,
+      "mrr": 0.425,
+      "precision": 0.24333333333333335,
+      "recall": 0.4666666666666667
+    }
+  },
+  "delta": {
+    "hit_rate": 0.1,
+    "mrr": 0.105,
+    "precision": 0.02,
+    "recall": 0.1
+  },
+  "openviking_routing": {
+    "resource_hit_rate": 0.6,
+    "avg_openviking_matches": 20.0,
+    "resource_eval_count": 10
+  },
+  "details": [
+    {
+      "question": "我在公司干了三年，老板突然说不续签合同了，我能拿到补偿吗？",
+      "corpus_status": "in_corpus",
+      "baseline_retrieved_ids": [
+        "劳动法_第二十八条",
+        "劳动合同法_第四十六条",
+        "劳动法_第九十一条",
+        "劳动合同法_第九十七条",
+        "劳动合同法_第四十条"
+      ],
+      "openviking_candidate_ids": [
+        "劳动法_第二十八条",
+        "劳动合同法_第四十六条",
+        "劳动法_第九十一条",
+        "劳动合同法_第五十条",
+        "劳动合同法_第九十七条",
+        "劳动合同法_第四十条",
+        "劳动合同法_第三十八条",
+        "劳动法_第二十条",
+        "劳动合同法_第四十七条",
+        "劳动合同法_第十八条",
+        "民法典_第一百一十七条",
+        "劳动合同法_第十四条"
+      ],
+      "openviking_retrieved_ids": [
+        "劳动法_第二十八条",
+        "劳动合同法_第四十六条",
+        "劳动法_第九十一条",
+        "劳动合同法_第五十条",
+        "劳动合同法_第九十七条"
+      ],
+      "openviking_matches": [
+        {
+          "uri": "viking://resources/laws/labor/劳动合同法/劳动合同法_第三十条.md",
+          "context_type": "resource",
+          "score": 0.6157,
+          "abstract": "# 劳动合同法_第三十条\n\nlaw_name: 劳动合同法\narticle_no: 第三十条\nchunk_id: 劳动合同法_第三十条\ndomain: labor\nhierarchy: 第三章　劳动合同的履行和变更\n\n第三十条 用人单位应当按照劳动合同约定和国家规定，向劳动者及时足额支付劳动报酬。\n用人单位拖欠或者未足额支付劳动报酬的，劳动者可以依法向当地人民法院申请支付令，人民法院应当依法发出支付令。",
+          "overview": "",
+          "content": "",
+          "level": 2,
+          "match_reason": ""
+        },
+        {
+          "uri": "viking://resources/laws/labor/劳动合同法/劳动合同法_第二十三条.md",
+          "context_type": "resource",
+          "score": 0.6086,
+          "abstract": "# 劳动合同法_第二十三条\n\nlaw_name: 劳动合同法\narticle_no: 第二十三条\nchunk_id: 劳动合同法_第二十三条\ndomain: labor\nhierarchy: 第二章　劳动合同的订立\n\n第二十三条 用人单位与劳动者可以在劳动合同中约定保守用人单位的商业秘密和与知识产权相关的保密事项。\n对负有保密义务的劳动者，用人单位可以在劳动合同或者保密协议中与劳动者约定竞业限制条款，并约定在解除或者终止劳动合同后，在竞业限制期限内按月给予劳动者经济补偿。劳动",
+          "overview": "",
+          "content": "",
+          "level": 2,
+          "match_reason": ""
+        },
+        {
+          "uri": "viking://resources/laws/labor/劳动法/劳动法_第二十六条.md",
+          "context_type": "resource",
+          "score": 0.6075,
+          "abstract": "# 劳动法_第二十六条\n\nlaw_name: 劳动法\narticle_no: 第二十六条\nchunk_id: 劳动法_第二十六条\ndomain: labor\nhierarchy: 第三章　劳动合同和集体合同\n\n第二十六条 有下列情形之一的，用人单位可以解除劳动合同，但是应当提前三十日以书面形式通知劳动者本人：\n（一）劳动者患病或者非因工负伤，医疗期满后，不能从事原工作也不能从事由用人单位另行安排的工作的；\n（二）劳动者不能胜任工作，经过培训或者调整工作岗位，仍不能胜任工作的；",
+          "overview": "",
+          "content": "",
+          "level": 2,
+          "match_reason": ""
+        },
+        {
+          "uri": "viking://resources/laws/labor/劳动法/劳动法_第三十四条.md",
+          "context_type": "resource",
+          "score": 0.6055,
+          "abstract": "# 劳动法_第三十四条\n\nlaw_name: 劳动法\narticle_no: 第三十四条\nchunk_id: 劳动法_第三十四条\ndomain: labor\nhierarchy: 第三章　劳动合同和集体合同\n\n第三十四条 集体合同签订后应当报送劳动行政部门；劳动行政部门自收到集体合同文本之日起十五日内未提出异议的，集体合同即行生效。",
+          "overview": "",
+          "content": "",
+          "level": 2,
+          "match_reason": ""
+        },
+        {
+          "uri": "viking://resources/laws/labor/劳动合同法/劳动合同法_第五十条.md",
+          "context_type": "resource",
+          "score": 0.6029,
+          "abstract": "# 劳动合同法_第五十条\n\nlaw_name: 劳动合同法\narticle_no: 第五十条\nchunk_id: 劳动合同法_第五十条\ndomain: labor\nhierarchy: 第四章　劳动合同的解除和终止\n\n第五十条 用人单位应当在解除或者终止劳动合同时出具解除或者终止劳动合同的证明，并在十五日内为劳动者办理档案和社会保险关系转移手续。\n劳动者应当按照双方约定，办理工作交接。用人单位依照本法有关规定应当向劳动者支付经济补偿的，在办结工作交接时支付。\n用人单位对已经解",
+          "overview": "",
+          "content": "",
+          "level": 2,
+          "match_reason": ""
+        },
+        {
+          "uri": "viking://resources/laws/labor/劳动合同法/劳动合同法_第二十二条.md",
+          "context_type": "resource",
+          "score": 0.5976,
+          "abstract": "# 劳动合同法_第二十二条\n\nlaw_name: 劳动合同法\narticle_no: 第二十二条\nchunk_id: 劳动合同法_第二十二条\ndomain: labor\nhierarchy: 第二章　劳动合同的订立\n\n第二十二条 用人单位为劳动者提供专项培训费用，对其进行专业技术培训的，可以与该劳动者订立协议，约定服务期。\n劳动者违反服务期约定的，应当按照约定向用人单位支付违约金。违约金的数额不得超过用人单位提供的培训费用。用人单位要求劳动者支付的违约金不得超过服务期尚未履行",
+          "overview": "",
+          "content": "",
+          "level": 2,
+          "match_reason": ""
+        },
+        {
+          "uri": "viking://resources/laws/labor/劳动法/劳动法_第二十七条.md",
+          "context_type": "resource",
+          "score": 0.5965,
+          "abstract": "# 劳动法_第二十七条\n\nlaw_name: 劳动法\narticle_no: 第二十七条\nchunk_id: 劳动法_第二十七条\ndomain: labor\nhierarchy: 第三章　劳动合同和集体合同\n\n第二十七条 用人单位濒临破产进行法定整顿期间或者生产经营状况发生严重困难，确需裁减人员的，应当提前三十日向工会或者全体职工说明情况，听取工会或者职工的意见，经向劳动行政部门报告后，可以裁减人员。\n用人单位依据本条规定裁减人员，在六个月内录用人员的，应当优先录用被裁减的人",
+          "overview": "",
+          "content": "",
+          "level": 2,
+          "match_reason": ""
+        },
+        {
+          "uri": "viking://resources/laws/labor/劳动合同法/劳动合同法_第十三条.md",
+          "context_type": "resource",
+          "score": 0.595,
+          "abstract": "# 劳动合同法_第十三条\n\nlaw_name: 劳动合同法\narticle_no: 第十三条\nchunk_id: 劳动合同法_第十三条\ndomain: labor\nhierarchy: 第二章　劳动合同的订立\n\n第十三条 固定期限劳动合同，是指用人单位与劳动者约定合同终止时间的劳动合同。\n用人单位与劳动者协商一致，可以订立固定期限劳动合同。",
+          "overview": "",
+          "content": "",
+          "level": 2,
+          "match_reason": ""
+        },
+        {
+          "uri": "viking://resources/laws/labor/劳动法/劳动法_第三十条.md",
+          "context_type": "resource",
+          "score": 0.5945,
+          "abstract": "# 劳动法_第三十条\n\nlaw_name: 劳动法\narticle_no: 第三十条\nchunk_id: 劳动法_第三十条\ndomain: labor\nhierarchy: 第三章　劳动合同和集体合同\n\n第三十条 用人单位解除劳动合同，工会认为不适当的，有权提出意见。如果用人单位违反法律、法规或者劳动合同，工会有权要求重新处理；劳动者申请仲裁或者提起诉讼的，工会应当依法给予支持和帮助。",
+          "overview": "",
+          "content": "",
+          "level": 2,
+          "match_reason": ""
+        },
+        {
+          "uri": "viking://resources/laws/labor/劳动合同法/劳动合同法_第三十四条.md",
+          "context_type": "resource",
+          "score": 0.5919,
+          "abstract": "# 劳动合同法_第三十四条\n\nlaw_name: 劳动合同法\narticle_no: 第三十四条\nchunk_id: 劳动合同法_第三十四条\ndomain: labor\nhierarchy: 第三章　劳动合同的履行和变更\n\n第三十四条 用人单位发生合并或者分立等情况，原劳动合同继续有效，劳动合同由承继其权利和义务的用人单位继续履行。",
+          "overview": "",
+          "content": "",
+          "level": 2,
+          "match_reason": ""
+        },
+        {
+          "uri": "viking://resources/laws/labor/劳动合同法/劳动合同法_第四十条.md",
+          "context_type": "resource",
+          "score": 0.5918,
+          "abstract": "# 劳动合同法_第四十条\n\nlaw_name: 劳动合同法\narticle_no: 第四十条\nchunk_id: 劳动合同法_第四十条\ndomain: labor\nhierarchy: 第四章　劳动合同的解除和终止\n\n第四十条 有下列情形之一的，用人单位提前三十日以书面形式通知劳动者本人或者额外支付劳动者一个月工资后，可以解除劳动合同:\n（一）劳动者患病或者非因工负伤，在规定的医疗期满后不能从事原工作，也不能从事由用人单位另行安排的工作的；\n（二）劳动者不能胜任工作，经过培训",
+          "overview": "",
+          "content": "",
+          "level": 2,
+          "match_reason": ""
+        },
+        {
+          "uri": "viking://resources/laws/labor/劳动法/劳动法_第三十二条.md",
+          "context_type": "resource",
+          "score": 0.5872,
+          "abstract": "# 劳动法_第三十二条\n\nlaw_name: 劳动法\narticle_no: 第三十二条\nchunk_id: 劳动法_第三十二条\ndomain: labor\nhierarchy: 第三章　劳动合同和集体合同\n\n第三十二条 有下列情形之一的，劳动者可以随时通知用人单位解除劳动合同：\n（一）在试用期内的；\n（二）用人单位以暴力、威胁或者非法限制人身自由的手段强迫劳动的；\n（三）用人单位未按照劳动合同约定支付劳动报酬或者提供劳动条件的。",
+          "overview": "",
+          "content": "",
+          "level": 2,
+          "match_reason": ""
+        },
+        {
+          "uri": "viking://resources/laws/labor/劳动合同法/劳动合同法_第三十七条.md",
+          "context_type": "resource",
+          "score": 0.5867,
+          "abstract": "# 劳动合同法_第三十七条\n\nlaw_name: 劳动合同法\narticle_no: 第三十七条\nchunk_id: 劳动合同法_第三十七条\ndomain: labor\nhierarchy: 第四章　劳动合同的解除和终止\n\n第三十七条 劳动者提前三十日以书面形式通知用人单位，可以解除劳动合同。劳动者在试用期内提前三日通知用人单位，可以解除劳动合同。",
+          "overview": "",
+          "content": "",
+          "level": 2,
+          "match_reason": ""
+        },
+        {
+          "uri": "viking://resources/laws/labor/劳动合同法/劳动合同法_第三十九条.md",
+          "context_type": "resource",
+          "score": 0.5855,
+          "abstract": "# 劳动合同法_第三十九条\n\nlaw_name: 劳动合同法\narticle_no: 第三十九条\nchunk_id: 劳动合同法_第三十九条\ndomain: labor\nhierarchy: 第四章　劳动合同的解除和终止\n\n第三十九条 劳动者有下列情形之一的，用人单位可以解除劳动合同:\n（一）在试用期间被证明不符合录用条件的；\n（二）严重违反用人单位的规章制度的；\n（三）严重失职，营私舞弊，给用人单位造成重大损害的；\n（四）劳动者同时与其他用人单位建立劳动关系，对完成本单位的",
+          "overview": "",
+          "content": "",
+          "level": 2,
+          "match_reason": ""
+        },
+        {
+          "uri": "viking://resources/laws/labor/劳动法/劳动法_第二十三条.md",
+          "context_type": "resource",
+          "score": 0.5845,
+          "abstract": "# 劳动法_第二十三条\n\nlaw_name: 劳动法\narticle_no: 第二十三条\nchunk_id: 劳动法_第二十三条\ndomain: labor\nhierarchy: 第三章　劳动合同和集体合同\n\n第二十三条 劳动合同期满或者当事人约定的劳动合同终止条件出现，劳动合同即行终止。",
+          "overview": "",
+          "content": "",
+          "level": 2,
+          "match_reason": ""
+        },
+        {
+          "uri": "viking://resources/laws/labor/劳动法/劳动法_第三十三条.md",
+          "context_type": "resource",
+          "score": 0.5842,
+          "abstract": "# 劳动法_第三十三条\n\nlaw_name: 劳动法\narticle_no: 第三十三条\nchunk_id: 劳动法_第三十三条\ndomain: labor\nhierarchy: 第三章　劳动合同和集体合同\n\n第三十三条 企业职工一方与企业可以就劳动报酬、工作时间、休息休假、劳动安全卫生、保险福利等事项，签订集体合同。集体合同草案应当提交职工代表大会或者全体职工讨论通过。\n集体合同由工会代表职工与企业签订；没有建立工会的企业，由职工推举的代表与企业签订。",
+          "overview": "",
+          "content": "",
+          "level": 2,
+          "match_reason": ""
+        },
+        {
+          "uri": "viking://resources/laws/labor/劳动合同法/劳动合同法_第八十三条.md",
+          "context_type": "resource",
+          "score": 0.5837,
+          "abstract": "# 劳动合同法_第八十三条\n\nlaw_name: 劳动合同法\narticle_no: 第八十三条\nchunk_id: 劳动合同法_第八十三条\ndomain: labor\nhierarchy: 第七章　法律责任\n\n第八十三条 用人单位违反本法规定与劳动者约定试用期的，由劳动行政部门责令改正；违法约定的试用期已经履行的，由用人单位以劳动者试用期满月工资为标准，按已经履行的超过法定试用期的期间向劳动者支付赔偿金。",
+          "overview": "",
+          "content": "",
+          "level": 2,
+          "match_reason": ""
+        },
+        {
+          "uri": "viking://resources/laws/labor/劳动合同法/劳动合同法_第三十二条.md",
+          "context_type": "resource",
+          "score": 0.5801,
+          "abstract": "# 劳动合同法_第三十二条\n\nlaw_name: 劳动合同法\narticle_no: 第三十二条\nchunk_id: 劳动合同法_第三十二条\ndomain: labor\nhierarchy: 第三章　劳动合同的履行和变更\n\n第三十二条 劳动者拒绝用人单位管理人员违章指挥、强令冒险作业的，不视为违反劳动合同。\n劳动者对危害生命安全和身体健康的劳动条件，有权对用人单位提出批评、检举和控告。",
+          "overview": "",
+          "content": "",
+          "level": 2,
+          "match_reason": ""
+        },
+        {
+          "uri": "viking://resources/laws/civil_code/民法典/民法典_第五百一十条.md",
+          "context_type": "resource",
+          "score": 0.5798,
+          "abstract": "# 民法典_第五百一十条\n\nlaw_name: 民法典\narticle_no: 第五百一十条\nchunk_id: 民法典_第五百一十条\ndomain: civil_code\nhierarchy: 第三编　合同 > 第一分编　通则 > 第四章　合同的履行\n\n第五百一十条 合同生效后，当事人就质量、价款或者报酬、履行地点等内容没有约定或者约定不明确的，可以协议补充；不能达成补充协议的，按照合同相关条款或者交易习惯确定。",
+          "overview": "",
+          "content": "",
+          "level": 2,
+          "match_reason": ""
+        },
+        {
+          "uri": "viking://resources/laws/labor/劳动合同法/劳动合同法_第十四条.md",
+          "context_type": "resource",
+          "score": 0.5791,
+          "abstract": "# 劳动合同法_第十四条\n\nlaw_name: 劳动合同法\narticle_no: 第十四条\nchunk_id: 劳动合同法_第十四条\ndomain: labor\nhierarchy: 第二章　劳动合同的订立\n\n第十四条 无固定期限劳动合同，是指用人单位与劳动者约定无确定终止时间的劳动合同。\n用人单位与劳动者协商一致，可以订立无固定期限劳动合同。有下列情形之一，劳动者提出或者同意续订、订立劳动合同的，除劳动者提出订立固定期限劳动合同外，应当订立无固定期限劳动合同:\n（一）劳动",
+          "overview": "",
+          "content": "",
+          "level": 2,
+          "match_reason": ""
+        }
+      ],
+      "baseline_hit": true,
+      "openviking_hit": true,
+      "baseline_reciprocal_rank": 0.5,
+      "openviking_reciprocal_rank": 0.5,
+      "baseline_precision": 0.2,
+      "openviking_precision": 0.2,
+      "baseline_recall": 0.5,
+      "openviking_recall": 0.5,
+      "resource_hit": true
+    },
+    {
+      "question": "租的房子到期了房东不退押金，说墙上有钉子眼要扣钱，合理吗？",
+      "corpus_status": "in_corpus",
+      "baseline_retrieved_ids": [
+        "民法典_第七百二十四条"
+      ],
+      "openviking_candidate_ids": [
+        "民法典_第七百五十九条",
+        "民法典_第七百五十八条",
+        "民法典_第七百二十四条"
+      ],
+      "openviking_retrieved_ids": [
+        "民法典_第七百五十九条",
+        "民法典_第七百五十八条",
+        "民法典_第七百二十四条"
+      ],
+      "openviking_matches": [
+        {
+          "uri": "viking://resources/laws/civil_code/民法典/民法典_第七百五十二条.md",
+          "context_type": "resource",
+          "score": 0.6002,
+          "abstract": "# 民法典_第七百五十二条\n\nlaw_name: 民法典\narticle_no: 第七百五十二条\nchunk_id: 民法典_第七百五十二条\ndomain: civil_code\nhierarchy: 第三编　合同 > 第二分编　典型合同 > 第十五章　融资租赁合同\n\n第七百五十二条 承租人应当按照约定支付租金。承租人经催告后在合理期限内仍不支付租金的，出租人可以请求支付全部租金；也可以解除合同，收回租赁物。",
+          "overview": "",
+          "content": "",
+          "level": 2,
+          "match_reason": ""
+        },
+        {
+          "uri": "viking://resources/laws/civil_code/民法典/民法典_第七百二十二条.md",
+          "context_type": "resource",
+          "score": 0.5951,
+          "abstract": "# 民法典_第七百二十二条\n\nlaw_name: 民法典\narticle_no: 第七百二十二条\nchunk_id: 民法典_第七百二十二条\ndomain: civil_code\nhierarchy: 第三编　合同 > 第二分编　典型合同 > 第十四章　租赁合同\n\n第七百二十二条 承租人无正当理由未支付或者迟延支付租金的，出租人可以请求承租人在合理期限内支付；承租人逾期不支付的，出租人可以解除合同。",
+          "overview": "",
+          "content": "",
+          "level": 2,
+          "match_reason": ""
+        },
+        {
+          "uri": "viking://resources/laws/civil_code/民法典/民法典_第七百二十一条.md",
+          "context_type": "resource",
+          "score": 0.5919,
+          "abstract": "# 民法典_第七百二十一条\n\nlaw_name: 民法典\narticle_no: 第七百二十一条\nchunk_id: 民法典_第七百二十一条\ndomain: civil_code\nhierarchy: 第三编　合同 > 第二分编　典型合同 > 第十四章　租赁合同\n\n第七百二十一条 承租人应当按照约定的期限支付租金。对支付租金的期限没有约定或者约定不明确，依据本法第五百一十条的规定仍不能确定，租赁期限不满一年的，应当在租赁期限届满时支付；租赁期限一年以上的，应当在每届满一年时支",
+          "overview": "",
+          "content": "",
+          "level": 2,
+          "match_reason": ""
+        },
+        {
+          "uri": "viking://resources/laws/civil_code/民法典/民法典_第七百五十八条.md",
+          "context_type": "resource",
+          "score": 0.5856,
+          "abstract": "# 民法典_第七百五十八条\n\nlaw_name: 民法典\narticle_no: 第七百五十八条\nchunk_id: 民法典_第七百五十八条\ndomain: civil_code\nhierarchy: 第三编　合同 > 第二分编　典型合同 > 第十五章　融资租赁合同\n\n第七百五十八条 当事人约定租赁期限届满租赁物归承租人所有，承租人已经支付大部分租金，但是无力支付剩余租金，出租人因此解除合同收回租赁物，收回的租赁物的价值超过承租人欠付的租金以及其他费用的，承租人可以请求相应返",
+          "overview": "",
+          "content": "",
+          "level": 2,
+          "match_reason": ""
+        },
+        {
+          "uri": "viking://resources/laws/civil_code/民法典/民法典_第七百三十条.md",
+          "context_type": "resource",
+          "score": 0.5792,
+          "abstract": "# 民法典_第七百三十条\n\nlaw_name: 民法典\narticle_no: 第七百三十条\nchunk_id: 民法典_第七百三十条\ndomain: civil_code\nhierarchy: 第三编　合同 > 第二分编　典型合同 > 第十四章　租赁合同\n\n第七百三十条 当事人对租赁期限没有约定或者约定不明确，依据本法第五百一十条的规定仍不能确定的，视为不定期租赁；当事人可以随时解除合同，但是应当在合理期限之前通知对方。",
+          "overview": "",
+          "content": "",
+          "level": 2,
+          "match_reason": ""
+        },
+        {
+          "uri": "viking://resources/laws/civil_code/民法典/民法典_第七百五十九条.md",
+          "context_type": "resource",
+          "score": 0.5786,
+          "abstract": "# 民法典_第七百五十九条\n\nlaw_name: 民法典\narticle_no: 第七百五十九条\nchunk_id: 民法典_第七百五十九条\ndomain: civil_code\nhierarchy: 第三编　合同 > 第二分编　典型合同 > 第十五章　融资租赁合同\n\n第七百五十九条 当事人约定租赁期限届满，承租人仅需向出租人支付象征性价款的，视为约定的租金义务履行完毕后租赁物的所有权归承租人。",
+          "overview": "",
+          "content": "",
+          "level": 2,
+          "match_reason": ""
+        },
+        {
+          "uri": "viking://resources/laws/civil_code/民法典/民法典_第七百三十四条.md",
+          "context_type": "resource",
+          "score": 0.5758,
+          "abstract": "# 民法典_第七百三十四条\n\nlaw_name: 民法典\narticle_no: 第七百三十四条\nchunk_id: 民法典_第七百三十四条\ndomain: civil_code\nhierarchy: 第三编　合同 > 第二分编　典型合同 > 第十四章　租赁合同\n\n第七百三十四条 租赁期限届满，承租人继续使用租赁物，出租人没有提出异议的，原租赁合同继续有效，但是租赁期限为不定期。\n租赁期限届满，房屋承租人享有以同等条件优先承租的权利。",
+          "overview": "",
+          "content": "",
+          "level": 2,
+          "match_reason": ""
+        },
+        {
+          "uri": "viking://resources/laws/civil_code/民法典/民法典_第七百四十条.md",
+          "context_type": "resource",
+          "score": 0.5667,
+          "abstract": "# 民法典_第七百四十条\n\nlaw_name: 民法典\narticle_no: 第七百四十条\nchunk_id: 民法典_第七百四十条\ndomain: civil_code\nhierarchy: 第三编　合同 > 第二分编　典型合同 > 第十五章　融资租赁合同\n\n第七百四十条 出卖人违反向承租人交付标的物的义务，有下列情形之一的，承租人可以拒绝受领出卖人向其交付的标的物：\n（一）标的物严重不符合约定；\n（二）未按照约定交付标的物，经承租人或者出租人催告后在合理期限内仍未交付。",
+          "overview": "",
+          "content": "",
+          "level": 2,
+          "match_reason": ""
+        },
+        {
+          "uri": "viking://resources/laws/civil_code/民法典/民法典_第七百零七条.md",
+          "context_type": "resource",
+          "score": 0.5659,
+          "abstract": "# 民法典_第七百零七条\n\nlaw_name: 民法典\narticle_no: 第七百零七条\nchunk_id: 民法典_第七百零七条\ndomain: civil_code\nhierarchy: 第三编　合同 > 第二分编　典型合同 > 第十四章　租赁合同\n\n第七百零七条 租赁期限六个月以上的，应当采用书面形式。当事人未采用书面形式，无法确定租赁期限的，视为不定期租赁。",
+          "overview": "",
+          "content": "",
+          "level": 2,
+          "match_reason": ""
+        },
+        {
+          "uri": "viking://resources/laws/civil_code/民法典/民法典_第七百二十六条.md",
+          "context_type": "resource",
+          "score": 0.5601,
+          "abstract": "# 民法典_第七百二十六条\n\nlaw_name: 民法典\narticle_no: 第七百二十六条\nchunk_id: 民法典_第七百二十六条\ndomain: civil_code\nhierarchy: 第三编　合同 > 第二分编　典型合同 > 第十四章　租赁合同\n\n第七百二十六条 出租人出卖租赁房屋的，应当在出卖之前的合理期限内通知承租人，承租人享有以同等条件优先购买的权利；但是，房屋按份共有人行使优先购买权或者出租人将房屋出卖给近亲属的除外。\n出租人履行通知义务后，承租人在",
+          "overview": "",
+          "content": "",
+          "level": 2,
+          "match_reason": ""
+        },
+        {
+          "uri": "viking://resources/laws/civil_code/民法典/民法典_第四百零五条.md",
+          "context_type": "resource",
+          "score": 0.5587,
+          "abstract": "# 民法典_第四百零五条\n\nlaw_name: 民法典\narticle_no: 第四百零五条\nchunk_id: 民法典_第四百零五条\ndomain: civil_code\nhierarchy: 第二编　物权 > 第四分编　担保物权 > 第十七章　抵押权 > 第一节　一般抵押权\n\n第四百零五条 抵押权设立前，抵押财产已经出租并转移占有的，原租赁关系不受该抵押权的影响。",
+          "overview": "",
+          "content": "",
+          "level": 2,
+          "match_reason": ""
+        },
+        {
+          "uri": "viking://resources/laws/civil_code/民法典/民法典_第七百五十七条.md",
+          "context_type": "resource",
+          "score": 0.5573,
+          "abstract": "# 民法典_第七百五十七条\n\nlaw_name: 民法典\narticle_no: 第七百五十七条\nchunk_id: 民法典_第七百五十七条\ndomain: civil_code\nhierarchy: 第三编　合同 > 第二分编　典型合同 > 第十五章　融资租赁合同\n\n第七百五十七条 出租人和承租人可以约定租赁期限届满租赁物的归属；对租赁物的归属没有约定或者约定不明确，依据本法第五百一十条的规定仍不能确定的，租赁物的所有权归出租人。",
+          "overview": "",
+          "content": "",
+          "level": 2,
+          "match_reason": ""
+        },
+        {
+          "uri": "viking://resources/laws/civil_code/民法典/民法典_第七百二十五条.md",
+          "context_type": "resource",
+          "score": 0.5568,
+          "abstract": "# 民法典_第七百二十五条\n\nlaw_name: 民法典\narticle_no: 第七百二十五条\nchunk_id: 民法典_第七百二十五条\ndomain: civil_code\nhierarchy: 第三编　合同 > 第二分编　典型合同 > 第十四章　租赁合同\n\n第七百二十五条 租赁物在承租人按照租赁合同占有期限内发生所有权变动的，不影响租赁合同的效力。",
+          "overview": "",
+          "content": "",
+          "level": 2,
+          "match_reason": ""
+        },
+        {
+          "uri": "viking://resources/laws/civil_code/民法典/民法典_第七百一十三条.md",
+          "context_type": "resource",
+          "score": 0.5567,
+          "abstract": "# 民法典_第七百一十三条\n\nlaw_name: 民法典\narticle_no: 第七百一十三条\nchunk_id: 民法典_第七百一十三条\ndomain: civil_code\nhierarchy: 第三编　合同 > 第二分编　典型合同 > 第十四章　租赁合同\n\n第七百一十三条 承租人在租赁物需要维修时可以请求出租人在合理期限内维修。出租人未履行维修义务的，承租人可以自行维修，维修费用由出租人负担。因维修租赁物影响承租人使用的，应当相应减少租金或者延长租期。\n因承租人的过错",
+          "overview": "",
+          "content": "",
+          "level": 2,
+          "match_reason": ""
+        },
+        {
+          "uri": "viking://resources/laws/civil_code/民法典/民法典_第七百五十一条.md",
+          "context_type": "resource",
+          "score": 0.556,
+          "abstract": "# 民法典_第七百五十一条\n\nlaw_name: 民法典\narticle_no: 第七百五十一条\nchunk_id: 民法典_第七百五十一条\ndomain: civil_code\nhierarchy: 第三编　合同 > 第二分编　典型合同 > 第十五章　融资租赁合同\n\n第七百五十一条 承租人占有租赁物期间，租赁物毁损、灭失的，出租人有权请求承租人继续支付租金，但是法律另有规定或者当事人另有约定的除外。",
+          "overview": "",
+          "content": "",
+          "level": 2,
+          "match_reason": ""
+        },
+        {
+          "uri": "viking://resources/laws/civil_code/民法典/民法典_第七百六十条.md",
+          "context_type": "resource",
+          "score": 0.5551,
+          "abstract": "# 民法典_第七百六十条\n\nlaw_name: 民法典\narticle_no: 第七百六十条\nchunk_id: 民法典_第七百六十条\ndomain: civil_code\nhierarchy: 第三编　合同 > 第二分编　典型合同 > 第十五章　融资租赁合同\n\n第七百六十条 融资租赁合同无效，当事人就该情形下租赁物的归属有约定的，按照其约定；没有约定或者约定不明确的，租赁物应当返还出租人。但是，因承租人原因致使合同无效，出租人不请求返还或者返还后会显著降低租赁物效用的，租赁",
+          "overview": "",
+          "content": "",
+          "level": 2,
+          "match_reason": ""
+        },
+        {
+          "uri": "viking://resources/laws/civil_code/民法典/民法典_第七百四十二条.md",
+          "context_type": "resource",
+          "score": 0.555,
+          "abstract": "# 民法典_第七百四十二条\n\nlaw_name: 民法典\narticle_no: 第七百四十二条\nchunk_id: 民法典_第七百四十二条\ndomain: civil_code\nhierarchy: 第三编　合同 > 第二分编　典型合同 > 第十五章　融资租赁合同\n\n第七百四十二条 承租人对出卖人行使索赔权利，不影响其履行支付租金的义务。但是，承租人依赖出租人的技能确定租赁物或者出租人干预选择租赁物的，承租人可以请求减免相应租金。",
+          "overview": "",
+          "content": "",
+          "level": 2,
+          "match_reason": ""
+        },
+        {
+          "uri": "viking://resources/laws/civil_code/民法典/民法典_第七百二十四条.md",
+          "context_type": "resource",
+          "score": 0.5537,
+          "abstract": "# 民法典_第七百二十四条\n\nlaw_name: 民法典\narticle_no: 第七百二十四条\nchunk_id: 民法典_第七百二十四条\ndomain: civil_code\nhierarchy: 第三编　合同 > 第二分编　典型合同 > 第十四章　租赁合同\n\n第七百二十四条 有下列情形之一，非因承租人原因致使租赁物无法使用的，承租人可以解除合同：\n（一）租赁物被司法机关或者行政机关依法查封、扣押；\n（二）租赁物权属有争议；\n（三）租赁物具有违反法律、行政法规关于使用条件",
+          "overview": "",
+          "content": "",
+          "level": 2,
+          "match_reason": ""
+        },
+        {
+          "uri": "viking://resources/laws/civil_code/民法典/民法典_第七百一十九条.md",
+          "context_type": "resource",
+          "score": 0.5535,
+          "abstract": "# 民法典_第七百一十九条\n\nlaw_name: 民法典\narticle_no: 第七百一十九条\nchunk_id: 民法典_第七百一十九条\ndomain: civil_code\nhierarchy: 第三编　合同 > 第二分编　典型合同 > 第十四章　租赁合同\n\n第七百一十九条 承租人拖欠租金的，次承租人可以代承租人支付其欠付的租金和违约金，但是转租合同对出租人不具有法律约束力的除外。\n次承租人代为支付的租金和违约金，可以充抵次承租人应当向承租人支付的租金；超出其应付的租金",
+          "overview": "",
+          "content": "",
+          "level": 2,
+          "match_reason": ""
+        },
+        {
+          "uri": "viking://resources/laws/civil_code/民法典/民法典_第七百一十四条.md",
+          "context_type": "resource",
+          "score": 0.552,
+          "abstract": "# 民法典_第七百一十四条\n\nlaw_name: 民法典\narticle_no: 第七百一十四条\nchunk_id: 民法典_第七百一十四条\ndomain: civil_code\nhierarchy: 第三编　合同 > 第二分编　典型合同 > 第十四章　租赁合同\n\n第七百一十四条 承租人应当妥善保管租赁物，因保管不善造成租赁物毁损、灭失的，应当承担赔偿责任。",
+          "overview": "",
+          "content": "",
+          "level": 2,
+          "match_reason": ""
+        }
+      ],
+      "baseline_hit": false,
+      "openviking_hit": false,
+      "baseline_reciprocal_rank": 0.0,
+      "openviking_reciprocal_rank": 0.0,
+      "baseline_precision": 0.0,
+      "openviking_precision": 0.0,
+      "baseline_recall": 0.0,
+      "openviking_recall": 0.0,
+      "resource_hit": false
+    },
+    {
+      "question": "网上买的衣服不喜欢，商家说打折商品不能退，这对吗？",
+      "corpus_status": "in_corpus",
+      "baseline_retrieved_ids": [
+        "消费者权益保护法_第五十四条",
+        "消费者权益保护法_第二十五条"
+      ],
+      "openviking_candidate_ids": [
+        "消费者权益保护法_第五十四条",
+        "消费者权益保护法_第二十五条"
+      ],
+      "openviking_retrieved_ids": [
+        "消费者权益保护法_第五十四条",
+        "消费者权益保护法_第二十五条"
+      ],
+      "openviking_matches": [
+        {
+          "uri": "viking://resources/laws/consumer_protection/消费者权益保护法/消费者权益保护法_第二十五条.md",
+          "context_type": "resource",
+          "score": 0.571,
+          "abstract": "# 消费者权益保护法_第二十五条\n\nlaw_name: 消费者权益保护法\narticle_no: 第二十五条\nchunk_id: 消费者权益保护法_第二十五条\ndomain: consumer_protection\nhierarchy: 第三章 经营者的义务\n\n第二十五条 经营者采用网络、电视、电话、邮购等方式销售商品，消费者有权自收到商品之日起七日内退货，且无需说明理由，但下列商品除外：\n(一)消费者定作的；\n(二)鲜活易腐的；\n(三)在线下载或者消费者拆封的音像制品、计算",
+          "overview": "",
+          "content": "",
+          "level": 2,
+          "match_reason": ""
+        },
+        {
+          "uri": "viking://resources/laws/consumer_protection/消费者权益保护法/消费者权益保护法_第五十四条.md",
+          "context_type": "resource",
+          "score": 0.5599,
+          "abstract": "# 消费者权益保护法_第五十四条\n\nlaw_name: 消费者权益保护法\narticle_no: 第五十四条\nchunk_id: 消费者权益保护法_第五十四条\ndomain: consumer_protection\nhierarchy: 第七章 法律责任\n\n第五十四条 依法经有关行政部门认定为不合格的商品，消费者要求退货的，经营者应当负责退货。",
+          "overview": "",
+          "content": "",
+          "level": 2,
+          "match_reason": ""
+        },
+        {
+          "uri": "viking://resources/laws/consumer_protection/消费者权益保护法/消费者权益保护法_第二十四条.md",
+          "context_type": "resource",
+          "score": 0.5329,
+          "abstract": "# 消费者权益保护法_第二十四条\n\nlaw_name: 消费者权益保护法\narticle_no: 第二十四条\nchunk_id: 消费者权益保护法_第二十四条\ndomain: consumer_protection\nhierarchy: 第三章 经营者的义务\n\n第二十四条 经营者提供的商品或者服务不符合质量要求的，消费者可以依照国家规定、当事人约定退货，或者要求经营者履行更换、修理等义务。没有国家规定和当事人约定的，消费者可以自收到商品之日起七日内退货；七日后符合法定解除合同",
+          "overview": "",
+          "content": "",
+          "level": 2,
+          "match_reason": ""
+        },
+        {
+          "uri": "viking://resources/laws/consumer_protection/消费者权益保护法/消费者权益保护法_第四十八条.md",
+          "context_type": "resource",
+          "score": 0.5079,
+          "abstract": "# 消费者权益保护法_第四十八条\n\nlaw_name: 消费者权益保护法\narticle_no: 第四十八条\nchunk_id: 消费者权益保护法_第四十八条\ndomain: consumer_protection\nhierarchy: 第七章 法律责任\n\n第四十八条 经营者提供商品或者服务有下列情形之一的，除本法另有规定外，应当依照其他有关法律、法规的规定，承担民事责任：\n(一)商品或者服务存在缺陷的；\n(二)不具备商品应当具备的使用性能而出售时未作说明的；\n(三)不符合在",
+          "overview": "",
+          "content": "",
+          "level": 2,
+          "match_reason": ""
+        },
+        {
+          "uri": "viking://resources/laws/consumer_protection/消费者权益保护法/消费者权益保护法_第五十二条.md",
+          "context_type": "resource",
+          "score": 0.5006,
+          "abstract": "# 消费者权益保护法_第五十二条\n\nlaw_name: 消费者权益保护法\narticle_no: 第五十二条\nchunk_id: 消费者权益保护法_第五十二条\ndomain: consumer_protection\nhierarchy: 第七章 法律责任\n\n第五十二条 经营者提供商品或者服务，造成消费者财产损害的，应当依照法律规定或者当事人约定承担修理、重作、更换、退货、补足商品数量、退还货款和服务费用或者赔偿损失等民事责任。",
+          "overview": "",
+          "content": "",
+          "level": 2,
+          "match_reason": ""
+        },
+        {
+          "uri": "viking://resources/laws/consumer_protection/消费者权益保护法/消费者权益保护法_第十六条.md",
+          "context_type": "resource",
+          "score": 0.5001,
+          "abstract": "# 消费者权益保护法_第十六条\n\nlaw_name: 消费者权益保护法\narticle_no: 第十六条\nchunk_id: 消费者权益保护法_第十六条\ndomain: consumer_protection\nhierarchy: 第三章 经营者的义务\n\n第十六条 经营者向消费者提供商品或者服务，应当依照本法和其他有关法律、法规的规定履行义务。\n经营者和消费者有约定的，应当按照约定履行义务，但双方的约定不得违背法律、法规的规定。\n经营者向消费者提供商品或者服务，应当恪守社会公",
+          "overview": "",
+          "content": "",
+          "level": 2,
+          "match_reason": ""
+        },
+        {
+          "uri": "viking://resources/laws/consumer_protection/消费者权益保护法/消费者权益保护法_第五十六条.md",
+          "context_type": "resource",
+          "score": 0.4972,
+          "abstract": "# 消费者权益保护法_第五十六条\n\nlaw_name: 消费者权益保护法\narticle_no: 第五十六条\nchunk_id: 消费者权益保护法_第五十六条\ndomain: consumer_protection\nhierarchy: 第七章 法律责任\n\n第五十六条 经营者有下列情形之一，除承担相应的民事责任外，其他有关法律、法规对处罚机关和处罚方式有规定的，依照法律、法规的规定执行；法律、法规未作规定的，由工商行政管理部门或者其他有关行政部门责令改正，可以根据情节单处或者",
+          "overview": "",
+          "content": "",
+          "level": 2,
+          "match_reason": ""
+        },
+        {
+          "uri": "viking://resources/laws/civil_code/民法典/民法典_第六百一十条.md",
+          "context_type": "resource",
+          "score": 0.4965,
+          "abstract": "# 民法典_第六百一十条\n\nlaw_name: 民法典\narticle_no: 第六百一十条\nchunk_id: 民法典_第六百一十条\ndomain: civil_code\nhierarchy: 第三编　合同 > 第二分编　典型合同 > 第九章　买卖合同\n\n第六百一十条 因标的物不符合质量要求，致使不能实现合同目的的，买受人可以拒绝接受标的物或者解除合同。买受人拒绝接受标的物或者解除合同的，标的物毁损、灭失的风险由出卖人承担。",
+          "overview": "",
+          "content": "",
+          "level": 2,
+          "match_reason": ""
+        },
+        {
+          "uri": "viking://resources/laws/civil_code/民法典/民法典_第一千二百零六条.md",
+          "context_type": "resource",
+          "score": 0.4964,
+          "abstract": "# 民法典_第一千二百零六条\n\nlaw_name: 民法典\narticle_no: 第一千二百零六条\nchunk_id: 民法典_第一千二百零六条\ndomain: civil_code\nhierarchy: 第七编　侵权责任 > 第四章　产品责任\n\n第一千二百零六条 产品投入流通后发现存在缺陷的，生产者、销售者应当及时采取停止销售、警示、召回等补救措施；未及时采取补救措施或者补救措施不力造成损害扩大的，对扩大的损害也应当承担侵权责任。\n依据前款规定采取召回措施的，生产者、销售",
+          "overview": "",
+          "content": "",
+          "level": 2,
+          "match_reason": ""
+        },
+        {
+          "uri": "viking://resources/laws/civil_code/民法典/民法典_第六百三十八条.md",
+          "context_type": "resource",
+          "score": 0.4953,
+          "abstract": "# 民法典_第六百三十八条\n\nlaw_name: 民法典\narticle_no: 第六百三十八条\nchunk_id: 民法典_第六百三十八条\ndomain: civil_code\nhierarchy: 第三编　合同 > 第二分编　典型合同 > 第九章　买卖合同\n\n第六百三十八条 试用买卖的买受人在试用期内可以购买标的物，也可以拒绝购买。试用期限届满，买受人对是否购买标的物未作表示的，视为购买。\n试用买卖的买受人在试用期内已经支付部分价款或者对标的物实施出卖、出租、设立担保物权",
+          "overview": "",
+          "content": "",
+          "level": 2,
+          "match_reason": ""
+        },
+        {
+          "uri": "viking://resources/laws/consumer_protection/消费者权益保护法/消费者权益保护法_第十九条.md",
+          "context_type": "resource",
+          "score": 0.4921,
+          "abstract": "# 消费者权益保护法_第十九条\n\nlaw_name: 消费者权益保护法\narticle_no: 第十九条\nchunk_id: 消费者权益保护法_第十九条\ndomain: consumer_protection\nhierarchy: 第三章 经营者的义务\n\n第十九条 经营者发现其提供的商品或者服务存在缺陷，有危及人身、财产安全危险的，应当立即向有关行政部门报告和告知消费者，并采取停止销售、警示、召回、无害化处理、销毁、停止生产或者服务等措施。采取召回措施的，经营者应当承担消费者",
+          "overview": "",
+          "content": "",
+          "level": 2,
+          "match_reason": ""
+        },
+        {
+          "uri": "viking://resources/laws/civil_code/民法典/民法典_第六百二十八条.md",
+          "context_type": "resource",
+          "score": 0.4919,
+          "abstract": "# 民法典_第六百二十八条\n\nlaw_name: 民法典\narticle_no: 第六百二十八条\nchunk_id: 民法典_第六百二十八条\ndomain: civil_code\nhierarchy: 第三编　合同 > 第二分编　典型合同 > 第九章　买卖合同\n\n第六百二十八条 买受人应当按照约定的时间支付价款。对支付时间没有约定或者约定不明确，依据本法第五百一十条的规定仍不能确定的，买受人应当在收到标的物或者提取标的物单证的同时支付。",
+          "overview": "",
+          "content": "",
+          "level": 2,
+          "match_reason": ""
+        },
+        {
+          "uri": "viking://resources/laws/consumer_protection/消费者权益保护法/消费者权益保护法_第二十七条.md",
+          "context_type": "resource",
+          "score": 0.4904,
+          "abstract": "# 消费者权益保护法_第二十七条\n\nlaw_name: 消费者权益保护法\narticle_no: 第二十七条\nchunk_id: 消费者权益保护法_第二十七条\ndomain: consumer_protection\nhierarchy: 第三章 经营者的义务\n\n第二十七条 经营者不得对消费者进行侮辱、诽谤，不得搜查消费者的身体及其携带的物品，不得侵犯消费者的人身自由。",
+          "overview": "",
+          "content": "",
+          "level": 2,
+          "match_reason": ""
+        },
+        {
+          "uri": "viking://resources/laws/consumer_protection/消费者权益保护法/消费者权益保护法_第二十条.md",
+          "context_type": "resource",
+          "score": 0.4899,
+          "abstract": "# 消费者权益保护法_第二十条\n\nlaw_name: 消费者权益保护法\narticle_no: 第二十条\nchunk_id: 消费者权益保护法_第二十条\ndomain: consumer_protection\nhierarchy: 第三章 经营者的义务\n\n第二十条 经营者向消费者提供有关商品或者服务的质量、性能、用途、有效期限等信息，应当真实、全面，不得作虚假或者引人误解的宣传。\n经营者对消费者就其提供的商品或者服务的质量和使用方法等问题提出的询问，应当作出真实、明确的答复。",
+          "overview": "",
+          "content": "",
+          "level": 2,
+          "match_reason": ""
+        },
+        {
+          "uri": "viking://resources/laws/civil_code/民法典/民法典_第六百一十七条.md",
+          "context_type": "resource",
+          "score": 0.4891,
+          "abstract": "# 民法典_第六百一十七条\n\nlaw_name: 民法典\narticle_no: 第六百一十七条\nchunk_id: 民法典_第六百一十七条\ndomain: civil_code\nhierarchy: 第三编　合同 > 第二分编　典型合同 > 第九章　买卖合同\n\n第六百一十七条 出卖人交付的标的物不符合质量要求的，买受人可以依据本法第五百八十二条至第五百八十四条的规定请求承担违约责任。",
+          "overview": "",
+          "content": "",
+          "level": 2,
+          "match_reason": ""
+        },
+        {
+          "uri": "viking://resources/laws/consumer_protection/消费者权益保护法/消费者权益保护法_第四十四条.md",
+          "context_type": "resource",
+          "score": 0.4849,
+          "abstract": "# 消费者权益保护法_第四十四条\n\nlaw_name: 消费者权益保护法\narticle_no: 第四十四条\nchunk_id: 消费者权益保护法_第四十四条\ndomain: consumer_protection\nhierarchy: 第六章 争议的解决\n\n第四十四条 消费者通过网络交易平台购买商品或者接受服务，其合法权益受到损害的，可以向销售者或者服务者要求赔偿。网络交易平台提供者不能提供销售者或者服务者的真实名称、地址和有效联系方式的，消费者也可以向网络交易平台提供者要",
+          "overview": "",
+          "content": "",
+          "level": 2,
+          "match_reason": ""
+        },
+        {
+          "uri": "viking://resources/laws/consumer_protection/消费者权益保护法/消费者权益保护法_第二十三条.md",
+          "context_type": "resource",
+          "score": 0.4837,
+          "abstract": "# 消费者权益保护法_第二十三条\n\nlaw_name: 消费者权益保护法\narticle_no: 第二十三条\nchunk_id: 消费者权益保护法_第二十三条\ndomain: consumer_protection\nhierarchy: 第三章 经营者的义务\n\n第二十三条 经营者应当保证在正常使用商品或者接受服务的情况下其提供的商品或者服务应当具有的质量、性能、用途和有效期限；但消费者在购买该商品或者接受该服务前已经知道其存在瑕疵，且存在该瑕疵不违反法律强制性规定的除外。\n经",
+          "overview": "",
+          "content": "",
+          "level": 2,
+          "match_reason": ""
+        },
+        {
+          "uri": "viking://resources/laws/civil_code/民法典/民法典_第六百三十六条.md",
+          "context_type": "resource",
+          "score": 0.4832,
+          "abstract": "# 民法典_第六百三十六条\n\nlaw_name: 民法典\narticle_no: 第六百三十六条\nchunk_id: 民法典_第六百三十六条\ndomain: civil_code\nhierarchy: 第三编　合同 > 第二分编　典型合同 > 第九章　买卖合同\n\n第六百三十六条 凭样品买卖的买受人不知道样品有隐蔽瑕疵的，即使交付的标的物与样品相同，出卖人交付的标的物的质量仍然应当符合同种物的通常标准。",
+          "overview": "",
+          "content": "",
+          "level": 2,
+          "match_reason": ""
+        },
+        {
+          "uri": "viking://resources/laws/consumer_protection/消费者权益保护法/消费者权益保护法_第三十八条.md",
+          "context_type": "resource",
+          "score": 0.4817,
+          "abstract": "# 消费者权益保护法_第三十八条\n\nlaw_name: 消费者权益保护法\narticle_no: 第三十八条\nchunk_id: 消费者权益保护法_第三十八条\ndomain: consumer_protection\nhierarchy: 第五章 消费者组织\n\n第三十八条 消费者组织不得从事商品经营和营利性服务，不得以收取费用或者其他牟取利益的方式向消费者推荐商品和服务。",
+          "overview": "",
+          "content": "",
+          "level": 2,
+          "match_reason": ""
+        },
+        {
+          "uri": "viking://resources/laws/civil_code/民法典/民法典_第六百一十六条.md",
+          "context_type": "resource",
+          "score": 0.4813,
+          "abstract": "# 民法典_第六百一十六条\n\nlaw_name: 民法典\narticle_no: 第六百一十六条\nchunk_id: 民法典_第六百一十六条\ndomain: civil_code\nhierarchy: 第三编　合同 > 第二分编　典型合同 > 第九章　买卖合同\n\n第六百一十六条 当事人对标的物的质量要求没有约定或者约定不明确，依据本法第五百一十条的规定仍不能确定的，适用本法第五百一十一条第一项的规定。",
+          "overview": "",
+          "content": "",
+          "level": 2,
+          "match_reason": ""
+        }
+      ],
+      "baseline_hit": true,
+      "openviking_hit": true,
+      "baseline_reciprocal_rank": 0.5,
+      "openviking_reciprocal_rank": 0.5,
+      "baseline_precision": 0.5,
+      "openviking_precision": 0.5,
+      "baseline_recall": 1.0,
+      "openviking_recall": 1.0,
+      "resource_hit": true
+    },
+    {
+      "question": "离婚的时候，婚前买的房子对方能分吗？",
+      "corpus_status": "in_corpus",
+      "baseline_retrieved_ids": [
+        "民法典_第一千零九十二条",
+        "民法典_第一千零六十六条",
+        "民法典_第一千零八十八条",
+        "民法典_第一千一百五十三条",
+        "民法典_第一千零八十七条"
+      ],
+      "openviking_candidate_ids": [
+        "民法典_第一千零九十二条",
+        "民法典_第一千零六十六条",
+        "民法典_第一千零八十八条",
+        "民法典_第一千零八十七条",
+        "民法典_第一千零六十五条",
+        "民法典_第一千零八十九条",
+        "民法典_第一千零九十条",
+        "民法典_第一千零六十二条"
+      ],
+      "openviking_retrieved_ids": [
+        "民法典_第一千零九十二条",
+        "民法典_第一千零六十六条",
+        "民法典_第一千零八十八条",
+        "民法典_第一千零八十七条",
+        "民法典_第一千零六十五条"
+      ],
+      "openviking_matches": [
+        {
+          "uri": "viking://resources/laws/civil_code/民法典/民法典_第一千零九十二条.md",
+          "context_type": "resource",
+          "score": 0.6597,
+          "abstract": "# 民法典_第一千零九十二条\n\nlaw_name: 民法典\narticle_no: 第一千零九十二条\nchunk_id: 民法典_第一千零九十二条\ndomain: civil_code\nhierarchy: 第五编　婚姻家庭 > 第四章　离婚\n\n第一千零九十二条 夫妻一方隐藏、转移、变卖、毁损、挥霍夫妻共同财产，或者伪造夫妻共同债务企图侵占另一方财产的，在离婚分割夫妻共同财产时，对该方可以少分或者不分。离婚后，另一方发现有上述行为的，可以向人民法院提起诉讼，请求再次分割夫妻共",
+          "overview": "",
+          "content": "",
+          "level": 2,
+          "match_reason": ""
+        },
+        {
+          "uri": "viking://resources/laws/civil_code/民法典/民法典_第一千零八十七条.md",
+          "context_type": "resource",
+          "score": 0.6232,
+          "abstract": "# 民法典_第一千零八十七条\n\nlaw_name: 民法典\narticle_no: 第一千零八十七条\nchunk_id: 民法典_第一千零八十七条\ndomain: civil_code\nhierarchy: 第五编　婚姻家庭 > 第四章　离婚\n\n第一千零八十七条 离婚时，夫妻的共同财产由双方协议处理；协议不成的，由人民法院根据财产的具体情况，按照照顾子女、女方和无过错方权益的原则判决。\n对夫或者妻在家庭土地承包经营中享有的权益等，应当依法予以保护。",
+          "overview": "",
+          "content": "",
+          "level": 2,
+          "match_reason": ""
+        },
+        {
+          "uri": "viking://resources/laws/civil_code/民法典/民法典_第一千零八十九条.md",
+          "context_type": "resource",
+          "score": 0.6138,
+          "abstract": "# 民法典_第一千零八十九条\n\nlaw_name: 民法典\narticle_no: 第一千零八十九条\nchunk_id: 民法典_第一千零八十九条\ndomain: civil_code\nhierarchy: 第五编　婚姻家庭 > 第四章　离婚\n\n第一千零八十九条 离婚时，夫妻共同债务应当共同偿还。共同财产不足清偿或者财产归各自所有的，由双方协议清偿；协议不成的，由人民法院判决。",
+          "overview": "",
+          "content": "",
+          "level": 2,
+          "match_reason": ""
+        },
+        {
+          "uri": "viking://resources/laws/civil_code/民法典/民法典_第一千零九十条.md",
+          "context_type": "resource",
+          "score": 0.5978,
+          "abstract": "# 民法典_第一千零九十条\n\nlaw_name: 民法典\narticle_no: 第一千零九十条\nchunk_id: 民法典_第一千零九十条\ndomain: civil_code\nhierarchy: 第五编　婚姻家庭 > 第四章　离婚\n\n第一千零九十条 离婚时，如果一方生活困难，有负担能力的另一方应当给予适当帮助。具体办法由双方协议；协议不成的，由人民法院判决。",
+          "overview": "",
+          "content": "",
+          "level": 2,
+          "match_reason": ""
+        },
+        {
+          "uri": "viking://resources/laws/civil_code/民法典/民法典_第一千零八十二条.md",
+          "context_type": "resource",
+          "score": 0.5957,
+          "abstract": "# 民法典_第一千零八十二条\n\nlaw_name: 民法典\narticle_no: 第一千零八十二条\nchunk_id: 民法典_第一千零八十二条\ndomain: civil_code\nhierarchy: 第五编　婚姻家庭 > 第四章　离婚\n\n第一千零八十二条 女方在怀孕期间、分娩后一年内或者终止妊娠后六个月内，男方不得提出离婚；但是，女方提出离婚或者人民法院认为确有必要受理男方离婚请求的除外。",
+          "overview": "",
+          "content": "",
+          "level": 2,
+          "match_reason": ""
+        },
+        {
+          "uri": "viking://resources/laws/civil_code/民法典/民法典_第一千零七十六条.md",
+          "context_type": "resource",
+          "score": 0.5853,
+          "abstract": "# 民法典_第一千零七十六条\n\nlaw_name: 民法典\narticle_no: 第一千零七十六条\nchunk_id: 民法典_第一千零七十六条\ndomain: civil_code\nhierarchy: 第五编　婚姻家庭 > 第四章　离婚\n\n第一千零七十六条 夫妻双方自愿离婚的，应当签订书面离婚协议，并亲自到婚姻登记机关申请离婚登记。\n离婚协议应当载明双方自愿离婚的意思表示和对子女抚养、财产以及债务处理等事项协商一致的意见。",
+          "overview": "",
+          "content": "",
+          "level": 2,
+          "match_reason": ""
+        },
+        {
+          "uri": "viking://resources/laws/civil_code/民法典/民法典_第一千零七十九条.md",
+          "context_type": "resource",
+          "score": 0.5835,
+          "abstract": "# 民法典_第一千零七十九条\n\nlaw_name: 民法典\narticle_no: 第一千零七十九条\nchunk_id: 民法典_第一千零七十九条\ndomain: civil_code\nhierarchy: 第五编　婚姻家庭 > 第四章　离婚\n\n第一千零七十九条 夫妻一方要求离婚的，可以由有关组织进行调解或者直接向人民法院提起离婚诉讼。\n人民法院审理离婚案件，应当进行调解；如果感情确已破裂，调解无效的，应当准予离婚。\n有下列情形之一，调解无效的，应当准予离婚：\n（一）重婚或者",
+          "overview": "",
+          "content": "",
+          "level": 2,
+          "match_reason": ""
+        },
+        {
+          "uri": "viking://resources/laws/civil_code/民法典/民法典_第一千零八十八条.md",
+          "context_type": "resource",
+          "score": 0.5808,
+          "abstract": "# 民法典_第一千零八十八条\n\nlaw_name: 民法典\narticle_no: 第一千零八十八条\nchunk_id: 民法典_第一千零八十八条\ndomain: civil_code\nhierarchy: 第五编　婚姻家庭 > 第四章　离婚\n\n第一千零八十八条 夫妻一方因抚育子女、照料老年人、协助另一方工作等负担较多义务的，离婚时有权向另一方请求补偿，另一方应当给予补偿。具体办法由双方协议；协议不成的，由人民法院判决。",
+          "overview": "",
+          "content": "",
+          "level": 2,
+          "match_reason": ""
+        },
+        {
+          "uri": "viking://resources/laws/civil_code/民法典/民法典_第一千零七十八条.md",
+          "context_type": "resource",
+          "score": 0.5749,
+          "abstract": "# 民法典_第一千零七十八条\n\nlaw_name: 民法典\narticle_no: 第一千零七十八条\nchunk_id: 民法典_第一千零七十八条\ndomain: civil_code\nhierarchy: 第五编　婚姻家庭 > 第四章　离婚\n\n第一千零七十八条 婚姻登记机关查明双方确实是自愿离婚，并已经对子女抚养、财产以及债务处理等事项协商一致的，予以登记，发给离婚证。",
+          "overview": "",
+          "content": "",
+          "level": 2,
+          "match_reason": ""
+        },
+        {
+          "uri": "viking://resources/laws/civil_code/民法典/民法典_第一千零七十七条.md",
+          "context_type": "resource",
+          "score": 0.5743,
+          "abstract": "# 民法典_第一千零七十七条\n\nlaw_name: 民法典\narticle_no: 第一千零七十七条\nchunk_id: 民法典_第一千零七十七条\ndomain: civil_code\nhierarchy: 第五编　婚姻家庭 > 第四章　离婚\n\n第一千零七十七条 自婚姻登记机关收到离婚登记申请之日起三十日内，任何一方不愿意离婚的，可以向婚姻登记机关撤回离婚登记申请。\n前款规定期限届满后三十日内，双方应当亲自到婚姻登记机关申请发给离婚证；未申请的，视为撤回离婚登记申请。",
+          "overview": "",
+          "content": "",
+          "level": 2,
+          "match_reason": ""
+        },
+        {
+          "uri": "viking://resources/laws/civil_code/民法典/民法典_第一千零八十三条.md",
+          "context_type": "resource",
+          "score": 0.5698,
+          "abstract": "# 民法典_第一千零八十三条\n\nlaw_name: 民法典\narticle_no: 第一千零八十三条\nchunk_id: 民法典_第一千零八十三条\ndomain: civil_code\nhierarchy: 第五编　婚姻家庭 > 第四章　离婚\n\n第一千零八十三条 离婚后，男女双方自愿恢复婚姻关系的，应当到婚姻登记机关重新进行结婚登记。",
+          "overview": "",
+          "content": "",
+          "level": 2,
+          "match_reason": ""
+        },
+        {
+          "uri": "viking://resources/laws/civil_code/民法典/民法典_第一千零八十五条.md",
+          "context_type": "resource",
+          "score": 0.5694,
+          "abstract": "# 民法典_第一千零八十五条\n\nlaw_name: 民法典\narticle_no: 第一千零八十五条\nchunk_id: 民法典_第一千零八十五条\ndomain: civil_code\nhierarchy: 第五编　婚姻家庭 > 第四章　离婚\n\n第一千零八十五条 离婚后，子女由一方直接抚养的，另一方应当负担部分或者全部抚养费。负担费用的多少和期限的长短，由双方协议；协议不成的，由人民法院判决。\n前款规定的协议或者判决，不妨碍子女在必要时向父母任何一方提出超过协议或者判决原定数",
+          "overview": "",
+          "content": "",
+          "level": 2,
+          "match_reason": ""
+        },
+        {
+          "uri": "viking://resources/laws/civil_code/民法典/民法典_第一千一百五十三条.md",
+          "context_type": "resource",
+          "score": 0.5613,
+          "abstract": "# 民法典_第一千一百五十三条\n\nlaw_name: 民法典\narticle_no: 第一千一百五十三条\nchunk_id: 民法典_第一千一百五十三条\ndomain: civil_code\nhierarchy: 第六编　继承 > 第四章　遗产的处理\n\n第一千一百五十三条 夫妻共同所有的财产，除有约定的外，遗产分割时，应当先将共同所有的财产的一半分出为配偶所有，其余的为被继承人的遗产。\n遗产在家庭共有财产之中的，遗产分割时，应当先分出他人的财产。",
+          "overview": "",
+          "content": "",
+          "level": 2,
+          "match_reason": ""
+        },
+        {
+          "uri": "viking://resources/laws/civil_code/民法典/民法典_第一千零六十六条.md",
+          "context_type": "resource",
+          "score": 0.5551,
+          "abstract": "# 民法典_第一千零六十六条\n\nlaw_name: 民法典\narticle_no: 第一千零六十六条\nchunk_id: 民法典_第一千零六十六条\ndomain: civil_code\nhierarchy: 第五编　婚姻家庭 > 第三章　家庭关系 > 第一节　夫妻关系\n\n第一千零六十六条 婚姻关系存续期间，有下列情形之一的，夫妻一方可以向人民法院请求分割共同财产：\n（一）一方有隐藏、转移、变卖、毁损、挥霍夫妻共同财产或者伪造夫妻共同债务等严重损害夫妻共同财产利益的行为；\n（二",
+          "overview": "",
+          "content": "",
+          "level": 2,
+          "match_reason": ""
+        },
+        {
+          "uri": "viking://resources/laws/civil_code/民法典/民法典_第一千零八十条.md",
+          "context_type": "resource",
+          "score": 0.5489,
+          "abstract": "# 民法典_第一千零八十条\n\nlaw_name: 民法典\narticle_no: 第一千零八十条\nchunk_id: 民法典_第一千零八十条\ndomain: civil_code\nhierarchy: 第五编　婚姻家庭 > 第四章　离婚\n\n第一千零八十条 完成离婚登记，或者离婚判决书、调解书生效，即解除婚姻关系。",
+          "overview": "",
+          "content": "",
+          "level": 2,
+          "match_reason": ""
+        },
+        {
+          "uri": "viking://resources/laws/civil_code/民法典/民法典_第一千零六十五条.md",
+          "context_type": "resource",
+          "score": 0.5476,
+          "abstract": "# 民法典_第一千零六十五条\n\nlaw_name: 民法典\narticle_no: 第一千零六十五条\nchunk_id: 民法典_第一千零六十五条\ndomain: civil_code\nhierarchy: 第五编　婚姻家庭 > 第三章　家庭关系 > 第一节　夫妻关系\n\n第一千零六十五条 男女双方可以约定婚姻关系存续期间所得的财产以及婚前财产归各自所有、共同所有或者部分各自所有、部分共同所有。约定应当采用书面形式。没有约定或者约定不明确的，适用本法第一千零六十二条、第一千零六",
+          "overview": "",
+          "content": "",
+          "level": 2,
+          "match_reason": ""
+        },
+        {
+          "uri": "viking://resources/laws/civil_code/民法典/民法典_第一千零六十二条.md",
+          "context_type": "resource",
+          "score": 0.5428,
+          "abstract": "# 民法典_第一千零六十二条\n\nlaw_name: 民法典\narticle_no: 第一千零六十二条\nchunk_id: 民法典_第一千零六十二条\ndomain: civil_code\nhierarchy: 第五编　婚姻家庭 > 第三章　家庭关系 > 第一节　夫妻关系\n\n第一千零六十二条 夫妻在婚姻关系存续期间所得的下列财产，为夫妻的共同财产，归夫妻共同所有：\n（一）工资、奖金、劳务报酬；\n（二）生产、经营、投资的收益；\n（三）知识产权的收益；\n（四）继承或者受赠的财产，但是",
+          "overview": "",
+          "content": "",
+          "level": 2,
+          "match_reason": ""
+        },
+        {
+          "uri": "viking://resources/laws/civil_code/民法典/民法典_第一千零六十三条.md",
+          "context_type": "resource",
+          "score": 0.5425,
+          "abstract": "# 民法典_第一千零六十三条\n\nlaw_name: 民法典\narticle_no: 第一千零六十三条\nchunk_id: 民法典_第一千零六十三条\ndomain: civil_code\nhierarchy: 第五编　婚姻家庭 > 第三章　家庭关系 > 第一节　夫妻关系\n\n第一千零六十三条 下列财产为夫妻一方的个人财产：\n（一）一方的婚前财产；\n（二）一方因受到人身损害获得的赔偿或者补偿；\n（三）遗嘱或者赠与合同中确定只归一方的财产；\n（四）一方专用的生活用品；\n（五）其他应当",
+          "overview": "",
+          "content": "",
+          "level": 2,
+          "match_reason": ""
+        },
+        {
+          "uri": "viking://resources/laws/civil_code/民法典/民法典_第一千零八十六条.md",
+          "context_type": "resource",
+          "score": 0.5401,
+          "abstract": "# 民法典_第一千零八十六条\n\nlaw_name: 民法典\narticle_no: 第一千零八十六条\nchunk_id: 民法典_第一千零八十六条\ndomain: civil_code\nhierarchy: 第五编　婚姻家庭 > 第四章　离婚\n\n第一千零八十六条 离婚后，不直接抚养子女的父或者母，有探望子女的权利，另一方有协助的义务。\n行使探望权利的方式、时间由当事人协议；协议不成的，由人民法院判决。\n父或者母探望子女，不利于子女身心健康的，由人民法院依法中止探望；中止的事由",
+          "overview": "",
+          "content": "",
+          "level": 2,
+          "match_reason": ""
+        },
+        {
+          "uri": "viking://resources/laws/civil_code/民法典/民法典_第一千零九十一条.md",
+          "context_type": "resource",
+          "score": 0.5391,
+          "abstract": "# 民法典_第一千零九十一条\n\nlaw_name: 民法典\narticle_no: 第一千零九十一条\nchunk_id: 民法典_第一千零九十一条\ndomain: civil_code\nhierarchy: 第五编　婚姻家庭 > 第四章　离婚\n\n第一千零九十一条 有下列情形之一，导致离婚的，无过错方有权请求损害赔偿：\n（一）重婚；\n（二）与他人同居；\n（三）实施家庭暴力；\n（四）虐待、遗弃家庭成员；\n（五）有其他重大过错。",
+          "overview": "",
+          "content": "",
+          "level": 2,
+          "match_reason": ""
+        }
+      ],
+      "baseline_hit": true,
+      "openviking_hit": true,
+      "baseline_reciprocal_rank": 0.2,
+      "openviking_reciprocal_rank": 0.25,
+      "baseline_precision": 0.2,
+      "openviking_precision": 0.2,
+      "baseline_recall": 0.5,
+      "openviking_recall": 0.5,
+      "resource_hit": false
+    },
+    {
+      "question": "朋友借了我5万块钱，就写了个微信聊天记录说会还，现在不认账了怎么办？",
+      "corpus_status": "in_corpus",
+      "baseline_retrieved_ids": [
+        "民法典_第五百二十七条"
+      ],
+      "openviking_candidate_ids": [],
+      "openviking_retrieved_ids": [],
+      "openviking_matches": [
+        {
+          "uri": "viking://resources/laws/civil_code/民法典/民法典_第六百七十五条.md",
+          "context_type": "resource",
+          "score": 0.5191,
+          "abstract": "# 民法典_第六百七十五条\n\nlaw_name: 民法典\narticle_no: 第六百七十五条\nchunk_id: 民法典_第六百七十五条\ndomain: civil_code\nhierarchy: 第三编　合同 > 第二分编　典型合同 > 第十二章　借款合同\n\n第六百七十五条 借款人应当按照约定的期限返还借款。对借款期限没有约定或者约定不明确，依据本法第五百一十条的规定仍不能确定的，借款人可以随时返还；贷款人可以催告借款人在合理期限内返还。",
+          "overview": "",
+          "content": "",
+          "level": 2,
+          "match_reason": ""
+        },
+        {
+          "uri": "viking://resources/laws/civil_code/民法典/民法典_第六百七十七条.md",
+          "context_type": "resource",
+          "score": 0.5184,
+          "abstract": "# 民法典_第六百七十七条\n\nlaw_name: 民法典\narticle_no: 第六百七十七条\nchunk_id: 民法典_第六百七十七条\ndomain: civil_code\nhierarchy: 第三编　合同 > 第二分编　典型合同 > 第十二章　借款合同\n\n第六百七十七条 借款人提前返还借款的，除当事人另有约定外，应当按照实际借款的期间计算利息。",
+          "overview": "",
+          "content": "",
+          "level": 2,
+          "match_reason": ""
+        },
+        {
+          "uri": "viking://resources/laws/civil_code/民法典/民法典_第四百五十三条.md",
+          "context_type": "resource",
+          "score": 0.5074,
+          "abstract": "# 民法典_第四百五十三条\n\nlaw_name: 民法典\narticle_no: 第四百五十三条\nchunk_id: 民法典_第四百五十三条\ndomain: civil_code\nhierarchy: 第二编　物权 > 第四分编　担保物权 > 第十九章　留置权\n\n第四百五十三条 留置权人与债务人应当约定留置财产后的债务履行期限；没有约定或者约定不明确的，留置权人应当给债务人六十日以上履行债务的期限，但是鲜活易腐等不易保管的动产除外。债务人逾期未履行的，留置权人可以与债务人协议",
+          "overview": "",
+          "content": "",
+          "level": 2,
+          "match_reason": ""
+        },
+        {
+          "uri": "viking://resources/laws/civil_code/民法典/民法典_第六百七十六条.md",
+          "context_type": "resource",
+          "score": 0.5071,
+          "abstract": "# 民法典_第六百七十六条\n\nlaw_name: 民法典\narticle_no: 第六百七十六条\nchunk_id: 民法典_第六百七十六条\ndomain: civil_code\nhierarchy: 第三编　合同 > 第二分编　典型合同 > 第十二章　借款合同\n\n第六百七十六条 借款人未按照约定的期限返还借款的，应当按照约定或者国家有关规定支付逾期利息。",
+          "overview": "",
+          "content": "",
+          "level": 2,
+          "match_reason": ""
+        },
+        {
+          "uri": "viking://resources/laws/civil_code/民法典/民法典_第五百七十四条.md",
+          "context_type": "resource",
+          "score": 0.4936,
+          "abstract": "# 民法典_第五百七十四条\n\nlaw_name: 民法典\narticle_no: 第五百七十四条\nchunk_id: 民法典_第五百七十四条\ndomain: civil_code\nhierarchy: 第三编　合同 > 第一分编　通则 > 第七章　合同的权利义务终止\n\n第五百七十四条 债权人可以随时领取提存物。但是，债权人对债务人负有到期债务的，在债权人未履行债务或者提供担保之前，提存部门根据债务人的要求应当拒绝其领取提存物。\n债权人领取提存物的权利，自提存之日起五年内不行使",
+          "overview": "",
+          "content": "",
+          "level": 2,
+          "match_reason": ""
+        },
+        {
+          "uri": "viking://resources/laws/civil_code/民法典/民法典_第四百四十五条.md",
+          "context_type": "resource",
+          "score": 0.4836,
+          "abstract": "# 民法典_第四百四十五条\n\nlaw_name: 民法典\narticle_no: 第四百四十五条\nchunk_id: 民法典_第四百四十五条\ndomain: civil_code\nhierarchy: 第二编　物权 > 第四分编　担保物权 > 第十八章　质权 > 第二节　权利质权\n\n第四百四十五条 以应收账款出质的，质权自办理出质登记时设立。\n应收账款出质后，不得转让，但是出质人与质权人协商同意的除外。出质人转让应收账款所得的价款，应当向质权人提前清偿债务或者提存。",
+          "overview": "",
+          "content": "",
+          "level": 2,
+          "match_reason": ""
+        },
+        {
+          "uri": "viking://resources/laws/civil_code/民法典/民法典_第六百七十四条.md",
+          "context_type": "resource",
+          "score": 0.4832,
+          "abstract": "# 民法典_第六百七十四条\n\nlaw_name: 民法典\narticle_no: 第六百七十四条\nchunk_id: 民法典_第六百七十四条\ndomain: civil_code\nhierarchy: 第三编　合同 > 第二分编　典型合同 > 第十二章　借款合同\n\n第六百七十四条 借款人应当按照约定的期限支付利息。对支付利息的期限没有约定或者约定不明确，依据本法第五百一十条的规定仍不能确定，借款期间不满一年的，应当在返还借款时一并支付；借款期间一年以上的，应当在每届满一年时支",
+          "overview": "",
+          "content": "",
+          "level": 2,
+          "match_reason": ""
+        },
+        {
+          "uri": "viking://resources/laws/civil_code/民法典/民法典_第五百七十三条.md",
+          "context_type": "resource",
+          "score": 0.4828,
+          "abstract": "# 民法典_第五百七十三条\n\nlaw_name: 民法典\narticle_no: 第五百七十三条\nchunk_id: 民法典_第五百七十三条\ndomain: civil_code\nhierarchy: 第三编　合同 > 第一分编　通则 > 第七章　合同的权利义务终止\n\n第五百七十三条 标的物提存后，毁损、灭失的风险由债权人承担。提存期间，标的物的孳息归债权人所有。提存费用由债权人负担。",
+          "overview": "",
+          "content": "",
+          "level": 2,
+          "match_reason": ""
+        },
+        {
+          "uri": "viking://resources/laws/civil_code/民法典/民法典_第七百六十三条.md",
+          "context_type": "resource",
+          "score": 0.4814,
+          "abstract": "# 民法典_第七百六十三条\n\nlaw_name: 民法典\narticle_no: 第七百六十三条\nchunk_id: 民法典_第七百六十三条\ndomain: civil_code\nhierarchy: 第三编　合同 > 第二分编　典型合同 > 第十六章　保理合同\n\n第七百六十三条 应收账款债权人与债务人虚构应收账款作为转让标的，与保理人订立保理合同的，应收账款债务人不得以应收账款不存在为由对抗保理人，但是保理人明知虚构的除外。",
+          "overview": "",
+          "content": "",
+          "level": 2,
+          "match_reason": ""
+        },
+        {
+          "uri": "viking://resources/laws/civil_code/民法典/民法典_第六百七十一条.md",
+          "context_type": "resource",
+          "score": 0.4762,
+          "abstract": "# 民法典_第六百七十一条\n\nlaw_name: 民法典\narticle_no: 第六百七十一条\nchunk_id: 民法典_第六百七十一条\ndomain: civil_code\nhierarchy: 第三编　合同 > 第二分编　典型合同 > 第十二章　借款合同\n\n第六百七十一条 贷款人未按照约定的日期、数额提供借款，造成借款人损失的，应当赔偿损失。\n借款人未按照约定的日期、数额收取借款的，应当按照约定的日期、数额支付利息。",
+          "overview": "",
+          "content": "",
+          "level": 2,
+          "match_reason": ""
+        },
+        {
+          "uri": "viking://resources/laws/civil_procedure/民事诉讼法/民事诉讼法_第六十九条.md",
+          "context_type": "resource",
+          "score": 0.4699,
+          "abstract": "# 民事诉讼法_第六十九条\n\nlaw_name: 民事诉讼法\narticle_no: 第六十九条\nchunk_id: 民事诉讼法_第六十九条\ndomain: civil_procedure\nhierarchy: 第一编　总则 > 第六章　证据\n\n第六十九条 人民法院收到当事人提交的证据材料，应当出具收据，写明证据名称、页数、份数、原件或者复印件以及收到时间等，并由经办人员签名或者盖章。",
+          "overview": "",
+          "content": "",
+          "level": 2,
+          "match_reason": ""
+        },
+        {
+          "uri": "viking://resources/laws/civil_code/民法典/民法典_第六百七十条.md",
+          "context_type": "resource",
+          "score": 0.4691,
+          "abstract": "# 民法典_第六百七十条\n\nlaw_name: 民法典\narticle_no: 第六百七十条\nchunk_id: 民法典_第六百七十条\ndomain: civil_code\nhierarchy: 第三编　合同 > 第二分编　典型合同 > 第十二章　借款合同\n\n第六百七十条 借款的利息不得预先在本金中扣除。利息预先在本金中扣除的，应当按照实际借款数额返还借款并计算利息。",
+          "overview": "",
+          "content": "",
+          "level": 2,
+          "match_reason": ""
+        },
+        {
+          "uri": "viking://resources/laws/civil_code/民法典/民法典_第五百七十一条.md",
+          "context_type": "resource",
+          "score": 0.4672,
+          "abstract": "# 民法典_第五百七十一条\n\nlaw_name: 民法典\narticle_no: 第五百七十一条\nchunk_id: 民法典_第五百七十一条\ndomain: civil_code\nhierarchy: 第三编　合同 > 第一分编　通则 > 第七章　合同的权利义务终止\n\n第五百七十一条 债务人将标的物或者将标的物依法拍卖、变卖所得价款交付提存部门时，提存成立。\n提存成立的，视为债务人在其提存范围内已经交付标的物。",
+          "overview": "",
+          "content": "",
+          "level": 2,
+          "match_reason": ""
+        },
+        {
+          "uri": "viking://resources/laws/civil_code/民法典/民法典_第五百二十六条.md",
+          "context_type": "resource",
+          "score": 0.4659,
+          "abstract": "# 民法典_第五百二十六条\n\nlaw_name: 民法典\narticle_no: 第五百二十六条\nchunk_id: 民法典_第五百二十六条\ndomain: civil_code\nhierarchy: 第三编　合同 > 第一分编　通则 > 第四章　合同的履行\n\n第五百二十六条 当事人互负债务，有先后履行顺序，应当先履行债务一方未履行的，后履行一方有权拒绝其履行请求。先履行一方履行债务不符合约定的，后履行一方有权拒绝其相应的履行请求。",
+          "overview": "",
+          "content": "",
+          "level": 2,
+          "match_reason": ""
+        },
+        {
+          "uri": "viking://resources/laws/civil_code/民法典/民法典_第五百八十七条.md",
+          "context_type": "resource",
+          "score": 0.4659,
+          "abstract": "# 民法典_第五百八十七条\n\nlaw_name: 民法典\narticle_no: 第五百八十七条\nchunk_id: 民法典_第五百八十七条\ndomain: civil_code\nhierarchy: 第三编　合同 > 第一分编　通则 > 第八章　违约责任\n\n第五百八十七条 债务人履行债务的，定金应当抵作价款或者收回。给付定金的一方不履行债务或者履行债务不符合约定，致使不能实现合同目的的，无权请求返还定金；收受定金的一方不履行债务或者履行债务不符合约定，致使不能实现合同目的的",
+          "overview": "",
+          "content": "",
+          "level": 2,
+          "match_reason": ""
+        },
+        {
+          "uri": "viking://resources/laws/civil_code/民法典/民法典_第五百五十八条.md",
+          "context_type": "resource",
+          "score": 0.4654,
+          "abstract": "# 民法典_第五百五十八条\n\nlaw_name: 民法典\narticle_no: 第五百五十八条\nchunk_id: 民法典_第五百五十八条\ndomain: civil_code\nhierarchy: 第三编　合同 > 第一分编　通则 > 第七章　合同的权利义务终止\n\n第五百五十八条 债权债务终止后，当事人应当遵循诚信等原则，根据交易习惯履行通知、协助、保密、旧物回收等义务。",
+          "overview": "",
+          "content": "",
+          "level": 2,
+          "match_reason": ""
+        },
+        {
+          "uri": "viking://resources/laws/civil_code/民法典/民法典_第六百九十二条.md",
+          "context_type": "resource",
+          "score": 0.4646,
+          "abstract": "# 民法典_第六百九十二条\n\nlaw_name: 民法典\narticle_no: 第六百九十二条\nchunk_id: 民法典_第六百九十二条\ndomain: civil_code\nhierarchy: 第三编　合同 > 第二分编　典型合同 > 第十三章　保证合同 > 第二节　保证责任\n\n第六百九十二条 保证期间是确定保证人承担保证责任的期间，不发生中止、中断和延长。\n债权人与保证人可以约定保证期间，但是约定的保证期间早于主债务履行期限或者与主债务履行期限同时届满的，视为没有约",
+          "overview": "",
+          "content": "",
+          "level": 2,
+          "match_reason": ""
+        },
+        {
+          "uri": "viking://resources/laws/civil_code/民法典/民法典_第五百六十条.md",
+          "context_type": "resource",
+          "score": 0.4634,
+          "abstract": "# 民法典_第五百六十条\n\nlaw_name: 民法典\narticle_no: 第五百六十条\nchunk_id: 民法典_第五百六十条\ndomain: civil_code\nhierarchy: 第三编　合同 > 第一分编　通则 > 第七章　合同的权利义务终止\n\n第五百六十条 债务人对同一债权人负担的数项债务种类相同，债务人的给付不足以清偿全部债务的，除当事人另有约定外，由债务人在清偿时指定其履行的债务。\n债务人未作指定的，应当优先履行已经到期的债务；数项债务均到期的，优先履",
+          "overview": "",
+          "content": "",
+          "level": 2,
+          "match_reason": ""
+        },
+        {
+          "uri": "viking://resources/laws/civil_code/民法典/民法典_第六百七十八条.md",
+          "context_type": "resource",
+          "score": 0.463,
+          "abstract": "# 民法典_第六百七十八条\n\nlaw_name: 民法典\narticle_no: 第六百七十八条\nchunk_id: 民法典_第六百七十八条\ndomain: civil_code\nhierarchy: 第三编　合同 > 第二分编　典型合同 > 第十二章　借款合同\n\n第六百七十八条 借款人可以在还款期限届满前向贷款人申请展期；贷款人同意的，可以展期。",
+          "overview": "",
+          "content": "",
+          "level": 2,
+          "match_reason": ""
+        },
+        {
+          "uri": "viking://resources/laws/civil_code/民法典/民法典_第六百八十条.md",
+          "context_type": "resource",
+          "score": 0.4628,
+          "abstract": "# 民法典_第六百八十条\n\nlaw_name: 民法典\narticle_no: 第六百八十条\nchunk_id: 民法典_第六百八十条\ndomain: civil_code\nhierarchy: 第三编　合同 > 第二分编　典型合同 > 第十二章　借款合同\n\n第六百八十条 禁止高利放贷，借款的利率不得违反国家有关规定。\n借款合同对支付利息没有约定的，视为没有利息。\n借款合同对支付利息约定不明确，当事人不能达成补充协议的，按照当地或者当事人的交易方式、交易习惯、市场利率等因素确",
+          "overview": "",
+          "content": "",
+          "level": 2,
+          "match_reason": ""
+        }
+      ],
+      "baseline_hit": false,
+      "openviking_hit": false,
+      "baseline_reciprocal_rank": 0.0,
+      "openviking_reciprocal_rank": 0.0,
+      "baseline_precision": 0.0,
+      "openviking_precision": 0.0,
+      "baseline_recall": 0.0,
+      "openviking_recall": 0.0,
+      "resource_hit": true
+    },
+    {
+      "question": "试用期三个月，公司只给我发八成工资合法吗",
+      "corpus_status": "in_corpus",
+      "baseline_retrieved_ids": [
+        "劳动合同法_第二十条",
+        "劳动合同法_第八十二条",
+        "劳动合同法_第八十三条"
+      ],
+      "openviking_candidate_ids": [
+        "劳动合同法_第二十条",
+        "劳动合同法_第八十二条",
+        "劳动合同法_第八十三条"
+      ],
+      "openviking_retrieved_ids": [
+        "劳动合同法_第二十条",
+        "劳动合同法_第八十二条",
+        "劳动合同法_第八十三条"
+      ],
+      "openviking_matches": [
+        {
+          "uri": "viking://resources/laws/labor/劳动合同法/劳动合同法_第八十三条.md",
+          "context_type": "resource",
+          "score": 0.6943,
+          "abstract": "# 劳动合同法_第八十三条\n\nlaw_name: 劳动合同法\narticle_no: 第八十三条\nchunk_id: 劳动合同法_第八十三条\ndomain: labor\nhierarchy: 第七章　法律责任\n\n第八十三条 用人单位违反本法规定与劳动者约定试用期的，由劳动行政部门责令改正；违法约定的试用期已经履行的，由用人单位以劳动者试用期满月工资为标准，按已经履行的超过法定试用期的期间向劳动者支付赔偿金。",
+          "overview": "",
+          "content": "",
+          "level": 2,
+          "match_reason": ""
+        },
+        {
+          "uri": "viking://resources/laws/labor/劳动合同法/劳动合同法_第十九条.md",
+          "context_type": "resource",
+          "score": 0.6664,
+          "abstract": "# 劳动合同法_第十九条\n\nlaw_name: 劳动合同法\narticle_no: 第十九条\nchunk_id: 劳动合同法_第十九条\ndomain: labor\nhierarchy: 第二章　劳动合同的订立\n\n第十九条 劳动合同期限三个月以上不满一年的，试用期不得超过一个月；劳动合同期限一年以上不满三年的，试用期不得超过二个月；三年以上固定期限和无固定期限的劳动合同，试用期不得超过六个月。\n同一用人单位与同一劳动者只能约定一次试用期。\n以完成一定工作任务为期限的劳动合同或者",
+          "overview": "",
+          "content": "",
+          "level": 2,
+          "match_reason": ""
+        },
+        {
+          "uri": "viking://resources/laws/labor/劳动合同法/劳动合同法_第二十条.md",
+          "context_type": "resource",
+          "score": 0.6631,
+          "abstract": "# 劳动合同法_第二十条\n\nlaw_name: 劳动合同法\narticle_no: 第二十条\nchunk_id: 劳动合同法_第二十条\ndomain: labor\nhierarchy: 第二章　劳动合同的订立\n\n第二十条 劳动者在试用期的工资不得低于本单位相同岗位最低档工资或者劳动合同约定工资的百分之八十，并不得低于用人单位所在地的最低工资标准。",
+          "overview": "",
+          "content": "",
+          "level": 2,
+          "match_reason": ""
+        },
+        {
+          "uri": "viking://resources/laws/labor/劳动法/劳动法_第二十一条.md",
+          "context_type": "resource",
+          "score": 0.6468,
+          "abstract": "# 劳动法_第二十一条\n\nlaw_name: 劳动法\narticle_no: 第二十一条\nchunk_id: 劳动法_第二十一条\ndomain: labor\nhierarchy: 第三章　劳动合同和集体合同\n\n第二十一条 劳动合同可以约定试用期。试用期最长不得超过六个月。",
+          "overview": "",
+          "content": "",
+          "level": 2,
+          "match_reason": ""
+        },
+        {
+          "uri": "viking://resources/laws/labor/劳动合同法/劳动合同法_第八十二条.md",
+          "context_type": "resource",
+          "score": 0.6419,
+          "abstract": "# 劳动合同法_第八十二条\n\nlaw_name: 劳动合同法\narticle_no: 第八十二条\nchunk_id: 劳动合同法_第八十二条\ndomain: labor\nhierarchy: 第七章　法律责任\n\n第八十二条 用人单位自用工之日起超过一个月不满一年未与劳动者订立书面劳动合同的，应当向劳动者每月支付二倍的工资。\n用人单位违反本法规定不与劳动者订立无固定期限劳动合同的，自应当订立无固定期限劳动合同之日起向劳动者每月支付二倍的工资。",
+          "overview": "",
+          "content": "",
+          "level": 2,
+          "match_reason": ""
+        },
+        {
+          "uri": "viking://resources/laws/labor/劳动合同法/劳动合同法_第四十七条.md",
+          "context_type": "resource",
+          "score": 0.6405,
+          "abstract": "# 劳动合同法_第四十七条\n\nlaw_name: 劳动合同法\narticle_no: 第四十七条\nchunk_id: 劳动合同法_第四十七条\ndomain: labor\nhierarchy: 第四章　劳动合同的解除和终止\n\n第四十七条 经济补偿按劳动者在本单位工作的年限，每满一年支付一个月工资的标准向劳动者支付。六个月以上不满一年的，按一年计算；不满六个月的，向劳动者支付半个月工资的经济补偿。\n劳动者月工资高于用人单位所在直辖市、设区的市级人民政府公布的本地区上年度职工月平均",
+          "overview": "",
+          "content": "",
+          "level": 2,
+          "match_reason": ""
+        },
+        {
+          "uri": "viking://resources/laws/labor/劳动合同法/劳动合同法_第七十条.md",
+          "context_type": "resource",
+          "score": 0.6403,
+          "abstract": "# 劳动合同法_第七十条\n\nlaw_name: 劳动合同法\narticle_no: 第七十条\nchunk_id: 劳动合同法_第七十条\ndomain: labor\nhierarchy: 第五章　特别规定 > 第三节　非全日制用工\n\n第七十条 非全日制用工双方当事人不得约定试用期。",
+          "overview": "",
+          "content": "",
+          "level": 2,
+          "match_reason": ""
+        },
+        {
+          "uri": "viking://resources/laws/labor/劳动合同法/劳动合同法_第三十九条.md",
+          "context_type": "resource",
+          "score": 0.6322,
+          "abstract": "# 劳动合同法_第三十九条\n\nlaw_name: 劳动合同法\narticle_no: 第三十九条\nchunk_id: 劳动合同法_第三十九条\ndomain: labor\nhierarchy: 第四章　劳动合同的解除和终止\n\n第三十九条 劳动者有下列情形之一的，用人单位可以解除劳动合同:\n（一）在试用期间被证明不符合录用条件的；\n（二）严重违反用人单位的规章制度的；\n（三）严重失职，营私舞弊，给用人单位造成重大损害的；\n（四）劳动者同时与其他用人单位建立劳动关系，对完成本单位的",
+          "overview": "",
+          "content": "",
+          "level": 2,
+          "match_reason": ""
+        },
+        {
+          "uri": "viking://resources/laws/labor/劳动合同法/劳动合同法_第二十一条.md",
+          "context_type": "resource",
+          "score": 0.6206,
+          "abstract": "# 劳动合同法_第二十一条\n\nlaw_name: 劳动合同法\narticle_no: 第二十一条\nchunk_id: 劳动合同法_第二十一条\ndomain: labor\nhierarchy: 第二章　劳动合同的订立\n\n第二十一条 在试用期中，除劳动者有本法第三十九条和第四十条第一项、第二项规定的情形外，用人单位不得解除劳动合同。用人单位在试用期解除劳动合同的，应当向劳动者说明理由。",
+          "overview": "",
+          "content": "",
+          "level": 2,
+          "match_reason": ""
+        },
+        {
+          "uri": "viking://resources/laws/civil_code/民法典/民法典_第六百三十七条.md",
+          "context_type": "resource",
+          "score": 0.6177,
+          "abstract": "# 民法典_第六百三十七条\n\nlaw_name: 民法典\narticle_no: 第六百三十七条\nchunk_id: 民法典_第六百三十七条\ndomain: civil_code\nhierarchy: 第三编　合同 > 第二分编　典型合同 > 第九章　买卖合同\n\n第六百三十七条 试用买卖的当事人可以约定标的物的试用期限。对试用期限没有约定或者约定不明确，依据本法第五百一十条的规定仍不能确定的，由出卖人确定。",
+          "overview": "",
+          "content": "",
+          "level": 2,
+          "match_reason": ""
+        },
+        {
+          "uri": "viking://resources/laws/labor/劳动合同法/劳动合同法_第十八条.md",
+          "context_type": "resource",
+          "score": 0.6173,
+          "abstract": "# 劳动合同法_第十八条\n\nlaw_name: 劳动合同法\narticle_no: 第十八条\nchunk_id: 劳动合同法_第十八条\ndomain: labor\nhierarchy: 第二章　劳动合同的订立\n\n第十八条 劳动合同对劳动报酬和劳动条件等标准约定不明确，引发争议的，用人单位与劳动者可以重新协商；协商不成的，适用集体合同规定；没有集体合同或者集体合同未规定劳动报酬的，实行同工同酬；没有集体合同或者集体合同未规定劳动条件等标准的，适用国家有关规定。",
+          "overview": "",
+          "content": "",
+          "level": 2,
+          "match_reason": ""
+        },
+        {
+          "uri": "viking://resources/laws/labor/劳动合同法/劳动合同法_第九十四条.md",
+          "context_type": "resource",
+          "score": 0.6109,
+          "abstract": "# 劳动合同法_第九十四条\n\nlaw_name: 劳动合同法\narticle_no: 第九十四条\nchunk_id: 劳动合同法_第九十四条\ndomain: labor\nhierarchy: 第七章　法律责任\n\n第九十四条 个人承包经营违反本法规定招用劳动者，给劳动者造成损害的，发包的组织与个人承包经营者承担连带赔偿责任。",
+          "overview": "",
+          "content": "",
+          "level": 2,
+          "match_reason": ""
+        },
+        {
+          "uri": "viking://resources/laws/labor/劳动合同法/劳动合同法_第九十三条.md",
+          "context_type": "resource",
+          "score": 0.6101,
+          "abstract": "# 劳动合同法_第九十三条\n\nlaw_name: 劳动合同法\narticle_no: 第九十三条\nchunk_id: 劳动合同法_第九十三条\ndomain: labor\nhierarchy: 第七章　法律责任\n\n第九十三条 对不具备合法经营资格的用人单位的违法犯罪行为，依法追究法律责任；劳动者已经付出劳动的，该单位或者其出资人应当依照本法有关规定向劳动者支付劳动报酬、经济补偿、赔偿金；给劳动者造成损害的，应当承担赔偿责任。",
+          "overview": "",
+          "content": "",
+          "level": 2,
+          "match_reason": ""
+        },
+        {
+          "uri": "viking://resources/laws/labor/劳动合同法/劳动合同法_第七十二条.md",
+          "context_type": "resource",
+          "score": 0.6062,
+          "abstract": "# 劳动合同法_第七十二条\n\nlaw_name: 劳动合同法\narticle_no: 第七十二条\nchunk_id: 劳动合同法_第七十二条\ndomain: labor\nhierarchy: 第五章　特别规定 > 第三节　非全日制用工\n\n第七十二条 非全日制用工小时计酬标准不得低于用人单位所在地人民政府规定的最低小时工资标准。\n非全日制用工劳动报酬结算支付周期最长不得超过十五日。",
+          "overview": "",
+          "content": "",
+          "level": 2,
+          "match_reason": ""
+        },
+        {
+          "uri": "viking://resources/laws/labor/劳动合同法/劳动合同法_第三十七条.md",
+          "context_type": "resource",
+          "score": 0.6057,
+          "abstract": "# 劳动合同法_第三十七条\n\nlaw_name: 劳动合同法\narticle_no: 第三十七条\nchunk_id: 劳动合同法_第三十七条\ndomain: labor\nhierarchy: 第四章　劳动合同的解除和终止\n\n第三十七条 劳动者提前三十日以书面形式通知用人单位，可以解除劳动合同。劳动者在试用期内提前三日通知用人单位，可以解除劳动合同。",
+          "overview": "",
+          "content": "",
+          "level": 2,
+          "match_reason": ""
+        },
+        {
+          "uri": "viking://resources/laws/labor/劳动法/劳动法_第三十二条.md",
+          "context_type": "resource",
+          "score": 0.6049,
+          "abstract": "# 劳动法_第三十二条\n\nlaw_name: 劳动法\narticle_no: 第三十二条\nchunk_id: 劳动法_第三十二条\ndomain: labor\nhierarchy: 第三章　劳动合同和集体合同\n\n第三十二条 有下列情形之一的，劳动者可以随时通知用人单位解除劳动合同：\n（一）在试用期内的；\n（二）用人单位以暴力、威胁或者非法限制人身自由的手段强迫劳动的；\n（三）用人单位未按照劳动合同约定支付劳动报酬或者提供劳动条件的。",
+          "overview": "",
+          "content": "",
+          "level": 2,
+          "match_reason": ""
+        },
+        {
+          "uri": "viking://resources/laws/labor/劳动合同法/劳动合同法_第七十八条.md",
+          "context_type": "resource",
+          "score": 0.6042,
+          "abstract": "# 劳动合同法_第七十八条\n\nlaw_name: 劳动合同法\narticle_no: 第七十八条\nchunk_id: 劳动合同法_第七十八条\ndomain: labor\nhierarchy: 第六章　监督检查\n\n第七十八条 工会依法维护劳动者的合法权益，对用人单位履行劳动合同、集体合同的情况进行监督。用人单位违反劳动法律、法规和劳动合同、集体合同的，工会有权提出意见或者要求纠正；劳动者申请仲裁、提起诉讼的，工会依法给予支持和帮助。",
+          "overview": "",
+          "content": "",
+          "level": 2,
+          "match_reason": ""
+        },
+        {
+          "uri": "viking://resources/laws/civil_code/民法典/民法典_第八百零七条.md",
+          "context_type": "resource",
+          "score": 0.6041,
+          "abstract": "# 民法典_第八百零七条\n\nlaw_name: 民法典\narticle_no: 第八百零七条\nchunk_id: 民法典_第八百零七条\ndomain: civil_code\nhierarchy: 第三编　合同 > 第二分编　典型合同 > 第十八章　建设工程合同\n\n第八百零七条 发包人未按照约定支付价款的，承包人可以催告发包人在合理期限内支付价款。发包人逾期不支付的，除根据建设工程的性质不宜折价、拍卖外，承包人可以与发包人协议将该工程折价，也可以请求人民法院将该工程依法拍卖。建",
+          "overview": "",
+          "content": "",
+          "level": 2,
+          "match_reason": ""
+        },
+        {
+          "uri": "viking://resources/laws/labor/劳动合同法/劳动合同法_第二十二条.md",
+          "context_type": "resource",
+          "score": 0.6018,
+          "abstract": "# 劳动合同法_第二十二条\n\nlaw_name: 劳动合同法\narticle_no: 第二十二条\nchunk_id: 劳动合同法_第二十二条\ndomain: labor\nhierarchy: 第二章　劳动合同的订立\n\n第二十二条 用人单位为劳动者提供专项培训费用，对其进行专业技术培训的，可以与该劳动者订立协议，约定服务期。\n劳动者违反服务期约定的，应当按照约定向用人单位支付违约金。违约金的数额不得超过用人单位提供的培训费用。用人单位要求劳动者支付的违约金不得超过服务期尚未履行",
+          "overview": "",
+          "content": "",
+          "level": 2,
+          "match_reason": ""
+        },
+        {
+          "uri": "viking://resources/laws/civil_code/民法典/民法典_第七百九十三条.md",
+          "context_type": "resource",
+          "score": 0.6003,
+          "abstract": "# 民法典_第七百九十三条\n\nlaw_name: 民法典\narticle_no: 第七百九十三条\nchunk_id: 民法典_第七百九十三条\ndomain: civil_code\nhierarchy: 第三编　合同 > 第二分编　典型合同 > 第十八章　建设工程合同\n\n第七百九十三条 建设工程施工合同无效，但是建设工程经验收合格的，可以参照合同关于工程价款的约定折价补偿承包人。\n建设工程施工合同无效，且建设工程经验收不合格的，按照以下情形处理：\n（一）修复后的建设工程经验收合",
+          "overview": "",
+          "content": "",
+          "level": 2,
+          "match_reason": ""
+        }
+      ],
+      "baseline_hit": true,
+      "openviking_hit": true,
+      "baseline_reciprocal_rank": 1.0,
+      "openviking_reciprocal_rank": 1.0,
+      "baseline_precision": 0.3333333333333333,
+      "openviking_precision": 0.3333333333333333,
+      "baseline_recall": 1.0,
+      "openviking_recall": 1.0,
+      "resource_hit": true
+    },
+    {
+      "question": "加班之后公司说只能调休不给加班费，这样对吗",
+      "corpus_status": "in_corpus",
+      "baseline_retrieved_ids": [
+        "劳动合同法_第三十一条",
+        "劳动合同法_第八十五条"
+      ],
+      "openviking_candidate_ids": [
+        "劳动合同法_第三十一条",
+        "劳动合同法_第八十五条"
+      ],
+      "openviking_retrieved_ids": [
+        "劳动合同法_第三十一条",
+        "劳动合同法_第八十五条"
+      ],
+      "openviking_matches": [
+        {
+          "uri": "viking://resources/laws/labor/劳动合同法/劳动合同法_第三十一条.md",
+          "context_type": "resource",
+          "score": 0.5993,
+          "abstract": "# 劳动合同法_第三十一条\n\nlaw_name: 劳动合同法\narticle_no: 第三十一条\nchunk_id: 劳动合同法_第三十一条\ndomain: labor\nhierarchy: 第三章　劳动合同的履行和变更\n\n第三十一条 用人单位应当严格执行劳动定额标准，不得强迫或者变相强迫劳动者加班。用人单位安排加班的，应当按照国家有关规定向劳动者支付加班费。",
+          "overview": "",
+          "content": "",
+          "level": 2,
+          "match_reason": ""
+        },
+        {
+          "uri": "viking://resources/laws/labor/劳动法/劳动法_第九十条.md",
+          "context_type": "resource",
+          "score": 0.5692,
+          "abstract": "# 劳动法_第九十条\n\nlaw_name: 劳动法\narticle_no: 第九十条\nchunk_id: 劳动法_第九十条\ndomain: labor\nhierarchy: 第十二章　法律责任\n\n第九十条 用人单位违反本法规定，延长劳动者工作时间的，由劳动行政部门给予警告，责令改正，并可以处以罚款。",
+          "overview": "",
+          "content": "",
+          "level": 2,
+          "match_reason": ""
+        },
+        {
+          "uri": "viking://resources/laws/labor/劳动法/劳动法_第三十九条.md",
+          "context_type": "resource",
+          "score": 0.5635,
+          "abstract": "# 劳动法_第三十九条\n\nlaw_name: 劳动法\narticle_no: 第三十九条\nchunk_id: 劳动法_第三十九条\ndomain: labor\nhierarchy: 第四章　工作时间和休息休假\n\n第三十九条 企业因生产特点不能实行本法第三十六条、第三十八条规定的，经劳动行政部门批准，可以实行其他工作和休息办法。",
+          "overview": "",
+          "content": "",
+          "level": 2,
+          "match_reason": ""
+        },
+        {
+          "uri": "viking://resources/laws/labor/劳动合同法/劳动合同法_第八十五条.md",
+          "context_type": "resource",
+          "score": 0.5622,
+          "abstract": "# 劳动合同法_第八十五条\n\nlaw_name: 劳动合同法\narticle_no: 第八十五条\nchunk_id: 劳动合同法_第八十五条\ndomain: labor\nhierarchy: 第七章　法律责任\n\n第八十五条 用人单位有下列情形之一的，由劳动行政部门责令限期支付劳动报酬、加班费或者经济补偿；劳动报酬低于当地最低工资标准的，应当支付其差额部分；逾期不支付的，责令用人单位按应付金额百分之五十以上百分之一百以下的标准向劳动者加付赔偿金:\n（一）未按照劳动合同的约定或者",
+          "overview": "",
+          "content": "",
+          "level": 2,
+          "match_reason": ""
+        },
+        {
+          "uri": "viking://resources/laws/labor/劳动法/劳动法_第四十二条.md",
+          "context_type": "resource",
+          "score": 0.5599,
+          "abstract": "# 劳动法_第四十二条\n\nlaw_name: 劳动法\narticle_no: 第四十二条\nchunk_id: 劳动法_第四十二条\ndomain: labor\nhierarchy: 第四章　工作时间和休息休假\n\n第四十二条 有下列情形之一的，延长工作时间不受本法第四十一条规定的限制：\n（一）发生自然灾害、事故或者因其他原因，威胁劳动者生命健康和财产安全，需要紧急处理的；\n（二）生产设备、交通运输线路、公共设施发生故障，影响生产和公众利益，必须及时抢修的；\n（三）法律、行政法规规",
+          "overview": "",
+          "content": "",
+          "level": 2,
+          "match_reason": ""
+        },
+        {
+          "uri": "viking://resources/laws/labor/劳动法/劳动法_第四十四条.md",
+          "context_type": "resource",
+          "score": 0.5573,
+          "abstract": "# 劳动法_第四十四条\n\nlaw_name: 劳动法\narticle_no: 第四十四条\nchunk_id: 劳动法_第四十四条\ndomain: labor\nhierarchy: 第四章　工作时间和休息休假\n\n第四十四条 有下列情形之一的，用人单位应当按照下列标准支付高于劳动者正常工作时间工资的工资报酬：\n（一）安排劳动者延长工作时间的，支付不低于工资的百分之一百五十的工资报酬；\n（二）休息日安排劳动者工作又不能安排补休的，支付不低于工资的百分之二百的工资报酬；\n（三）法定休",
+          "overview": "",
+          "content": "",
+          "level": 2,
+          "match_reason": ""
+        },
+        {
+          "uri": "viking://resources/laws/labor/劳动法/劳动法_第四十一条.md",
+          "context_type": "resource",
+          "score": 0.5443,
+          "abstract": "# 劳动法_第四十一条\n\nlaw_name: 劳动法\narticle_no: 第四十一条\nchunk_id: 劳动法_第四十一条\ndomain: labor\nhierarchy: 第四章　工作时间和休息休假\n\n第四十一条 用人单位由于生产经营需要，经与工会和劳动者协商后可以延长工作时间，一般每日不得超过一小时；因特殊原因需要延长工作时间的，在保障劳动者身体健康的条件下延长工作时间每日不得超过三小时，但是每月不得超过三十六小时。",
+          "overview": "",
+          "content": "",
+          "level": 2,
+          "match_reason": ""
+        },
+        {
+          "uri": "viking://resources/laws/labor/劳动法/劳动法_第二十六条.md",
+          "context_type": "resource",
+          "score": 0.5425,
+          "abstract": "# 劳动法_第二十六条\n\nlaw_name: 劳动法\narticle_no: 第二十六条\nchunk_id: 劳动法_第二十六条\ndomain: labor\nhierarchy: 第三章　劳动合同和集体合同\n\n第二十六条 有下列情形之一的，用人单位可以解除劳动合同，但是应当提前三十日以书面形式通知劳动者本人：\n（一）劳动者患病或者非因工负伤，医疗期满后，不能从事原工作也不能从事由用人单位另行安排的工作的；\n（二）劳动者不能胜任工作，经过培训或者调整工作岗位，仍不能胜任工作的；",
+          "overview": "",
+          "content": "",
+          "level": 2,
+          "match_reason": ""
+        },
+        {
+          "uri": "viking://resources/laws/labor/劳动法/劳动法_第四十三条.md",
+          "context_type": "resource",
+          "score": 0.5417,
+          "abstract": "# 劳动法_第四十三条\n\nlaw_name: 劳动法\narticle_no: 第四十三条\nchunk_id: 劳动法_第四十三条\ndomain: labor\nhierarchy: 第四章　工作时间和休息休假\n\n第四十三条 用人单位不得违反本法规定延长劳动者的工作时间。",
+          "overview": "",
+          "content": "",
+          "level": 2,
+          "match_reason": ""
+        },
+        {
+          "uri": "viking://resources/laws/labor/劳动合同法/劳动合同法_第六十二条.md",
+          "context_type": "resource",
+          "score": 0.5409,
+          "abstract": "# 劳动合同法_第六十二条\n\nlaw_name: 劳动合同法\narticle_no: 第六十二条\nchunk_id: 劳动合同法_第六十二条\ndomain: labor\nhierarchy: 第五章　特别规定 > 第二节　劳务派遣\n\n第六十二条 用工单位应当履行下列义务:\n（一）执行国家劳动标准，提供相应的劳动条件和劳动保护；\n（二）告知被派遣劳动者的工作要求和劳动报酬；\n（三）支付加班费、绩效奖金，提供与工作岗位相关的福利待遇；\n（四）对在岗被派遣劳动者进行工作岗位所必需的",
+          "overview": "",
+          "content": "",
+          "level": 2,
+          "match_reason": ""
+        },
+        {
+          "uri": "viking://resources/laws/labor/劳动法/劳动法_第一百条.md",
+          "context_type": "resource",
+          "score": 0.5359,
+          "abstract": "# 劳动法_第一百条\n\nlaw_name: 劳动法\narticle_no: 第一百条\nchunk_id: 劳动法_第一百条\ndomain: labor\nhierarchy: 第十二章　法律责任\n\n第一百条 用人单位无故不缴纳社会保险费的，由劳动行政部门责令其限期缴纳；逾期不缴的，可以加收滞纳金。",
+          "overview": "",
+          "content": "",
+          "level": 2,
+          "match_reason": ""
+        },
+        {
+          "uri": "viking://resources/laws/labor/劳动合同法/劳动合同法_第二十二条.md",
+          "context_type": "resource",
+          "score": 0.534,
+          "abstract": "# 劳动合同法_第二十二条\n\nlaw_name: 劳动合同法\narticle_no: 第二十二条\nchunk_id: 劳动合同法_第二十二条\ndomain: labor\nhierarchy: 第二章　劳动合同的订立\n\n第二十二条 用人单位为劳动者提供专项培训费用，对其进行专业技术培训的，可以与该劳动者订立协议，约定服务期。\n劳动者违反服务期约定的，应当按照约定向用人单位支付违约金。违约金的数额不得超过用人单位提供的培训费用。用人单位要求劳动者支付的违约金不得超过服务期尚未履行",
+          "overview": "",
+          "content": "",
+          "level": 2,
+          "match_reason": ""
+        },
+        {
+          "uri": "viking://resources/laws/labor/劳动法/劳动法_第三十七条.md",
+          "context_type": "resource",
+          "score": 0.5336,
+          "abstract": "# 劳动法_第三十七条\n\nlaw_name: 劳动法\narticle_no: 第三十七条\nchunk_id: 劳动法_第三十七条\ndomain: labor\nhierarchy: 第四章　工作时间和休息休假\n\n第三十七条 对实行计件工作的劳动者，用人单位应当根据本法第三十六条规定的工时制度合理确定其劳动定额和计件报酬标准。",
+          "overview": "",
+          "content": "",
+          "level": 2,
+          "match_reason": ""
+        },
+        {
+          "uri": "viking://resources/laws/labor/劳动合同法/劳动合同法_第九十二条.md",
+          "context_type": "resource",
+          "score": 0.5327,
+          "abstract": "# 劳动合同法_第九十二条\n\nlaw_name: 劳动合同法\narticle_no: 第九十二条\nchunk_id: 劳动合同法_第九十二条\ndomain: labor\nhierarchy: 第七章　法律责任\n\n第九十二条 违反本法规定，未经许可，擅自经营劳务派遣业务的，由劳动行政部门责令停止违法行为，没收违法所得，并处违法所得一倍以上五倍以下的罚款；没有违法所得的，可以处五万元以下的罚款。\n劳务派遣单位、用工单位违反本法有关劳务派遣规定的，由劳动行政部门责令限期改正；逾期不",
+          "overview": "",
+          "content": "",
+          "level": 2,
+          "match_reason": ""
+        },
+        {
+          "uri": "viking://resources/laws/labor/劳动法/劳动法_第四十九条.md",
+          "context_type": "resource",
+          "score": 0.5322,
+          "abstract": "# 劳动法_第四十九条\n\nlaw_name: 劳动法\narticle_no: 第四十九条\nchunk_id: 劳动法_第四十九条\ndomain: labor\nhierarchy: 第五章　工　　资\n\n第四十九条 确定和调整最低工资标准应当综合参考下列因素：\n（一）劳动者本人及平均赡养人口的最低生活费用；\n（二）社会平均工资水平；\n（三）劳动生产率；\n（四）就业状况；\n（五）地区之间经济发展水平的差异。",
+          "overview": "",
+          "content": "",
+          "level": 2,
+          "match_reason": ""
+        },
+        {
+          "uri": "viking://resources/laws/labor/劳动法/劳动法_第三十八条.md",
+          "context_type": "resource",
+          "score": 0.53,
+          "abstract": "# 劳动法_第三十八条\n\nlaw_name: 劳动法\narticle_no: 第三十八条\nchunk_id: 劳动法_第三十八条\ndomain: labor\nhierarchy: 第四章　工作时间和休息休假\n\n第三十八条 用人单位应当保证劳动者每周至少休息一日。",
+          "overview": "",
+          "content": "",
+          "level": 2,
+          "match_reason": ""
+        },
+        {
+          "uri": "viking://resources/laws/labor/劳动法/劳动法_第九十一条.md",
+          "context_type": "resource",
+          "score": 0.529,
+          "abstract": "# 劳动法_第九十一条\n\nlaw_name: 劳动法\narticle_no: 第九十一条\nchunk_id: 劳动法_第九十一条\ndomain: labor\nhierarchy: 第十二章　法律责任\n\n第九十一条 用人单位有下列侵害劳动者合法权益情形之一的，由劳动行政部门责令支付劳动者的工资报酬、经济补偿，并可以责令支付赔偿金：\n（一）克扣或者无故拖欠劳动者工资的；\n（二）拒不支付劳动者延长工作时间工资报酬的；\n（三）低于当地最低工资标准支付劳动者工资的；\n（四）解除劳动合同",
+          "overview": "",
+          "content": "",
+          "level": 2,
+          "match_reason": ""
+        },
+        {
+          "uri": "viking://resources/laws/labor/劳动法/劳动法_第九十八条.md",
+          "context_type": "resource",
+          "score": 0.5263,
+          "abstract": "# 劳动法_第九十八条\n\nlaw_name: 劳动法\narticle_no: 第九十八条\nchunk_id: 劳动法_第九十八条\ndomain: labor\nhierarchy: 第十二章　法律责任\n\n第九十八条 用人单位违反本法规定的条件解除劳动合同或者故意拖延不订立劳动合同的，由劳动行政部门责令改正；对劳动者造成损害的，应当承担赔偿责任。",
+          "overview": "",
+          "content": "",
+          "level": 2,
+          "match_reason": ""
+        },
+        {
+          "uri": "viking://resources/laws/labor/劳动法/劳动法_第四十六条.md",
+          "context_type": "resource",
+          "score": 0.5193,
+          "abstract": "# 劳动法_第四十六条\n\nlaw_name: 劳动法\narticle_no: 第四十六条\nchunk_id: 劳动法_第四十六条\ndomain: labor\nhierarchy: 第五章　工　　资\n\n第四十六条 工资分配应当遵循按劳分配原则，实行同工同酬。\n工资水平在经济发展的基础上逐步提高。国家对工资总量实行宏观调控。",
+          "overview": "",
+          "content": "",
+          "level": 2,
+          "match_reason": ""
+        },
+        {
+          "uri": "viking://resources/laws/labor/劳动法/劳动法_第九十四条.md",
+          "context_type": "resource",
+          "score": 0.5178,
+          "abstract": "# 劳动法_第九十四条\n\nlaw_name: 劳动法\narticle_no: 第九十四条\nchunk_id: 劳动法_第九十四条\ndomain: labor\nhierarchy: 第十二章　法律责任\n\n第九十四条 用人单位非法招用未满十六周岁的未成年人的，由劳动行政部门责令改正，处以罚款；情节严重的，由市场监督管理部门吊销营业执照。",
+          "overview": "",
+          "content": "",
+          "level": 2,
+          "match_reason": ""
+        }
+      ],
+      "baseline_hit": true,
+      "openviking_hit": true,
+      "baseline_reciprocal_rank": 1.0,
+      "openviking_reciprocal_rank": 1.0,
+      "baseline_precision": 1.0,
+      "openviking_precision": 1.0,
+      "baseline_recall": 0.6666666666666666,
+      "openviking_recall": 0.6666666666666666,
+      "resource_hit": true
+    },
+    {
+      "question": "我租的房子到期，房东不退押金说我墙面脏了，怎么办",
+      "corpus_status": "in_corpus",
+      "baseline_retrieved_ids": [
+        "民法典_第七百一十一条",
+        "合同法_历史版本_第二百一十九条",
+        "民法典_第七百二十九条",
+        "民法典_第七百五十八条",
+        "民法典_第七百五十九条"
+      ],
+      "openviking_candidate_ids": [
+        "民法典_第七百一十一条",
+        "合同法_历史版本_第二百一十九条",
+        "民法典_第七百二十九条",
+        "合同法_历史版本_第二百三十一条",
+        "民法典_第七百五十八条",
+        "城市房地产管理法_第五十四条",
+        "物权法_历史版本_第一百四十八条",
+        "民法典_第七百三十四条",
+        "民法典_第七百五十六条",
+        "海商法_第一百四十九条"
+      ],
+      "openviking_retrieved_ids": [
+        "民法典_第七百一十一条",
+        "合同法_历史版本_第二百一十九条",
+        "民法典_第七百二十九条",
+        "合同法_历史版本_第二百三十一条",
+        "民法典_第七百五十八条"
+      ],
+      "openviking_matches": [
+        {
+          "uri": "viking://resources/laws/civil_code/民法典/民法典_第七百二十二条.md",
+          "context_type": "resource",
+          "score": 0.5854,
+          "abstract": "# 民法典_第七百二十二条\n\nlaw_name: 民法典\narticle_no: 第七百二十二条\nchunk_id: 民法典_第七百二十二条\ndomain: civil_code\nhierarchy: 第三编　合同 > 第二分编　典型合同 > 第十四章　租赁合同\n\n第七百二十二条 承租人无正当理由未支付或者迟延支付租金的，出租人可以请求承租人在合理期限内支付；承租人逾期不支付的，出租人可以解除合同。",
+          "overview": "",
+          "content": "",
+          "level": 2,
+          "match_reason": ""
+        },
+        {
+          "uri": "viking://resources/laws/civil_code/民法典/民法典_第七百一十四条.md",
+          "context_type": "resource",
+          "score": 0.5834,
+          "abstract": "# 民法典_第七百一十四条\n\nlaw_name: 民法典\narticle_no: 第七百一十四条\nchunk_id: 民法典_第七百一十四条\ndomain: civil_code\nhierarchy: 第三编　合同 > 第二分编　典型合同 > 第十四章　租赁合同\n\n第七百一十四条 承租人应当妥善保管租赁物，因保管不善造成租赁物毁损、灭失的，应当承担赔偿责任。",
+          "overview": "",
+          "content": "",
+          "level": 2,
+          "match_reason": ""
+        },
+        {
+          "uri": "viking://resources/laws/civil_code/民法典/民法典_第七百二十一条.md",
+          "context_type": "resource",
+          "score": 0.58,
+          "abstract": "# 民法典_第七百二十一条\n\nlaw_name: 民法典\narticle_no: 第七百二十一条\nchunk_id: 民法典_第七百二十一条\ndomain: civil_code\nhierarchy: 第三编　合同 > 第二分编　典型合同 > 第十四章　租赁合同\n\n第七百二十一条 承租人应当按照约定的期限支付租金。对支付租金的期限没有约定或者约定不明确，依据本法第五百一十条的规定仍不能确定，租赁期限不满一年的，应当在租赁期限届满时支付；租赁期限一年以上的，应当在每届满一年时支",
+          "overview": "",
+          "content": "",
+          "level": 2,
+          "match_reason": ""
+        },
+        {
+          "uri": "viking://resources/laws/civil_code/民法典/民法典_第七百零七条.md",
+          "context_type": "resource",
+          "score": 0.5796,
+          "abstract": "# 民法典_第七百零七条\n\nlaw_name: 民法典\narticle_no: 第七百零七条\nchunk_id: 民法典_第七百零七条\ndomain: civil_code\nhierarchy: 第三编　合同 > 第二分编　典型合同 > 第十四章　租赁合同\n\n第七百零七条 租赁期限六个月以上的，应当采用书面形式。当事人未采用书面形式，无法确定租赁期限的，视为不定期租赁。",
+          "overview": "",
+          "content": "",
+          "level": 2,
+          "match_reason": ""
+        },
+        {
+          "uri": "viking://resources/laws/civil_code/民法典/民法典_第七百三十条.md",
+          "context_type": "resource",
+          "score": 0.5792,
+          "abstract": "# 民法典_第七百三十条\n\nlaw_name: 民法典\narticle_no: 第七百三十条\nchunk_id: 民法典_第七百三十条\ndomain: civil_code\nhierarchy: 第三编　合同 > 第二分编　典型合同 > 第十四章　租赁合同\n\n第七百三十条 当事人对租赁期限没有约定或者约定不明确，依据本法第五百一十条的规定仍不能确定的，视为不定期租赁；当事人可以随时解除合同，但是应当在合理期限之前通知对方。",
+          "overview": "",
+          "content": "",
+          "level": 2,
+          "match_reason": ""
+        },
+        {
+          "uri": "viking://resources/laws/civil_code/民法典/民法典_第七百三十四条.md",
+          "context_type": "resource",
+          "score": 0.5758,
+          "abstract": "# 民法典_第七百三十四条\n\nlaw_name: 民法典\narticle_no: 第七百三十四条\nchunk_id: 民法典_第七百三十四条\ndomain: civil_code\nhierarchy: 第三编　合同 > 第二分编　典型合同 > 第十四章　租赁合同\n\n第七百三十四条 租赁期限届满，承租人继续使用租赁物，出租人没有提出异议的，原租赁合同继续有效，但是租赁期限为不定期。\n租赁期限届满，房屋承租人享有以同等条件优先承租的权利。",
+          "overview": "",
+          "content": "",
+          "level": 2,
+          "match_reason": ""
+        },
+        {
+          "uri": "viking://resources/laws/civil_code/民法典/民法典_第七百五十二条.md",
+          "context_type": "resource",
+          "score": 0.5726,
+          "abstract": "# 民法典_第七百五十二条\n\nlaw_name: 民法典\narticle_no: 第七百五十二条\nchunk_id: 民法典_第七百五十二条\ndomain: civil_code\nhierarchy: 第三编　合同 > 第二分编　典型合同 > 第十五章　融资租赁合同\n\n第七百五十二条 承租人应当按照约定支付租金。承租人经催告后在合理期限内仍不支付租金的，出租人可以请求支付全部租金；也可以解除合同，收回租赁物。",
+          "overview": "",
+          "content": "",
+          "level": 2,
+          "match_reason": ""
+        },
+        {
+          "uri": "viking://resources/laws/civil_code/民法典/民法典_第四百零五条.md",
+          "context_type": "resource",
+          "score": 0.5694,
+          "abstract": "# 民法典_第四百零五条\n\nlaw_name: 民法典\narticle_no: 第四百零五条\nchunk_id: 民法典_第四百零五条\ndomain: civil_code\nhierarchy: 第二编　物权 > 第四分编　担保物权 > 第十七章　抵押权 > 第一节　一般抵押权\n\n第四百零五条 抵押权设立前，抵押财产已经出租并转移占有的，原租赁关系不受该抵押权的影响。",
+          "overview": "",
+          "content": "",
+          "level": 2,
+          "match_reason": ""
+        },
+        {
+          "uri": "viking://resources/laws/civil_code/民法典/民法典_第七百一十三条.md",
+          "context_type": "resource",
+          "score": 0.5657,
+          "abstract": "# 民法典_第七百一十三条\n\nlaw_name: 民法典\narticle_no: 第七百一十三条\nchunk_id: 民法典_第七百一十三条\ndomain: civil_code\nhierarchy: 第三编　合同 > 第二分编　典型合同 > 第十四章　租赁合同\n\n第七百一十三条 承租人在租赁物需要维修时可以请求出租人在合理期限内维修。出租人未履行维修义务的，承租人可以自行维修，维修费用由出租人负担。因维修租赁物影响承租人使用的，应当相应减少租金或者延长租期。\n因承租人的过错",
+          "overview": "",
+          "content": "",
+          "level": 2,
+          "match_reason": ""
+        },
+        {
+          "uri": "viking://resources/laws/civil_code/民法典/民法典_第七百五十八条.md",
+          "context_type": "resource",
+          "score": 0.565,
+          "abstract": "# 民法典_第七百五十八条\n\nlaw_name: 民法典\narticle_no: 第七百五十八条\nchunk_id: 民法典_第七百五十八条\ndomain: civil_code\nhierarchy: 第三编　合同 > 第二分编　典型合同 > 第十五章　融资租赁合同\n\n第七百五十八条 当事人约定租赁期限届满租赁物归承租人所有，承租人已经支付大部分租金，但是无力支付剩余租金，出租人因此解除合同收回租赁物，收回的租赁物的价值超过承租人欠付的租金以及其他费用的，承租人可以请求相应返",
+          "overview": "",
+          "content": "",
+          "level": 2,
+          "match_reason": ""
+        },
+        {
+          "uri": "viking://resources/laws/civil_code/民法典/民法典_第七百二十九条.md",
+          "context_type": "resource",
+          "score": 0.5617,
+          "abstract": "# 民法典_第七百二十九条\n\nlaw_name: 民法典\narticle_no: 第七百二十九条\nchunk_id: 民法典_第七百二十九条\ndomain: civil_code\nhierarchy: 第三编　合同 > 第二分编　典型合同 > 第十四章　租赁合同\n\n第七百二十九条 因不可归责于承租人的事由，致使租赁物部分或者全部毁损、灭失的，承租人可以请求减少租金或者不支付租金；因租赁物部分或者全部毁损、灭失，致使不能实现合同目的的，承租人可以解除合同。",
+          "overview": "",
+          "content": "",
+          "level": 2,
+          "match_reason": ""
+        },
+        {
+          "uri": "viking://resources/laws/civil_code/民法典/民法典_第七百三十三条.md",
+          "context_type": "resource",
+          "score": 0.5609,
+          "abstract": "# 民法典_第七百三十三条\n\nlaw_name: 民法典\narticle_no: 第七百三十三条\nchunk_id: 民法典_第七百三十三条\ndomain: civil_code\nhierarchy: 第三编　合同 > 第二分编　典型合同 > 第十四章　租赁合同\n\n第七百三十三条 租赁期限届满，承租人应当返还租赁物。返还的租赁物应当符合按照约定或者根据租赁物的性质使用后的状态。",
+          "overview": "",
+          "content": "",
+          "level": 2,
+          "match_reason": ""
+        },
+        {
+          "uri": "viking://resources/laws/civil_code/民法典/民法典_第七百五十九条.md",
+          "context_type": "resource",
+          "score": 0.5608,
+          "abstract": "# 民法典_第七百五十九条\n\nlaw_name: 民法典\narticle_no: 第七百五十九条\nchunk_id: 民法典_第七百五十九条\ndomain: civil_code\nhierarchy: 第三编　合同 > 第二分编　典型合同 > 第十五章　融资租赁合同\n\n第七百五十九条 当事人约定租赁期限届满，承租人仅需向出租人支付象征性价款的，视为约定的租金义务履行完毕后租赁物的所有权归承租人。",
+          "overview": "",
+          "content": "",
+          "level": 2,
+          "match_reason": ""
+        },
+        {
+          "uri": "viking://resources/laws/civil_code/民法典/民法典_第七百二十五条.md",
+          "context_type": "resource",
+          "score": 0.5597,
+          "abstract": "# 民法典_第七百二十五条\n\nlaw_name: 民法典\narticle_no: 第七百二十五条\nchunk_id: 民法典_第七百二十五条\ndomain: civil_code\nhierarchy: 第三编　合同 > 第二分编　典型合同 > 第十四章　租赁合同\n\n第七百二十五条 租赁物在承租人按照租赁合同占有期限内发生所有权变动的，不影响租赁合同的效力。",
+          "overview": "",
+          "content": "",
+          "level": 2,
+          "match_reason": ""
+        },
+        {
+          "uri": "viking://resources/laws/civil_code/民法典/民法典_第七百二十四条.md",
+          "context_type": "resource",
+          "score": 0.5594,
+          "abstract": "# 民法典_第七百二十四条\n\nlaw_name: 民法典\narticle_no: 第七百二十四条\nchunk_id: 民法典_第七百二十四条\ndomain: civil_code\nhierarchy: 第三编　合同 > 第二分编　典型合同 > 第十四章　租赁合同\n\n第七百二十四条 有下列情形之一，非因承租人原因致使租赁物无法使用的，承租人可以解除合同：\n（一）租赁物被司法机关或者行政机关依法查封、扣押；\n（二）租赁物权属有争议；\n（三）租赁物具有违反法律、行政法规关于使用条件",
+          "overview": "",
+          "content": "",
+          "level": 2,
+          "match_reason": ""
+        },
+        {
+          "uri": "viking://resources/laws/civil_code/民法典/民法典_第七百四十条.md",
+          "context_type": "resource",
+          "score": 0.5578,
+          "abstract": "# 民法典_第七百四十条\n\nlaw_name: 民法典\narticle_no: 第七百四十条\nchunk_id: 民法典_第七百四十条\ndomain: civil_code\nhierarchy: 第三编　合同 > 第二分编　典型合同 > 第十五章　融资租赁合同\n\n第七百四十条 出卖人违反向承租人交付标的物的义务，有下列情形之一的，承租人可以拒绝受领出卖人向其交付的标的物：\n（一）标的物严重不符合约定；\n（二）未按照约定交付标的物，经承租人或者出租人催告后在合理期限内仍未交付。",
+          "overview": "",
+          "content": "",
+          "level": 2,
+          "match_reason": ""
+        },
+        {
+          "uri": "viking://resources/laws/civil_code/民法典/民法典_第七百零九条.md",
+          "context_type": "resource",
+          "score": 0.5567,
+          "abstract": "# 民法典_第七百零九条\n\nlaw_name: 民法典\narticle_no: 第七百零九条\nchunk_id: 民法典_第七百零九条\ndomain: civil_code\nhierarchy: 第三编　合同 > 第二分编　典型合同 > 第十四章　租赁合同\n\n第七百零九条 承租人应当按照约定的方法使用租赁物。对租赁物的使用方法没有约定或者约定不明确，依据本法第五百一十条的规定仍不能确定的，应当根据租赁物的性质使用。",
+          "overview": "",
+          "content": "",
+          "level": 2,
+          "match_reason": ""
+        },
+        {
+          "uri": "viking://resources/laws/civil_code/民法典/民法典_第七百五十六条.md",
+          "context_type": "resource",
+          "score": 0.5549,
+          "abstract": "# 民法典_第七百五十六条\n\nlaw_name: 民法典\narticle_no: 第七百五十六条\nchunk_id: 民法典_第七百五十六条\ndomain: civil_code\nhierarchy: 第三编　合同 > 第二分编　典型合同 > 第十五章　融资租赁合同\n\n第七百五十六条 融资租赁合同因租赁物交付承租人后意外毁损、灭失等不可归责于当事人的原因解除的，出租人可以请求承租人按照租赁物折旧情况给予补偿。",
+          "overview": "",
+          "content": "",
+          "level": 2,
+          "match_reason": ""
+        },
+        {
+          "uri": "viking://resources/laws/civil_code/民法典/民法典_第七百六十条.md",
+          "context_type": "resource",
+          "score": 0.5525,
+          "abstract": "# 民法典_第七百六十条\n\nlaw_name: 民法典\narticle_no: 第七百六十条\nchunk_id: 民法典_第七百六十条\ndomain: civil_code\nhierarchy: 第三编　合同 > 第二分编　典型合同 > 第十五章　融资租赁合同\n\n第七百六十条 融资租赁合同无效，当事人就该情形下租赁物的归属有约定的，按照其约定；没有约定或者约定不明确的，租赁物应当返还出租人。但是，因承租人原因致使合同无效，出租人不请求返还或者返还后会显著降低租赁物效用的，租赁",
+          "overview": "",
+          "content": "",
+          "level": 2,
+          "match_reason": ""
+        },
+        {
+          "uri": "viking://resources/laws/civil_code/民法典/民法典_第七百二十七条.md",
+          "context_type": "resource",
+          "score": 0.5506,
+          "abstract": "# 民法典_第七百二十七条\n\nlaw_name: 民法典\narticle_no: 第七百二十七条\nchunk_id: 民法典_第七百二十七条\ndomain: civil_code\nhierarchy: 第三编　合同 > 第二分编　典型合同 > 第十四章　租赁合同\n\n第七百二十七条 出租人委托拍卖人拍卖租赁房屋的，应当在拍卖五日前通知承租人。承租人未参加拍卖的，视为放弃优先购买权。",
+          "overview": "",
+          "content": "",
+          "level": 2,
+          "match_reason": ""
+        }
+      ],
+      "baseline_hit": false,
+      "openviking_hit": false,
+      "baseline_reciprocal_rank": 0.0,
+      "openviking_reciprocal_rank": 0.0,
+      "baseline_precision": 0.0,
+      "openviking_precision": 0.0,
+      "baseline_recall": 0.0,
+      "openviking_recall": 0.0,
+      "resource_hit": false
+    },
+    {
+      "question": "网上买的水果到货坏了一半，商家只同意退坏的部分钱合理吗",
+      "corpus_status": "in_corpus",
+      "baseline_retrieved_ids": [],
+      "openviking_candidate_ids": [],
+      "openviking_retrieved_ids": [],
+      "openviking_matches": [
+        {
+          "uri": "viking://resources/laws/consumer_protection/消费者权益保护法/消费者权益保护法_第二十五条.md",
+          "context_type": "resource",
+          "score": 0.6091,
+          "abstract": "# 消费者权益保护法_第二十五条\n\nlaw_name: 消费者权益保护法\narticle_no: 第二十五条\nchunk_id: 消费者权益保护法_第二十五条\ndomain: consumer_protection\nhierarchy: 第三章 经营者的义务\n\n第二十五条 经营者采用网络、电视、电话、邮购等方式销售商品，消费者有权自收到商品之日起七日内退货，且无需说明理由，但下列商品除外：\n(一)消费者定作的；\n(二)鲜活易腐的；\n(三)在线下载或者消费者拆封的音像制品、计算",
+          "overview": "",
+          "content": "",
+          "level": 2,
+          "match_reason": ""
+        },
+        {
+          "uri": "viking://resources/laws/consumer_protection/消费者权益保护法/消费者权益保护法_第五十四条.md",
+          "context_type": "resource",
+          "score": 0.6003,
+          "abstract": "# 消费者权益保护法_第五十四条\n\nlaw_name: 消费者权益保护法\narticle_no: 第五十四条\nchunk_id: 消费者权益保护法_第五十四条\ndomain: consumer_protection\nhierarchy: 第七章 法律责任\n\n第五十四条 依法经有关行政部门认定为不合格的商品，消费者要求退货的，经营者应当负责退货。",
+          "overview": "",
+          "content": "",
+          "level": 2,
+          "match_reason": ""
+        },
+        {
+          "uri": "viking://resources/laws/consumer_protection/消费者权益保护法/消费者权益保护法_第二十四条.md",
+          "context_type": "resource",
+          "score": 0.5771,
+          "abstract": "# 消费者权益保护法_第二十四条\n\nlaw_name: 消费者权益保护法\narticle_no: 第二十四条\nchunk_id: 消费者权益保护法_第二十四条\ndomain: consumer_protection\nhierarchy: 第三章 经营者的义务\n\n第二十四条 经营者提供的商品或者服务不符合质量要求的，消费者可以依照国家规定、当事人约定退货，或者要求经营者履行更换、修理等义务。没有国家规定和当事人约定的，消费者可以自收到商品之日起七日内退货；七日后符合法定解除合同",
+          "overview": "",
+          "content": "",
+          "level": 2,
+          "match_reason": ""
+        },
+        {
+          "uri": "viking://resources/laws/civil_code/民法典/民法典_第一千二百零六条.md",
+          "context_type": "resource",
+          "score": 0.5516,
+          "abstract": "# 民法典_第一千二百零六条\n\nlaw_name: 民法典\narticle_no: 第一千二百零六条\nchunk_id: 民法典_第一千二百零六条\ndomain: civil_code\nhierarchy: 第七编　侵权责任 > 第四章　产品责任\n\n第一千二百零六条 产品投入流通后发现存在缺陷的，生产者、销售者应当及时采取停止销售、警示、召回等补救措施；未及时采取补救措施或者补救措施不力造成损害扩大的，对扩大的损害也应当承担侵权责任。\n依据前款规定采取召回措施的，生产者、销售",
+          "overview": "",
+          "content": "",
+          "level": 2,
+          "match_reason": ""
+        },
+        {
+          "uri": "viking://resources/laws/consumer_protection/消费者权益保护法/消费者权益保护法_第四十八条.md",
+          "context_type": "resource",
+          "score": 0.5482,
+          "abstract": "# 消费者权益保护法_第四十八条\n\nlaw_name: 消费者权益保护法\narticle_no: 第四十八条\nchunk_id: 消费者权益保护法_第四十八条\ndomain: consumer_protection\nhierarchy: 第七章 法律责任\n\n第四十八条 经营者提供商品或者服务有下列情形之一的，除本法另有规定外，应当依照其他有关法律、法规的规定，承担民事责任：\n(一)商品或者服务存在缺陷的；\n(二)不具备商品应当具备的使用性能而出售时未作说明的；\n(三)不符合在",
+          "overview": "",
+          "content": "",
+          "level": 2,
+          "match_reason": ""
+        },
+        {
+          "uri": "viking://resources/laws/civil_code/民法典/民法典_第五百六十九条.md",
+          "context_type": "resource",
+          "score": 0.5453,
+          "abstract": "# 民法典_第五百六十九条\n\nlaw_name: 民法典\narticle_no: 第五百六十九条\nchunk_id: 民法典_第五百六十九条\ndomain: civil_code\nhierarchy: 第三编　合同 > 第一分编　通则 > 第七章　合同的权利义务终止\n\n第五百六十九条 当事人互负债务，标的物种类、品质不相同的，经协商一致，也可以抵销。",
+          "overview": "",
+          "content": "",
+          "level": 2,
+          "match_reason": ""
+        },
+        {
+          "uri": "viking://resources/laws/civil_code/民法典/民法典_第六百四十二条.md",
+          "context_type": "resource",
+          "score": 0.5406,
+          "abstract": "# 民法典_第六百四十二条\n\nlaw_name: 民法典\narticle_no: 第六百四十二条\nchunk_id: 民法典_第六百四十二条\ndomain: civil_code\nhierarchy: 第三编　合同 > 第二分编　典型合同 > 第九章　买卖合同\n\n第六百四十二条 当事人约定出卖人保留合同标的物的所有权，在标的物所有权转移前，买受人有下列情形之一，造成出卖人损害的，除当事人另有约定外，出卖人有权取回标的物：\n（一）未按照约定支付价款，经催告后在合理期限内仍未支付",
+          "overview": "",
+          "content": "",
+          "level": 2,
+          "match_reason": ""
+        },
+        {
+          "uri": "viking://resources/laws/civil_code/民法典/民法典_第六百二十九条.md",
+          "context_type": "resource",
+          "score": 0.5373,
+          "abstract": "# 民法典_第六百二十九条\n\nlaw_name: 民法典\narticle_no: 第六百二十九条\nchunk_id: 民法典_第六百二十九条\ndomain: civil_code\nhierarchy: 第三编　合同 > 第二分编　典型合同 > 第九章　买卖合同\n\n第六百二十九条 出卖人多交标的物的，买受人可以接收或者拒绝接收多交的部分。买受人接收多交部分的，按照约定的价格支付价款；买受人拒绝接收多交部分的，应当及时通知出卖人。",
+          "overview": "",
+          "content": "",
+          "level": 2,
+          "match_reason": ""
+        },
+        {
+          "uri": "viking://resources/laws/civil_code/民法典/民法典_第六百零八条.md",
+          "context_type": "resource",
+          "score": 0.5367,
+          "abstract": "# 民法典_第六百零八条\n\nlaw_name: 民法典\narticle_no: 第六百零八条\nchunk_id: 民法典_第六百零八条\ndomain: civil_code\nhierarchy: 第三编　合同 > 第二分编　典型合同 > 第九章　买卖合同\n\n第六百零八条 出卖人按照约定或者依据本法第六百零三条第二款第二项的规定将标的物置于交付地点，买受人违反约定没有收取的，标的物毁损、灭失的风险自违反约定时起由买受人承担。",
+          "overview": "",
+          "content": "",
+          "level": 2,
+          "match_reason": ""
+        },
+        {
+          "uri": "viking://resources/laws/civil_code/民法典/民法典_第八百九十八条.md",
+          "context_type": "resource",
+          "score": 0.5362,
+          "abstract": "# 民法典_第八百九十八条\n\nlaw_name: 民法典\narticle_no: 第八百九十八条\nchunk_id: 民法典_第八百九十八条\ndomain: civil_code\nhierarchy: 第三编　合同 > 第二分编　典型合同 > 第二十一章　保管合同\n\n第八百九十八条 寄存人寄存货币、有价证券或者其他贵重物品的，应当向保管人声明，由保管人验收或者封存；寄存人未声明的，该物品毁损、灭失后，保管人可以按照一般物品予以赔偿。",
+          "overview": "",
+          "content": "",
+          "level": 2,
+          "match_reason": ""
+        },
+        {
+          "uri": "viking://resources/laws/civil_code/民法典/民法典_第六百二十八条.md",
+          "context_type": "resource",
+          "score": 0.5354,
+          "abstract": "# 民法典_第六百二十八条\n\nlaw_name: 民法典\narticle_no: 第六百二十八条\nchunk_id: 民法典_第六百二十八条\ndomain: civil_code\nhierarchy: 第三编　合同 > 第二分编　典型合同 > 第九章　买卖合同\n\n第六百二十八条 买受人应当按照约定的时间支付价款。对支付时间没有约定或者约定不明确，依据本法第五百一十条的规定仍不能确定的，买受人应当在收到标的物或者提取标的物单证的同时支付。",
+          "overview": "",
+          "content": "",
+          "level": 2,
+          "match_reason": ""
+        },
+        {
+          "uri": "viking://resources/laws/civil_code/民法典/民法典_第九百零七条.md",
+          "context_type": "resource",
+          "score": 0.535,
+          "abstract": "# 民法典_第九百零七条\n\nlaw_name: 民法典\narticle_no: 第九百零七条\nchunk_id: 民法典_第九百零七条\ndomain: civil_code\nhierarchy: 第三编　合同 > 第二分编　典型合同 > 第二十二章　仓储合同\n\n第九百零七条 保管人应当按照约定对入库仓储物进行验收。保管人验收时发现入库仓储物与约定不符合的，应当及时通知存货人。保管人验收后，发生仓储物的品种、数量、质量不符合约定的，保管人应当承担赔偿责任。",
+          "overview": "",
+          "content": "",
+          "level": 2,
+          "match_reason": ""
+        },
+        {
+          "uri": "viking://resources/laws/consumer_protection/消费者权益保护法/消费者权益保护法_第五十六条.md",
+          "context_type": "resource",
+          "score": 0.5341,
+          "abstract": "# 消费者权益保护法_第五十六条\n\nlaw_name: 消费者权益保护法\narticle_no: 第五十六条\nchunk_id: 消费者权益保护法_第五十六条\ndomain: consumer_protection\nhierarchy: 第七章 法律责任\n\n第五十六条 经营者有下列情形之一，除承担相应的民事责任外，其他有关法律、法规对处罚机关和处罚方式有规定的，依照法律、法规的规定执行；法律、法规未作规定的，由工商行政管理部门或者其他有关行政部门责令改正，可以根据情节单处或者",
+          "overview": "",
+          "content": "",
+          "level": 2,
+          "match_reason": ""
+        },
+        {
+          "uri": "viking://resources/laws/civil_code/民法典/民法典_第八百三十条.md",
+          "context_type": "resource",
+          "score": 0.5341,
+          "abstract": "# 民法典_第八百三十条\n\nlaw_name: 民法典\narticle_no: 第八百三十条\nchunk_id: 民法典_第八百三十条\ndomain: civil_code\nhierarchy: 第三编　合同 > 第二分编　典型合同 > 第十九章　运输合同 > 第三节　货运合同\n\n第八百三十条 货物运输到达后，承运人知道收货人的，应当及时通知收货人，收货人应当及时提货。收货人逾期提货的，应当向承运人支付保管费等费用。",
+          "overview": "",
+          "content": "",
+          "level": 2,
+          "match_reason": ""
+        },
+        {
+          "uri": "viking://resources/laws/civil_code/民法典/民法典_第六百一十七条.md",
+          "context_type": "resource",
+          "score": 0.5315,
+          "abstract": "# 民法典_第六百一十七条\n\nlaw_name: 民法典\narticle_no: 第六百一十七条\nchunk_id: 民法典_第六百一十七条\ndomain: civil_code\nhierarchy: 第三编　合同 > 第二分编　典型合同 > 第九章　买卖合同\n\n第六百一十七条 出卖人交付的标的物不符合质量要求的，买受人可以依据本法第五百八十二条至第五百八十四条的规定请求承担违约责任。",
+          "overview": "",
+          "content": "",
+          "level": 2,
+          "match_reason": ""
+        },
+        {
+          "uri": "viking://resources/laws/civil_code/民法典/民法典_第六百零四条.md",
+          "context_type": "resource",
+          "score": 0.5312,
+          "abstract": "# 民法典_第六百零四条\n\nlaw_name: 民法典\narticle_no: 第六百零四条\nchunk_id: 民法典_第六百零四条\ndomain: civil_code\nhierarchy: 第三编　合同 > 第二分编　典型合同 > 第九章　买卖合同\n\n第六百零四条 标的物毁损、灭失的风险，在标的物交付之前由出卖人承担，交付之后由买受人承担，但是法律另有规定或者当事人另有约定的除外。",
+          "overview": "",
+          "content": "",
+          "level": 2,
+          "match_reason": ""
+        },
+        {
+          "uri": "viking://resources/laws/civil_code/民法典/民法典_第九百四十九条.md",
+          "context_type": "resource",
+          "score": 0.5311,
+          "abstract": "# 民法典_第九百四十九条\n\nlaw_name: 民法典\narticle_no: 第九百四十九条\nchunk_id: 民法典_第九百四十九条\ndomain: civil_code\nhierarchy: 第三编　合同 > 第二分编　典型合同 > 第二十四章　物业服务合同\n\n第九百四十九条 物业服务合同终止的，原物业服务人应当在约定期限或者合理期限内退出物业服务区域，将物业服务用房、相关设施、物业服务所必需的相关资料等交还给业主委员会、决定自行管理的业主或者其指定的人，配合新物业",
+          "overview": "",
+          "content": "",
+          "level": 2,
+          "match_reason": ""
+        },
+        {
+          "uri": "viking://resources/laws/civil_code/民法典/民法典_第六百零七条.md",
+          "context_type": "resource",
+          "score": 0.5309,
+          "abstract": "# 民法典_第六百零七条\n\nlaw_name: 民法典\narticle_no: 第六百零七条\nchunk_id: 民法典_第六百零七条\ndomain: civil_code\nhierarchy: 第三编　合同 > 第二分编　典型合同 > 第九章　买卖合同\n\n第六百零七条 出卖人按照约定将标的物运送至买受人指定地点并交付给承运人后，标的物毁损、灭失的风险由买受人承担。\n当事人没有约定交付地点或者约定不明确，依据本法第六百零三条第二款第一项的规定标的物需要运输的，出卖人将标的物交",
+          "overview": "",
+          "content": "",
+          "level": 2,
+          "match_reason": ""
+        },
+        {
+          "uri": "viking://resources/laws/civil_code/民法典/民法典_第六百三十六条.md",
+          "context_type": "resource",
+          "score": 0.5301,
+          "abstract": "# 民法典_第六百三十六条\n\nlaw_name: 民法典\narticle_no: 第六百三十六条\nchunk_id: 民法典_第六百三十六条\ndomain: civil_code\nhierarchy: 第三编　合同 > 第二分编　典型合同 > 第九章　买卖合同\n\n第六百三十六条 凭样品买卖的买受人不知道样品有隐蔽瑕疵的，即使交付的标的物与样品相同，出卖人交付的标的物的质量仍然应当符合同种物的通常标准。",
+          "overview": "",
+          "content": "",
+          "level": 2,
+          "match_reason": ""
+        },
+        {
+          "uri": "viking://resources/laws/civil_code/民法典/民法典_第六百三十二条.md",
+          "context_type": "resource",
+          "score": 0.5294,
+          "abstract": "# 民法典_第六百三十二条\n\nlaw_name: 民法典\narticle_no: 第六百三十二条\nchunk_id: 民法典_第六百三十二条\ndomain: civil_code\nhierarchy: 第三编　合同 > 第二分编　典型合同 > 第九章　买卖合同\n\n第六百三十二条 标的物为数物，其中一物不符合约定的，买受人可以就该物解除。但是，该物与他物分离使标的物的价值显受损害的，买受人可以就数物解除合同。",
+          "overview": "",
+          "content": "",
+          "level": 2,
+          "match_reason": ""
+        }
+      ],
+      "baseline_hit": false,
+      "openviking_hit": false,
+      "baseline_reciprocal_rank": 0.0,
+      "openviking_reciprocal_rank": 0.0,
+      "baseline_precision": 0.0,
+      "openviking_precision": 0.0,
+      "baseline_recall": 0.0,
+      "openviking_recall": 0.0,
+      "resource_hit": true
+    },
+    {
+      "question": "在小区遛狗没牵绳，被别人开车撞了，责任怎么分",
+      "corpus_status": "in_corpus",
+      "baseline_retrieved_ids": [
+        "民法典_第一千二百一十二条",
+        "民法典_第一千一百七十二条",
+        "治安管理处罚法_第八十九条",
+        "道路交通安全法_第七十六条",
+        "民法典_第一千二百零九条"
+      ],
+      "openviking_candidate_ids": [
+        "民法典_第一千二百四十六条",
+        "民法典_第一千二百四十七条",
+        "民法典_第一千二百四十五条",
+        "民法典_第一百七十七条",
+        "民法典_第一千二百五十条",
+        "民法典_第一千二百一十二条",
+        "民法典_第一千一百七十二条",
+        "治安管理处罚法_第八十九条",
+        "道路交通安全法_第七十六条",
+        "民法典_第一千二百零九条",
+        "民法典_第一百七十八条",
+        "民法典_第一千二百一十五条",
+        "道路交通安全法_第六十条"
+      ],
+      "openviking_retrieved_ids": [
+        "民法典_第一千二百四十六条",
+        "民法典_第一千二百四十七条",
+        "民法典_第一千二百四十五条",
+        "民法典_第一百七十七条",
+        "民法典_第一千二百五十条"
+      ],
+      "openviking_matches": [
+        {
+          "uri": "viking://resources/laws/civil_code/民法典/民法典_第一千二百一十五条.md",
+          "context_type": "resource",
+          "score": 0.6104,
+          "abstract": "# 民法典_第一千二百一十五条\n\nlaw_name: 民法典\narticle_no: 第一千二百一十五条\nchunk_id: 民法典_第一千二百一十五条\ndomain: civil_code\nhierarchy: 第七编　侵权责任 > 第五章　机动车交通事故责任\n\n第一千二百一十五条 盗窃、抢劫或者抢夺的机动车发生交通事故造成损害的，由盗窃人、抢劫人或者抢夺人承担赔偿责任。盗窃人、抢劫人或者抢夺人与机动车使用人不是同一人，发生交通事故造成损害，属于该机动车一方责任的，由盗窃人",
+          "overview": "",
+          "content": "",
+          "level": 2,
+          "match_reason": ""
+        },
+        {
+          "uri": "viking://resources/laws/civil_code/民法典/民法典_第一千二百一十二条.md",
+          "context_type": "resource",
+          "score": 0.6072,
+          "abstract": "# 民法典_第一千二百一十二条\n\nlaw_name: 民法典\narticle_no: 第一千二百一十二条\nchunk_id: 民法典_第一千二百一十二条\ndomain: civil_code\nhierarchy: 第七编　侵权责任 > 第五章　机动车交通事故责任\n\n第一千二百一十二条 未经允许驾驶他人机动车，发生交通事故造成损害，属于该机动车一方责任的，由机动车使用人承担赔偿责任；机动车所有人、管理人对损害的发生有过错的，承担相应的赔偿责任，但是本章另有规定的除外。",
+          "overview": "",
+          "content": "",
+          "level": 2,
+          "match_reason": ""
+        },
+        {
+          "uri": "viking://resources/laws/civil_code/民法典/民法典_第一千二百零九条.md",
+          "context_type": "resource",
+          "score": 0.6058,
+          "abstract": "# 民法典_第一千二百零九条\n\nlaw_name: 民法典\narticle_no: 第一千二百零九条\nchunk_id: 民法典_第一千二百零九条\ndomain: civil_code\nhierarchy: 第七编　侵权责任 > 第五章　机动车交通事故责任\n\n第一千二百零九条 因租赁、借用等情形机动车所有人、管理人与使用人不是同一人时，发生交通事故造成损害，属于该机动车一方责任的，由机动车使用人承担赔偿责任；机动车所有人、管理人对损害的发生有过错的，承担相应的赔偿责任。",
+          "overview": "",
+          "content": "",
+          "level": 2,
+          "match_reason": ""
+        },
+        {
+          "uri": "viking://resources/laws/civil_code/民法典/民法典_第一千二百四十六条.md",
+          "context_type": "resource",
+          "score": 0.6035,
+          "abstract": "# 民法典_第一千二百四十六条\n\nlaw_name: 民法典\narticle_no: 第一千二百四十六条\nchunk_id: 民法典_第一千二百四十六条\ndomain: civil_code\nhierarchy: 第七编　侵权责任 > 第九章　饲养动物损害责任\n\n第一千二百四十六条 违反管理规定，未对动物采取安全措施造成他人损害的，动物饲养人或者管理人应当承担侵权责任；但是，能够证明损害是因被侵权人故意造成的，可以减轻责任。",
+          "overview": "",
+          "content": "",
+          "level": 2,
+          "match_reason": ""
+        },
+        {
+          "uri": "viking://resources/laws/civil_code/民法典/民法典_第一千二百四十七条.md",
+          "context_type": "resource",
+          "score": 0.5979,
+          "abstract": "# 民法典_第一千二百四十七条\n\nlaw_name: 民法典\narticle_no: 第一千二百四十七条\nchunk_id: 民法典_第一千二百四十七条\ndomain: civil_code\nhierarchy: 第七编　侵权责任 > 第九章　饲养动物损害责任\n\n第一千二百四十七条 禁止饲养的烈性犬等危险动物造成他人损害的，动物饲养人或者管理人应当承担侵权责任。",
+          "overview": "",
+          "content": "",
+          "level": 2,
+          "match_reason": ""
+        },
+        {
+          "uri": "viking://resources/laws/civil_code/民法典/民法典_第一千二百一十条.md",
+          "context_type": "resource",
+          "score": 0.5964,
+          "abstract": "# 民法典_第一千二百一十条\n\nlaw_name: 民法典\narticle_no: 第一千二百一十条\nchunk_id: 民法典_第一千二百一十条\ndomain: civil_code\nhierarchy: 第七编　侵权责任 > 第五章　机动车交通事故责任\n\n第一千二百一十条 当事人之间已经以买卖或者其他方式转让并交付机动车但是未办理登记，发生交通事故造成损害，属于该机动车一方责任的，由受让人承担赔偿责任。",
+          "overview": "",
+          "content": "",
+          "level": 2,
+          "match_reason": ""
+        },
+        {
+          "uri": "viking://resources/laws/civil_code/民法典/民法典_第一千二百一十六条.md",
+          "context_type": "resource",
+          "score": 0.5931,
+          "abstract": "# 民法典_第一千二百一十六条\n\nlaw_name: 民法典\narticle_no: 第一千二百一十六条\nchunk_id: 民法典_第一千二百一十六条\ndomain: civil_code\nhierarchy: 第七编　侵权责任 > 第五章　机动车交通事故责任\n\n第一千二百一十六条 机动车驾驶人发生交通事故后逃逸，该机动车参加强制保险的，由保险人在机动车强制保险责任限额范围内予以赔偿；机动车不明、该机动车未参加强制保险或者抢救费用超过机动车强制保险责任限额，需要支付被侵权人",
+          "overview": "",
+          "content": "",
+          "level": 2,
+          "match_reason": ""
+        },
+        {
+          "uri": "viking://resources/laws/civil_code/民法典/民法典_第一千二百一十七条.md",
+          "context_type": "resource",
+          "score": 0.5928,
+          "abstract": "# 民法典_第一千二百一十七条\n\nlaw_name: 民法典\narticle_no: 第一千二百一十七条\nchunk_id: 民法典_第一千二百一十七条\ndomain: civil_code\nhierarchy: 第七编　侵权责任 > 第五章　机动车交通事故责任\n\n第一千二百一十七条 非营运机动车发生交通事故造成无偿搭乘人损害，属于该机动车一方责任的，应当减轻其赔偿责任，但是机动车使用人有故意或者重大过失的除外。",
+          "overview": "",
+          "content": "",
+          "level": 2,
+          "match_reason": ""
+        },
+        {
+          "uri": "viking://resources/laws/civil_code/民法典/民法典_第一千二百一十三条.md",
+          "context_type": "resource",
+          "score": 0.5906,
+          "abstract": "# 民法典_第一千二百一十三条\n\nlaw_name: 民法典\narticle_no: 第一千二百一十三条\nchunk_id: 民法典_第一千二百一十三条\ndomain: civil_code\nhierarchy: 第七编　侵权责任 > 第五章　机动车交通事故责任\n\n第一千二百一十三条 机动车发生交通事故造成损害，属于该机动车一方责任的，先由承保机动车强制保险的保险人在强制保险责任限额范围内予以赔偿；不足部分，由承保机动车商业保险的保险人按照保险合同的约定予以赔偿；仍然不足或者",
+          "overview": "",
+          "content": "",
+          "level": 2,
+          "match_reason": ""
+        },
+        {
+          "uri": "viking://resources/laws/civil_code/民法典/民法典_第一千二百五十六条.md",
+          "context_type": "resource",
+          "score": 0.5887,
+          "abstract": "# 民法典_第一千二百五十六条\n\nlaw_name: 民法典\narticle_no: 第一千二百五十六条\nchunk_id: 民法典_第一千二百五十六条\ndomain: civil_code\nhierarchy: 第七编　侵权责任 > 第十章　建筑物和物件损害责任\n\n第一千二百五十六条 在公共道路上堆放、倾倒、遗撒妨碍通行的物品造成他人损害的，由行为人承担侵权责任。公共道路管理人不能证明已经尽到清理、防护、警示等义务的，应当承担相应的责任。",
+          "overview": "",
+          "content": "",
+          "level": 2,
+          "match_reason": ""
+        },
+        {
+          "uri": "viking://resources/laws/civil_code/民法典/民法典_第一千二百五十条.md",
+          "context_type": "resource",
+          "score": 0.5869,
+          "abstract": "# 民法典_第一千二百五十条\n\nlaw_name: 民法典\narticle_no: 第一千二百五十条\nchunk_id: 民法典_第一千二百五十条\ndomain: civil_code\nhierarchy: 第七编　侵权责任 > 第九章　饲养动物损害责任\n\n第一千二百五十条 因第三人的过错致使动物造成他人损害的，被侵权人可以向动物饲养人或者管理人请求赔偿，也可以向第三人请求赔偿。动物饲养人或者管理人赔偿后，有权向第三人追偿。",
+          "overview": "",
+          "content": "",
+          "level": 2,
+          "match_reason": ""
+        },
+        {
+          "uri": "viking://resources/laws/civil_code/民法典/民法典_第一千二百一十一条.md",
+          "context_type": "resource",
+          "score": 0.5865,
+          "abstract": "# 民法典_第一千二百一十一条\n\nlaw_name: 民法典\narticle_no: 第一千二百一十一条\nchunk_id: 民法典_第一千二百一十一条\ndomain: civil_code\nhierarchy: 第七编　侵权责任 > 第五章　机动车交通事故责任\n\n第一千二百一十一条 以挂靠形式从事道路运输经营活动的机动车，发生交通事故造成损害，属于该机动车一方责任的，由挂靠人和被挂靠人承担连带责任。",
+          "overview": "",
+          "content": "",
+          "level": 2,
+          "match_reason": ""
+        },
+        {
+          "uri": "viking://resources/laws/civil_code/民法典/民法典_第一千二百四十八条.md",
+          "context_type": "resource",
+          "score": 0.5848,
+          "abstract": "# 民法典_第一千二百四十八条\n\nlaw_name: 民法典\narticle_no: 第一千二百四十八条\nchunk_id: 民法典_第一千二百四十八条\ndomain: civil_code\nhierarchy: 第七编　侵权责任 > 第九章　饲养动物损害责任\n\n第一千二百四十八条 动物园的动物造成他人损害的，动物园应当承担侵权责任；但是，能够证明尽到管理职责的，不承担侵权责任。",
+          "overview": "",
+          "content": "",
+          "level": 2,
+          "match_reason": ""
+        },
+        {
+          "uri": "viking://resources/laws/civil_code/民法典/民法典_第一千二百四十五条.md",
+          "context_type": "resource",
+          "score": 0.5832,
+          "abstract": "# 民法典_第一千二百四十五条\n\nlaw_name: 民法典\narticle_no: 第一千二百四十五条\nchunk_id: 民法典_第一千二百四十五条\ndomain: civil_code\nhierarchy: 第七编　侵权责任 > 第九章　饲养动物损害责任\n\n第一千二百四十五条 饲养的动物造成他人损害的，动物饲养人或者管理人应当承担侵权责任；但是，能够证明损害是因被侵权人故意或者重大过失造成的，可以不承担或者减轻责任。",
+          "overview": "",
+          "content": "",
+          "level": 2,
+          "match_reason": ""
+        },
+        {
+          "uri": "viking://resources/laws/civil_code/民法典/民法典_第一百七十八条.md",
+          "context_type": "resource",
+          "score": 0.5652,
+          "abstract": "# 民法典_第一百七十八条\n\nlaw_name: 民法典\narticle_no: 第一百七十八条\nchunk_id: 民法典_第一百七十八条\ndomain: civil_code\nhierarchy: 第一编　总则 > 第八章　民事责任\n\n第一百七十八条 二人以上依法承担连带责任的，权利人有权请求部分或者全部连带责任人承担责任。\n连带责任人的责任份额根据各自责任大小确定；难以确定责任大小的，平均承担责任。实际承担责任超过自己责任份额的连带责任人，有权向其他连带责任人追偿。\n连",
+          "overview": "",
+          "content": "",
+          "level": 2,
+          "match_reason": ""
+        },
+        {
+          "uri": "viking://resources/laws/civil_code/民法典/民法典_第八百九十四条.md",
+          "context_type": "resource",
+          "score": 0.562,
+          "abstract": "# 民法典_第八百九十四条\n\nlaw_name: 民法典\narticle_no: 第八百九十四条\nchunk_id: 民法典_第八百九十四条\ndomain: civil_code\nhierarchy: 第三编　合同 > 第二分编　典型合同 > 第二十一章　保管合同\n\n第八百九十四条 保管人不得将保管物转交第三人保管，但是当事人另有约定的除外。\n保管人违反前款规定，将保管物转交第三人保管，造成保管物损失的，应当承担赔偿责任。",
+          "overview": "",
+          "content": "",
+          "level": 2,
+          "match_reason": ""
+        },
+        {
+          "uri": "viking://resources/laws/civil_code/民法典/民法典_第一千二百零八条.md",
+          "context_type": "resource",
+          "score": 0.5595,
+          "abstract": "# 民法典_第一千二百零八条\n\nlaw_name: 民法典\narticle_no: 第一千二百零八条\nchunk_id: 民法典_第一千二百零八条\ndomain: civil_code\nhierarchy: 第七编　侵权责任 > 第五章　机动车交通事故责任\n\n第一千二百零八条 机动车发生交通事故造成损害的，依照道路交通安全法律和本法的有关规定承担赔偿责任。",
+          "overview": "",
+          "content": "",
+          "level": 2,
+          "match_reason": ""
+        },
+        {
+          "uri": "viking://resources/laws/civil_code/民法典/民法典_第八百九十七条.md",
+          "context_type": "resource",
+          "score": 0.5585,
+          "abstract": "# 民法典_第八百九十七条\n\nlaw_name: 民法典\narticle_no: 第八百九十七条\nchunk_id: 民法典_第八百九十七条\ndomain: civil_code\nhierarchy: 第三编　合同 > 第二分编　典型合同 > 第二十一章　保管合同\n\n第八百九十七条 保管期内，因保管人保管不善造成保管物毁损、灭失的，保管人应当承担赔偿责任。但是，无偿保管人证明自己没有故意或者重大过失的，不承担赔偿责任。",
+          "overview": "",
+          "content": "",
+          "level": 2,
+          "match_reason": ""
+        },
+        {
+          "uri": "viking://resources/laws/civil_code/民法典/民法典_第一百七十七条.md",
+          "context_type": "resource",
+          "score": 0.5584,
+          "abstract": "# 民法典_第一百七十七条\n\nlaw_name: 民法典\narticle_no: 第一百七十七条\nchunk_id: 民法典_第一百七十七条\ndomain: civil_code\nhierarchy: 第一编　总则 > 第八章　民事责任\n\n第一百七十七条 二人以上依法承担按份责任，能够确定责任大小的，各自承担相应的责任；难以确定责任大小的，平均承担责任。",
+          "overview": "",
+          "content": "",
+          "level": 2,
+          "match_reason": ""
+        },
+        {
+          "uri": "viking://resources/laws/civil_code/民法典/民法典_第一千二百一十四条.md",
+          "context_type": "resource",
+          "score": 0.5565,
+          "abstract": "# 民法典_第一千二百一十四条\n\nlaw_name: 民法典\narticle_no: 第一千二百一十四条\nchunk_id: 民法典_第一千二百一十四条\ndomain: civil_code\nhierarchy: 第七编　侵权责任 > 第五章　机动车交通事故责任\n\n第一千二百一十四条 以买卖或者其他方式转让拼装或者已经达到报废标准的机动车，发生交通事故造成损害的，由转让人和受让人承担连带责任。",
+          "overview": "",
+          "content": "",
+          "level": 2,
+          "match_reason": ""
+        }
+      ],
+      "baseline_hit": false,
+      "openviking_hit": true,
+      "baseline_reciprocal_rank": 0.0,
+      "openviking_reciprocal_rank": 1.0,
+      "baseline_precision": 0.0,
+      "openviking_precision": 0.2,
+      "baseline_recall": 0.0,
+      "openviking_recall": 1.0,
+      "resource_hit": false
+    }
+  ]
+}

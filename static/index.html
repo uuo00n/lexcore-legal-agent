@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>法律咨询助手</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <div id="app">
+    <aside id="sidebar">
+      <button id="new-chat" type="button">+ 新对话</button>
+      <ul id="thread-list"></ul>
+      <section id="context-panel">
+        <div class="context-row">
+          <span>上下文</span>
+          <span id="context-percent">0%</span>
+        </div>
+        <div id="context-bar" aria-hidden="true">
+          <span></span>
+        </div>
+        <div id="context-meta">0 / 0 tokens</div>
+        <button id="compact-context" type="button">压缩</button>
+      </section>
+      <div id="provider-tag"></div>
+    </aside>
+
+    <main id="chat-area">
+      <header>
+        <h1>法律咨询助手</h1>
+        <div id="doc-chip" hidden>
+          <span class="doc-name"></span>
+          <span class="doc-meta"></span>
+          <button class="doc-remove" title="移除文档" type="button">✕</button>
+        </div>
+        <div id="evidence-chip" hidden>
+          <span class="evidence-name"></span>
+          <span class="evidence-meta"></span>
+          <button class="evidence-remove" title="移除视频证据" type="button">✕</button>
+        </div>
+      </header>
+
+      <div id="messages"></div>
+
+      <div id="composer">
+        <div id="slash-menu" hidden>
+          <button type="button" data-command="/context">/context 查看上下文</button>
+          <button type="button" data-command="/compact">/compact 主动压缩</button>
+          <button type="button" data-command="/tools">/tools 查看命令</button>
+        </div>
+        <label class="upload-btn" title="上传文档或视频证据（PDF/DOCX/TXT/MP4/MOV 等）">
+          <input type="file" id="file-input" accept=".pdf,.docx,.txt,.mp4,.mov,.avi,.mkv,.webm,.flv,.wmv,.ts" hidden>
+          <span>📎</span>
+        </label>
+        <textarea id="input" rows="2" placeholder="请描述您的法律问题，Shift+Enter 换行..."></textarea>
+        <button id="send" type="button">发送</button>
+      </div>
+    </main>
+  </div>
+  <script src="/static/app.js" type="module"></script>
+</body>
+</html>

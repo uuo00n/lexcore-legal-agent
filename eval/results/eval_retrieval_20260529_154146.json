@@ -1,0 +1,842 @@
+{
+  "mode": "retrieval",
+  "top_k": 5,
+  "num_queries": 51,
+  "aggregated": {
+    "hit_rate": 0.37254901960784315,
+    "mrr": 0.2800653594771242,
+    "precision": 0.08790849673202615,
+    "recall": 0.3235294117647059
+  },
+  "details": [
+    {
+      "question": "我在公司干了三年，老板突然说不续签合同了，我能拿到补偿吗？",
+      "ground_truth_contexts": [
+        "劳动合同法_第四十六条",
+        "劳动合同法_第四十七条"
+      ],
+      "retrieved_ids": [
+        "劳动合同法_第四十六条",
+        "劳动合同法_第四十八条",
+        "劳动法_第九十一条",
+        "劳动合同法_第五十条",
+        "劳动合同法_第九十七条"
+      ],
+      "hit": true,
+      "reciprocal_rank": 1.0,
+      "precision": 0.2,
+      "recall": 0.5
+    },
+    {
+      "question": "租的房子到期了房东不退押金，说墙上有钉子眼要扣钱，合理吗？",
+      "ground_truth_contexts": [
+        "民法典_第七百一十四条",
+        "民法典_第七百三十三条"
+      ],
+      "retrieved_ids": [
+        "民法典_第七百五十九条",
+        "民法典_第七百五十八条",
+        "民法典_第七百二十条",
+        "民法典_第七百二十四条"
+      ],
+      "hit": false,
+      "reciprocal_rank": 0.0,
+      "precision": 0.0,
+      "recall": 0.0
+    },
+    {
+      "question": "网上买的衣服不喜欢，商家说打折商品不能退，这对吗？",
+      "ground_truth_contexts": [
+        "消费者权益保护法_第二十五条"
+      ],
+      "retrieved_ids": [
+        "消费者权益保护法_第五十四条",
+        "消费者权益保护法_第二十五条"
+      ],
+      "hit": true,
+      "reciprocal_rank": 0.5,
+      "precision": 0.5,
+      "recall": 1.0
+    },
+    {
+      "question": "离婚的时候，婚前买的房子对方能分吗？",
+      "ground_truth_contexts": [
+        "民法典_第一千零六十三条",
+        "民法典_第一千零八十七条"
+      ],
+      "retrieved_ids": [
+        "民法典_第一千零九十二条",
+        "民法典_第一千零六十六条",
+        "民法典_第一千一百五十三条",
+        "民法典_第一千零八十七条",
+        "民法典_第三百零三条"
+      ],
+      "hit": true,
+      "reciprocal_rank": 0.25,
+      "precision": 0.2,
+      "recall": 0.5
+    },
+    {
+      "question": "朋友借了我5万块钱，就写了个微信聊天记录说会还，现在不认账了怎么办？",
+      "ground_truth_contexts": [
+        "民法典_第六百七十五条",
+        "民事诉讼法_第六十六条"
+      ],
+      "retrieved_ids": [
+        "民法典_第五百八十条"
+      ],
+      "hit": false,
+      "reciprocal_rank": 0.0,
+      "precision": 0.0,
+      "recall": 0.0
+    },
+    {
+      "question": "试用期三个月，公司只给我发八成工资合法吗",
+      "ground_truth_contexts": [
+        "劳动合同法_第二十条"
+      ],
+      "retrieved_ids": [
+        "劳动合同法_第二十条",
+        "劳动合同法_第八十二条",
+        "劳动合同法_第八十三条"
+      ],
+      "hit": true,
+      "reciprocal_rank": 1.0,
+      "precision": 0.3333333333333333,
+      "recall": 1.0
+    },
+    {
+      "question": "加班之后公司说只能调休不给加班费，这样对吗",
+      "ground_truth_contexts": [
+        "劳动法_第四十四条"
+      ],
+      "retrieved_ids": [
+        "劳动合同法_第三十一条",
+        "劳动合同法_第八十五条"
+      ],
+      "hit": false,
+      "reciprocal_rank": 0.0,
+      "precision": 0.0,
+      "recall": 0.0
+    },
+    {
+      "question": "我租的房子到期，房东不退押金说我墙面脏了，怎么办",
+      "ground_truth_contexts": [
+        "民法典_第七百三十三条"
+      ],
+      "retrieved_ids": [
+        "民法典_第七百五十三条",
+        "民法典_第七百二十四条",
+        "民法典_第七百一十一条",
+        "民法典_第七百二十九条",
+        "民法典_第七百五十八条"
+      ],
+      "hit": false,
+      "reciprocal_rank": 0.0,
+      "precision": 0.0,
+      "recall": 0.0
+    },
+    {
+      "question": "网上买的水果到货坏了一半，商家只同意退坏的部分钱合理吗",
+      "ground_truth_contexts": [
+        "消费者权益保护法_第二十四条"
+      ],
+      "retrieved_ids": [],
+      "hit": false,
+      "reciprocal_rank": 0.0,
+      "precision": 0.0,
+      "recall": 0.0
+    },
+    {
+      "question": "在小区遛狗没牵绳，被别人开车撞了，责任怎么分",
+      "ground_truth_contexts": [
+        "民法典_第一千二百四十六条"
+      ],
+      "retrieved_ids": [
+        "民法典_第一千二百四十六条",
+        "民法典_第一千二百四十七条",
+        "民法典_第一千二百四十五条",
+        "民法典_第一百七十七条",
+        "民法典_第一千二百五十条"
+      ],
+      "hit": true,
+      "reciprocal_rank": 1.0,
+      "precision": 0.2,
+      "recall": 1.0
+    },
+    {
+      "question": "公司转正之后才给交社保，说试用期不交，这个合法吗",
+      "ground_truth_contexts": [
+        "劳动法_第七十二条"
+      ],
+      "retrieved_ids": [
+        "劳动法_第一百条"
+      ],
+      "hit": false,
+      "reciprocal_rank": 0.0,
+      "precision": 0.0,
+      "recall": 0.0
+    },
+    {
+      "question": "我偷了邻居一辆电动车卖了三千块钱，会被判刑吗",
+      "ground_truth_contexts": [
+        "刑法_第二百六十四条"
+      ],
+      "retrieved_ids": [
+        "治安管理处罚法_第四十一条",
+        "刑法_第一百一十九条",
+        "治安管理处罚法_第五十八条",
+        "治安管理处罚法_第六十九条",
+        "刑法_第二百三十四条"
+      ],
+      "hit": false,
+      "reciprocal_rank": 0.0,
+      "precision": 0.0,
+      "recall": 0.0
+    },
+    {
+      "question": "离婚的时候孩子满八周岁了，抚养权归谁会听孩子的想法吗",
+      "ground_truth_contexts": [
+        "民法典_第一千零八十四条"
+      ],
+      "retrieved_ids": [
+        "未成年人保护法_第一百零七条",
+        "民法典_第一千零八十四条",
+        "未成年人保护法_第二十四条",
+        "民法典_第一千零五十八条",
+        "民法典_第一千一百一十四条"
+      ],
+      "hit": true,
+      "reciprocal_rank": 0.5,
+      "precision": 0.2,
+      "recall": 1.0
+    },
+    {
+      "question": "政府部门不给我公开我申请的信息，我要告的话去哪个法院",
+      "ground_truth_contexts": [
+        "行政诉讼法_第十四条"
+      ],
+      "retrieved_ids": [
+        "行政复议法_第三十一条",
+        "个人信息保护法_第七十条",
+        "行政处罚法_第四十八条",
+        "行政诉讼法_第十二条",
+        "个人信息保护法_第五十条"
+      ],
+      "hit": false,
+      "reciprocal_rank": 0.0,
+      "precision": 0.0,
+      "recall": 0.0
+    },
+    {
+      "question": "我发了一张网上找的明星照片在我网店做宣传，算侵权吗",
+      "ground_truth_contexts": [
+        "民法典_第一千零一十九条"
+      ],
+      "retrieved_ids": [
+        "民法典_第一千一百九十四条",
+        "著作权法_第五十三条"
+      ],
+      "hit": false,
+      "reciprocal_rank": 0.0,
+      "precision": 0.0,
+      "recall": 0.0
+    },
+    {
+      "question": "闯红灯被交警当场开了罚单，我不服这个处罚，该怎么办",
+      "ground_truth_contexts": [
+        "行政处罚法_第七条",
+        "行政复议法_第六条"
+      ],
+      "retrieved_ids": [
+        "治安管理处罚法_第一百二十五条",
+        "治安管理处罚法_第一百一十九条",
+        "行政处罚法_第六十八条",
+        "治安管理处罚法_第一百二十条",
+        "治安管理处罚法_第一百二十三条"
+      ],
+      "hit": false,
+      "reciprocal_rank": 0.0,
+      "precision": 0.0,
+      "recall": 0.0
+    },
+    {
+      "question": "我被别人骗了五万块钱，去公安局报案他们不立案，我该去哪里告",
+      "ground_truth_contexts": [
+        "刑事诉讼法_第一百一十二条"
+      ],
+      "retrieved_ids": [
+        "行政诉讼法_第五十二条",
+        "刑事诉讼法_第一百一十三条",
+        "刑法_第八十八条",
+        "行政诉讼法_第五十一条",
+        "刑法_第一百九十八条"
+      ],
+      "hit": false,
+      "reciprocal_rank": 0.0,
+      "precision": 0.0,
+      "recall": 0.0
+    },
+    {
+      "question": "我自己写了一本网络小说，发在平台上，什么时候取得著作权",
+      "ground_truth_contexts": [
+        "著作权法_第二条"
+      ],
+      "retrieved_ids": [
+        "著作权法_第二十三条",
+        "著作权法_第十三条",
+        "著作权法_第十条"
+      ],
+      "hit": false,
+      "reciprocal_rank": 0.0,
+      "precision": 0.0,
+      "recall": 0.0
+    },
+    {
+      "question": "楼下饭店油烟排到我家，天天呛得没法开窗，我该找谁",
+      "ground_truth_contexts": [
+        "民法典_第二百八十八条"
+      ],
+      "retrieved_ids": [],
+      "hit": false,
+      "reciprocal_rank": 0.0,
+      "precision": 0.0,
+      "recall": 0.0
+    },
+    {
+      "question": "公司说我严重违反规章制度辞退我，需要给我补偿吗",
+      "ground_truth_contexts": [
+        "劳动合同法_第三十九条"
+      ],
+      "retrieved_ids": [
+        "公司法_第一百八十八条",
+        "劳动合同法_第八十条",
+        "劳动法_第八十九条",
+        "劳动法_第二十八条",
+        "劳动合同法_第八十七条"
+      ],
+      "hit": false,
+      "reciprocal_rank": 0.0,
+      "precision": 0.0,
+      "recall": 0.0
+    },
+    {
+      "question": "吃了外卖之后上吐下泻去医院，说是食物中毒，商家该赔我什么",
+      "ground_truth_contexts": [
+        "食品安全法_第一百四十八条"
+      ],
+      "retrieved_ids": [
+        "刑法_第一百四十三条",
+        "刑法_第一百四十四条",
+        "食品安全法_第九十六条",
+        "食品安全法_第九十九条",
+        "消费者权益保护法_第四十条"
+      ],
+      "hit": false,
+      "reciprocal_rank": 0.0,
+      "precision": 0.0,
+      "recall": 0.0
+    },
+    {
+      "question": "我借给朋友十万块钱，借条上没写利息，我能要利息吗",
+      "ground_truth_contexts": [
+        "民法典_第六百八十条"
+      ],
+      "retrieved_ids": [
+        "民法典_第六百八十条",
+        "民法典_第六百七十条",
+        "民法典_第六百七十四条",
+        "民法典_第六百七十七条",
+        "民法典_第六百七十一条"
+      ],
+      "hit": true,
+      "reciprocal_rank": 1.0,
+      "precision": 0.2,
+      "recall": 1.0
+    },
+    {
+      "question": "别人把我的手机号放到交友网站上，天天有陌生人打骚扰电话，怎么办",
+      "ground_truth_contexts": [
+        "个人信息保护法_第十条",
+        "治安管理处罚法_第四十二条"
+      ],
+      "retrieved_ids": [
+        "民法典_第一千零一十条",
+        "民法典_第一千零三十三条",
+        "治安管理处罚法_第五十条"
+      ],
+      "hit": false,
+      "reciprocal_rank": 0.0,
+      "precision": 0.0,
+      "recall": 0.0
+    },
+    {
+      "question": "我是公司股东，持股百分之十，能要求查看公司的会计账簿吗",
+      "ground_truth_contexts": [
+        "公司法_第三十三条"
+      ],
+      "retrieved_ids": [
+        "公司法_第一百一十条",
+        "公司法_第五十七条",
+        "公司法_第一百零九条",
+        "公司法_第二百一十九条"
+      ],
+      "hit": false,
+      "reciprocal_rank": 0.0,
+      "precision": 0.0,
+      "recall": 0.0
+    },
+    {
+      "question": "别人跟我吵架，先动手打我，我还手把他打伤了，算正当防卫吗",
+      "ground_truth_contexts": [
+        "刑法_第二十条"
+      ],
+      "retrieved_ids": [
+        "刑法_第二十条",
+        "民法典_第一百八十一条",
+        "治安管理处罚法_第五十一条",
+        "治安管理处罚法_第五十条",
+        "刑事诉讼法_第三百零二条"
+      ],
+      "hit": true,
+      "reciprocal_rank": 1.0,
+      "precision": 0.2,
+      "recall": 1.0
+    },
+    {
+      "question": "网上买了个电视机，买回来用了一周觉得不好看，想退，商家说电器拆了不能退，对吗",
+      "ground_truth_contexts": [
+        "消费者权益保护法_第二十五条"
+      ],
+      "retrieved_ids": [
+        "消费者权益保护法_第二十五条",
+        "消费者权益保护法_第二十四条",
+        "消费者权益保护法_第五十四条",
+        "消费者权益保护法_第二十三条"
+      ],
+      "hit": true,
+      "reciprocal_rank": 1.0,
+      "precision": 0.25,
+      "recall": 1.0
+    },
+    {
+      "question": "用人单位要跟我签竞业限制，说离职之后每个月给补偿，如果我不履行要赔违约金，这个限制期限最多多久",
+      "ground_truth_contexts": [
+        "劳动合同法_第二十四条"
+      ],
+      "retrieved_ids": [
+        "劳动合同法_第二十四条",
+        "劳动合同法_第二十三条",
+        "劳动合同法_第八十二条",
+        "劳动合同法_第十四条",
+        "劳动合同法_第四十八条"
+      ],
+      "hit": true,
+      "reciprocal_rank": 1.0,
+      "precision": 0.2,
+      "recall": 1.0
+    },
+    {
+      "question": "结婚之前我买的房子，婚后加上了对方名字，离婚的时候要分一半吗",
+      "ground_truth_contexts": [
+        "民法典_第一千零八十七条"
+      ],
+      "retrieved_ids": [
+        "民法典_第一千一百五十三条",
+        "民法典_第一千零九十二条",
+        "民法典_第一千一百五十六条",
+        "民法典_第三百零四条",
+        "民法典_第三百零三条"
+      ],
+      "hit": false,
+      "reciprocal_rank": 0.0,
+      "precision": 0.0,
+      "recall": 0.0
+    },
+    {
+      "question": "我骑电动车被汽车撞了，对方全责，我能要哪些赔偿",
+      "ground_truth_contexts": [
+        "民法典_第一千一百七十九条",
+        "民法典_第一千二百一十三条"
+      ],
+      "retrieved_ids": [
+        "民法典_第一千二百一十六条",
+        "民法典_第一千二百一十三条",
+        "民法典_第一千二百零八条",
+        "民法典_第一千二百零九条",
+        "民法典_第一千二百一十二条"
+      ],
+      "hit": true,
+      "reciprocal_rank": 0.5,
+      "precision": 0.2,
+      "recall": 0.5
+    },
+    {
+      "question": "我开了一家餐馆，没有办食品经营许可证就营业了，会受到什么处罚",
+      "ground_truth_contexts": [
+        "食品安全法_第一百二十二条"
+      ],
+      "retrieved_ids": [
+        "食品安全法_第九十条",
+        "未成年人保护法_第一百二十二条",
+        "食品安全法_第八十四条",
+        "食品安全法_第八十五条",
+        "食品安全法_第八十六条"
+      ],
+      "hit": false,
+      "reciprocal_rank": 0.0,
+      "precision": 0.0,
+      "recall": 0.0
+    },
+    {
+      "question": "学校发现学生被校园霸凌了，不管不问，学校要负责任吗",
+      "ground_truth_contexts": [
+        "民法典_第一千二百条",
+        "未成年人保护法_第三十九条"
+      ],
+      "retrieved_ids": [
+        "治安管理处罚法_第六十条",
+        "未成年人保护法_第三十九条",
+        "未成年人保护法_第一百三十条",
+        "未成年人保护法_第七十条",
+        "未成年人保护法_第二十七条"
+      ],
+      "hit": true,
+      "reciprocal_rank": 0.5,
+      "precision": 0.2,
+      "recall": 0.5
+    },
+    {
+      "question": "我把自己的发明创造卖给了公司，但是公司想要申请专利，发明人写谁啊",
+      "ground_truth_contexts": [
+        "专利法_第十六条"
+      ],
+      "retrieved_ids": [
+        "民法典_第八百五十九条",
+        "专利法_第八条",
+        "民法典_第八百六十条",
+        "专利法_第六条",
+        "专利法_第九条"
+      ],
+      "hit": false,
+      "reciprocal_rank": 0.0,
+      "precision": 0.0,
+      "recall": 0.0
+    },
+    {
+      "question": "单位说经营困难要裁员，裁了二十多个人，需要给我们什么补偿",
+      "ground_truth_contexts": [
+        "劳动合同法_第四十六条",
+        "劳动合同法_第四十一条"
+      ],
+      "retrieved_ids": [
+        "劳动合同法_第四十一条",
+        "劳动法_第二十七条",
+        "劳动合同法_第四十六条",
+        "劳动法_第二十八条",
+        "劳动合同法_第八十五条"
+      ],
+      "hit": true,
+      "reciprocal_rank": 1.0,
+      "precision": 0.4,
+      "recall": 1.0
+    },
+    {
+      "question": "我在闲鱼上卖了一张我自己买的正版CD，对方说我侵犯著作权，这算吗",
+      "ground_truth_contexts": [
+        "著作权法_第十条"
+      ],
+      "retrieved_ids": [
+        "著作权法_第五十八条",
+        "刑法_第二百一十七条",
+        "著作权法_第五十四条",
+        "著作权法_第五十二条",
+        "著作权法_第十三条"
+      ],
+      "hit": false,
+      "reciprocal_rank": 0.0,
+      "precision": 0.0,
+      "recall": 0.0
+    },
+    {
+      "question": "我买的二手房过户之后，发现前房主欠了好几年物业费没交，物业让我交，我要交吗",
+      "ground_truth_contexts": [
+        "物业管理条例_第四十一条"
+      ],
+      "retrieved_ids": [
+        "民法典_第九百四十四条",
+        "民法典_第九百四十九条",
+        "民法典_第九百五十条",
+        "民法典_第九百四十条",
+        "民法典_第九百三十七条"
+      ],
+      "hit": false,
+      "reciprocal_rank": 0.0,
+      "precision": 0.0,
+      "recall": 0.0
+    },
+    {
+      "question": "我被商家骗了买了假货，现在想起诉商家，是不是必须去商家所在地法院",
+      "ground_truth_contexts": [
+        "民事诉讼法_第二十四条"
+      ],
+      "retrieved_ids": [
+        "民事诉讼法_第二十五条",
+        "行政诉讼法_第十九条",
+        "民事诉讼法_第二十八条",
+        "民事诉讼法_第二十七条",
+        "民事诉讼法_第二十四条"
+      ],
+      "hit": true,
+      "reciprocal_rank": 0.2,
+      "precision": 0.2,
+      "recall": 1.0
+    },
+    {
+      "question": "企业收集我的个人信息，必须要我同意吗，不同意就不给我办业务合法吗",
+      "ground_truth_contexts": [
+        "个人信息保护法_第十三条"
+      ],
+      "retrieved_ids": [
+        "消费者权益保护法_第二十九条",
+        "个人信息保护法_第十六条",
+        "个人信息保护法_第十三条",
+        "个人信息保护法_第十四条",
+        "民法典_第一千零三十五条"
+      ],
+      "hit": true,
+      "reciprocal_rank": 0.3333333333333333,
+      "precision": 0.2,
+      "recall": 1.0
+    },
+    {
+      "question": "开发商卖房子的时候说小区有游泳池，收房之后发现根本没有，我能退房吗",
+      "ground_truth_contexts": [
+        "民法典_第五百条",
+        "民法典_第五百七十七条"
+      ],
+      "retrieved_ids": [
+        "民法典_第六百一十条"
+      ],
+      "hit": false,
+      "reciprocal_rank": 0.0,
+      "precision": 0.0,
+      "recall": 0.0
+    },
+    {
+      "question": "我在单位工作十年了，单位一直没给我签无固定期限劳动合同，这违法吗",
+      "ground_truth_contexts": [
+        "劳动合同法_第十四条"
+      ],
+      "retrieved_ids": [
+        "劳动合同法_第十四条",
+        "劳动法_第二十条",
+        "劳动合同法_第八十二条",
+        "劳动合同法_第十三条",
+        "劳动法_第九十八条"
+      ],
+      "hit": true,
+      "reciprocal_rank": 1.0,
+      "precision": 0.2,
+      "recall": 1.0
+    },
+    {
+      "question": "我自己买了辆车，放在朋友名下，现在朋友欠别人钱被起诉了，我的车会被法院查封吗",
+      "ground_truth_contexts": [
+        "民法典_第二百二十五条"
+      ],
+      "retrieved_ids": [
+        "治安管理处罚法_第四十一条",
+        "刑事诉讼法_第一百七十七条",
+        "行政诉讼法_第五十一条",
+        "民事诉讼法_第三十条",
+        "民法典_第四百二十三条"
+      ],
+      "hit": false,
+      "reciprocal_rank": 0.0,
+      "precision": 0.0,
+      "recall": 0.0
+    },
+    {
+      "question": "有人在朋友圈发我的丑照，还骂我，说我坏话，我能告他吗",
+      "ground_truth_contexts": [
+        "民法典_第一千零二十四条",
+        "民法典_第一千零一十九条",
+        "治安管理处罚法_第四十二条"
+      ],
+      "retrieved_ids": [
+        "刑法_第二百四十六条",
+        "民法典_第一千零二十七条"
+      ],
+      "hit": false,
+      "reciprocal_rank": 0.0,
+      "precision": 0.0,
+      "recall": 0.0
+    },
+    {
+      "question": "两个公司都是做外卖平台的，他们约定统一提高配送费，这违法吗",
+      "ground_truth_contexts": [
+        "反垄断法_第十三条"
+      ],
+      "retrieved_ids": [],
+      "hit": false,
+      "reciprocal_rank": 0.0,
+      "precision": 0.0,
+      "recall": 0.0
+    },
+    {
+      "question": "被人打了，我报警了，警方会怎么处理打人的那个人",
+      "ground_truth_contexts": [
+        "治安管理处罚法_第四十三条",
+        "刑法_第二百三十四条"
+      ],
+      "retrieved_ids": [
+        "治安管理处罚法_第一百三十九条",
+        "治安管理处罚法_第一百二十一条",
+        "治安管理处罚法_第九条",
+        "治安管理处罚法_第五十一条",
+        "刑事诉讼法_第一百一十条"
+      ],
+      "hit": false,
+      "reciprocal_rank": 0.0,
+      "precision": 0.0,
+      "recall": 0.0
+    },
+    {
+      "question": "离婚之后我每次看孩子，孩子前妻都不让，我可以怎么解决",
+      "ground_truth_contexts": [
+        "民法典_第一千零八十六条"
+      ],
+      "retrieved_ids": [
+        "民法典_第一千零八十六条",
+        "未成年人保护法_第二十四条",
+        "民法典_第一千零八十五条",
+        "民法典_第一千零八十七条",
+        "民法典_第一千零八十四条"
+      ],
+      "hit": true,
+      "reciprocal_rank": 1.0,
+      "precision": 0.2,
+      "recall": 1.0
+    },
+    {
+      "question": "我们公司要申请一个营业执照，需要办理行政许可，行政机关最长要多久给我们办下来",
+      "ground_truth_contexts": [
+        "行政许可法_第四十二条"
+      ],
+      "retrieved_ids": [
+        "行政许可法_第四十二条",
+        "行政许可法_第四十三条",
+        "行政许可法_第四十四条",
+        "行政许可法_第五十条",
+        "行政许可法_第四十五条"
+      ],
+      "hit": true,
+      "reciprocal_rank": 1.0,
+      "precision": 0.2,
+      "recall": 1.0
+    },
+    {
+      "question": "我发现有人偷偷给境外机构提供我们国家军事基地的照片，我该向谁举报",
+      "ground_truth_contexts": [
+        "国家安全法_第七十七条",
+        "反间谍法_第二十条"
+      ],
+      "retrieved_ids": [
+        "个人信息保护法_第三十六条",
+        "网络安全法_第十五条",
+        "国家安全法_第五十二条",
+        "刑事诉讼法_第一百一十条",
+        "个人信息保护法_第四十条"
+      ],
+      "hit": false,
+      "reciprocal_rank": 0.0,
+      "precision": 0.0,
+      "recall": 0.0
+    },
+    {
+      "question": "我自己开发了一个网站，放了很多电影让用户免费看，我收广告费，这侵犯著作权吗",
+      "ground_truth_contexts": [
+        "著作权法_第五十三条"
+      ],
+      "retrieved_ids": [
+        "刑法_第二百一十七条",
+        "著作权法_第五十二条",
+        "著作权法_第五十条",
+        "著作权法_第二十四条",
+        "著作权法_第十条"
+      ],
+      "hit": false,
+      "reciprocal_rank": 0.0,
+      "precision": 0.0,
+      "recall": 0.0
+    },
+    {
+      "question": "我发明了一个全新的产品结构，想要申请专利，什么样的条件才能批下来",
+      "ground_truth_contexts": [
+        "专利法_第二十二条"
+      ],
+      "retrieved_ids": [
+        "专利法_第二十六条",
+        "专利法_第三十条",
+        "专利法_第三十一条",
+        "专利法_第八条",
+        "专利法_第六条"
+      ],
+      "hit": false,
+      "reciprocal_rank": 0.0,
+      "precision": 0.0,
+      "recall": 0.0
+    },
+    {
+      "question": "我买的股票被上市公司造假坑了，亏了好多钱，上市公司要赔我吗",
+      "ground_truth_contexts": [
+        "证券法_第六十九条"
+      ],
+      "retrieved_ids": [
+        "证券法_第一百八十九条",
+        "公司法_第二百二十六条",
+        "公司法_第二百一十一条",
+        "公司法_第一百八十八条",
+        "公司法_第二十二条"
+      ],
+      "hit": false,
+      "reciprocal_rank": 0.0,
+      "precision": 0.0,
+      "recall": 0.0
+    },
+    {
+      "question": "我在公司上班，突然被老板叫到办公室说不续签合同了，我能拿到补偿吗",
+      "ground_truth_contexts": [
+        "劳动合同法_第四十六条",
+        "劳动合同法_第四十七条"
+      ],
+      "retrieved_ids": [
+        "劳动法_第二十八条",
+        "劳动合同法_第四十六条",
+        "劳动合同法_第四十八条",
+        "劳动合同法_第五十条",
+        "劳动合同法_第九十七条"
+      ],
+      "hit": true,
+      "reciprocal_rank": 0.5,
+      "precision": 0.2,
+      "recall": 0.5
+    },
+    {
+      "question": "未成年人拿父母手机偷偷充了一万块打游戏，这笔钱能要回来吗",
+      "ground_truth_contexts": [
+        "民法典_第十九条",
+        "民法典_第一百四十五条",
+        "未成年人保护法_第七十四条"
+      ],
+      "retrieved_ids": [
+        "未成年人保护法_第一百二十六条"
+      ],
+      "hit": false,
+      "reciprocal_rank": 0.0,
+      "precision": 0.0,
+      "recall": 0.0
+    }
+  ]
+}

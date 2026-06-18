@@ -1,0 +1,30 @@
+劳动人事争议仲裁申请书
+
+申请人：{applicant_name}，{applicant_gender}，身份证号：{applicant_id}，
+住所地：{applicant_address}，联系电话：{applicant_phone}。
+
+被申请人：{respondent_name}，
+法定代表人：{respondent_legal_rep}，
+住所地：{respondent_address}，联系电话：{respondent_phone}。
+
+仲裁请求：
+{claims}
+
+事实与理由：
+{facts}
+
+证据清单：
+{evidence}
+
+法律依据：
+{legal_basis}
+
+此致
+{arbitration_commission}
+
+申请人：{applicant_name}
+日期：{date}
+
+附：
+1. 本申请书副本 ___ 份
+2. 证据材料 ___ 份

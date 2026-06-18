@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(*)",
+      "Read(*)",
+      "Write(*)",
+      "Edit(*)",
+      "WebFetch(domain:www.siliconflow.com)",
+      "Bash(mkdir -p /Users/didi/Desktop/Legal/docs/.vitepress /Users/didi/Desktop/Legal/docs/guide /Users/didi/Desktop/Legal/docs/api /Users/didi/Desktop/Legal/docs/sequences /Users/didi/Desktop/Legal/docs/public)"
+    ],
+    "additionalDirectories": [
+      "/Users/didi/Desktop/Legal/.claude",
+      "/Users/didi/Desktop/Legal/docs"
+    ]
+  }
+}

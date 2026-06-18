@@ -1,0 +1,95 @@
+{
+  "mode": "retrieval",
+  "top_k": 5,
+  "num_queries": 5,
+  "aggregated": {
+    "hit_rate": 0.6,
+    "mrr": 0.24,
+    "precision": 0.18,
+    "recall": 0.4
+  },
+  "details": [
+    {
+      "question": "我在公司干了三年，老板突然说不续签合同了，我能拿到补偿吗？",
+      "ground_truth_contexts": [
+        "劳动合同法_第四十六条",
+        "劳动合同法_第四十七条"
+      ],
+      "retrieved_ids": [
+        "劳动法_第二十八条",
+        "劳动合同法_第四十六条",
+        "劳动合同法_第八十七条",
+        "劳动合同法_第四十八条",
+        "劳动法_第九十一条"
+      ],
+      "hit": true,
+      "reciprocal_rank": 0.5,
+      "precision": 0.2,
+      "recall": 0.5
+    },
+    {
+      "question": "租的房子到期了房东不退押金，说墙上有钉子眼要扣钱，合理吗？",
+      "ground_truth_contexts": [
+        "民法典_第七百一十四条",
+        "民法典_第七百三十三条"
+      ],
+      "retrieved_ids": [
+        "民法典_第七百五十九条",
+        "民法典_第七百五十八条",
+        "民法典_第七百二十条",
+        "民法典_第七百二十四条"
+      ],
+      "hit": false,
+      "reciprocal_rank": 0.0,
+      "precision": 0.0,
+      "recall": 0.0
+    },
+    {
+      "question": "网上买的衣服不喜欢，商家说打折商品不能退，这对吗？",
+      "ground_truth_contexts": [
+        "消费者权益保护法_第二十五条"
+      ],
+      "retrieved_ids": [
+        "消费者权益保护法_第五十四条",
+        "消费者权益保护法_第二十五条"
+      ],
+      "hit": true,
+      "reciprocal_rank": 0.5,
+      "precision": 0.5,
+      "recall": 1.0
+    },
+    {
+      "question": "离婚的时候，婚前买的房子对方能分吗？",
+      "ground_truth_contexts": [
+        "民法典_第一千零六十三条",
+        "民法典_第一千零八十七条"
+      ],
+      "retrieved_ids": [
+        "民法典_第一千零九十二条",
+        "民法典_第一千零六十六条",
+        "民法典_第一千零八十八条",
+        "民法典_第一千一百五十三条",
+        "民法典_第一千零八十七条"
+      ],
+      "hit": true,
+      "reciprocal_rank": 0.2,
+      "precision": 0.2,
+      "recall": 0.5
+    },
+    {
+      "question": "朋友借了我5万块钱，就写了个微信聊天记录说会还，现在不认账了怎么办？",
+      "ground_truth_contexts": [
+        "民法典_第六百七十五条",
+        "民事诉讼法_第六十六条"
+      ],
+      "retrieved_ids": [
+        "民法典_第五百二十七条",
+        "民法典_第五百八十条"
+      ],
+      "hit": false,
+      "reciprocal_rank": 0.0,
+      "precision": 0.0,
+      "recall": 0.0
+    }
+  ]
+}

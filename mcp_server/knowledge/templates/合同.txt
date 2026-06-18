@@ -1,0 +1,43 @@
+{contract_title}
+
+甲方（{party_a_role}）：{party_a}
+地址：{party_a_address}
+联系人：{party_a_contact}
+电话：{party_a_phone}
+
+乙方（{party_b_role}）：{party_b}
+地址：{party_b_address}
+联系人：{party_b_contact}
+电话：{party_b_phone}
+
+鉴于：
+{background}
+
+经甲乙双方友好协商，就{subject_matter}事宜达成如下协议：
+
+第一条 合同标的
+{subject_detail}
+
+第二条 合同价款及支付方式
+{payment_terms}
+
+第三条 双方权利义务
+{obligations}
+
+第四条 违约责任
+{breach_liability}
+
+第五条 争议解决
+因本合同引起的或与本合同有关的任何争议，双方应首先通过友好协商解决；协商不成的，{dispute_resolution}。
+
+第六条 其他约定
+{other_terms}
+
+第七条 合同期限
+本合同自双方签字（盖章）之日起生效，有效期至{end_date}。
+
+法律依据：
+{legal_basis}
+
+甲方（签章）：_______________    乙方（签章）：_______________
+日期：{date}                     日期：{date}

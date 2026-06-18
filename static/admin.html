@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>法智后台</title>
+  <link rel="stylesheet" href="/static/admin.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div>
+      <h1>法智后台</h1>
+      <p>LLM Gateway · Agent Trace · Eval History</p>
+    </div>
+    <button id="refreshBtn" type="button">刷新</button>
+  </header>
+
+  <main>
+    <section class="metrics" id="metrics"></section>
+
+    <section class="layout">
+      <div class="panel">
+        <div class="panel-head">
+          <h2>最近 Trace</h2>
+        </div>
+        <div id="traceList" class="list"></div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head">
+          <h2>Trace 时间线</h2>
+        </div>
+        <div id="traceDetail" class="timeline">选择一条 trace 查看详情</div>
+      </div>
+    </section>
+
+    <section class="layout">
+      <div class="panel">
+        <div class="panel-head">
+          <h2>LLM 调用</h2>
+        </div>
+        <div id="llmCalls" class="table"></div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head">
+          <h2>评测趋势</h2>
+        </div>
+        <div id="evalRuns" class="table"></div>
+      </div>
+    </section>
+
+    <section class="layout">
+      <div class="panel">
+        <div class="panel-head">
+          <h2>模型路由</h2>
+        </div>
+        <div id="routeStats" class="table"></div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head">
+          <h2>配额使用</h2>
+        </div>
+        <div id="quotaUsage" class="table"></div>
+      </div>
+    </section>
+  </main>
+
+  <script src="/static/admin.js"></script>
+</body>
+</html>

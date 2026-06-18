@@ -1,0 +1,37 @@
+fastapi>=0.115
+uvicorn[standard]>=0.30
+gunicorn>=22.0
+python-multipart>=0.0.9
+sse-starlette>=2.1
+python-dotenv>=1.0
+httpx>=0.27
+pydantic>=2.0
+
+langgraph>=0.2.50
+langgraph-checkpoint-sqlite>=2.0
+langchain-core>=0.3
+langchain-openai>=0.2
+
+# MCP 工具协议
+mcp>=1.9
+
+pypdf>=5.0
+python-docx>=1.1
+Pillow>=10.0
+
+# RAG 向量存储
+chromadb>=0.5
+pymilvus>=2.4
+
+# Embedding & Rerank
+sentence-transformers>=3.0
+transformers>=4.40
+
+# 关键词检索
+rank-bm25>=0.2.2
+
+# 联网搜索兜底
+duckduckgo-search>=6.3
+
+# 可选：配置 TAVILY_API_KEY 时启用 Tavily 搜索
+tavily-python>=0.5
