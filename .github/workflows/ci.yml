@@ -1,0 +1,53 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt -r requirements-dev.txt
+      - name: Run pytest smoke suite
+        run: |
+          python -m pytest -q \
+            tests/test_auth.py \
+            tests/test_cache.py \
+            tests/test_context_compaction.py \
+            tests/test_contract_agent_core.py \
+            tests/test_gateway.py \
+            tests/test_model_routing.py \
+            tests/test_quota.py \
+            tests/test_task_queue.py \
+            tests/test_static_app_js.py
+
+  docs:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: docs/package-lock.json
+      - name: Install docs dependencies
+        run: npm ci
+        working-directory: docs
+      - name: Build docs
+        run: npm run build
+        working-directory: docs

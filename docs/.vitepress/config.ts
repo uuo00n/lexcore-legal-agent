@@ -11,6 +11,7 @@ export default withMermaid({
     nav: [
       { text: '指南', link: '/guide/overview' },
       { text: '项目报告', link: '/report/project-report' },
+      { text: '验证报告', link: '/report/test-results' },
       { text: 'API', link: '/api/' },
       { text: '时序图', link: '/sequences/chat-flow' },
     ],
@@ -21,6 +22,7 @@ export default withMermaid({
           text: '项目报告',
           items: [
             { text: '项目介绍报告', link: '/report/project-report' },
+            { text: '验证报告', link: '/report/test-results' },
           ]
         }
       ],
