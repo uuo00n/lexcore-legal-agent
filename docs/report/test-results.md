@@ -14,7 +14,7 @@
 | 控制台错误 | 通过 | 截图采集时三张页面均未捕获相关 error/warn |
 | 密钥扫描 | 通过 | 未发现真实 API key、GitHub token、AWS key 或私钥 |
 | 运行数据清理 | 通过 | `data/chroma_db/` 与 SQLite checkpoint 从 Git 跟踪中移除 |
-| GitHub Pages | 已配置 | workflow 已包含 Pages 构建/部署步骤，目标地址为 `https://2249619829.github.io/Legal/` |
+| GitHub Pages | 已配置 | workflow 已包含 Pages 构建、自动 enablement 和部署步骤，目标地址为 `https://2249619829.github.io/Legal/` |
 | GitHub CI | 已配置 | `.github/workflows/ci.yml` 运行 pytest smoke suite 和文档构建 |
 
 ## 测试结果
@@ -105,6 +105,6 @@ npm run build
 
 ## 剩余风险
 
-- GitHub Pages 是否成功上线仍取决于仓库 Settings 中 Pages source 是否允许 GitHub Actions 部署；workflow 已按 Actions 部署方式配置。
+- GitHub Pages workflow 已启用 `actions/configure-pages` 的 `enablement` 参数；若仓库策略禁止 Actions 自动启用 Pages，仍需要在 GitHub Settings 中手动允许 Pages。
 - CI 使用 smoke suite，避免在 GitHub runner 上下载本地大模型；完整 RAG 集成仍建议在有模型和索引的本地环境运行。
 - README 中的在线文档链接需要等 GitHub Actions 部署成功后才会返回页面。
