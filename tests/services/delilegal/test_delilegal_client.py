@@ -1,0 +1,104 @@
+import json
+
+import httpx
+import pytest
+
+from services.delilegal.client import DelilegalClient
+from services.delilegal.config import DelilegalSettings
+from services.delilegal.exceptions import (
+    DelilegalAuthenticationError,
+    DelilegalConfigurationError,
+    DelilegalTimeoutError,
+)
+from services.delilegal.schemas import CaseSearchInput, LawSearchInput
+
+
+def _settings(**overrides):
+    values = {
+        "base_url": "https://openapi.delilegal.test",
+        "app_id": "test-app",
+        "secret": "test-secret",
+        "law_search_path": "/law-search",
+        "case_search_path": "/api/qa/v3/search/queryListCase",
+    }
+    values.update(overrides)
+    return DelilegalSettings(**values)
+
+
+async def test_client_posts_case_request_and_normalizes_response():
+    seen = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen["path"] = request.url.path
+        seen["body"] = request.content
+        assert request.headers["appid"] == "test-app"
+        return httpx.Response(200, json={"data": {"totalCount": 0, "list": []}})
+
+    http_client = httpx.AsyncClient(
+        base_url="https://openapi.delilegal.test", transport=httpx.MockTransport(handler)
+    )
+    client = DelilegalClient(_settings(), http_client=http_client, trace_id="trace-1")
+    response = await client.search_cases(CaseSearchInput(keywords=["劳动争议"]))
+    await http_client.aclose()
+
+    assert seen["path"] == "/api/qa/v3/search/queryListCase"
+    assert response.items == []
+
+
+async def test_law_path_must_be_configured():
+    http_client = httpx.AsyncClient(base_url="https://openapi.delilegal.test")
+    client = DelilegalClient(_settings(law_search_path=None), http_client=http_client)
+    with pytest.raises(DelilegalConfigurationError, match="DELILEGAL_LAW_SEARCH_PATH"):
+        await client.search_laws(LawSearchInput(query="劳动法"))
+    await http_client.aclose()
+
+
+async def test_law_search_uses_confirmed_endpoint_and_request_body():
+    seen = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen["path"] = request.url.path
+        seen["body"] = json.loads(request.content)
+        return httpx.Response(200, json={"data": {"totalCount": 0, "list": []}})
+
+    http_client = httpx.AsyncClient(
+        base_url="https://openapi.delilegal.test", transport=httpx.MockTransport(handler)
+    )
+    settings = _settings(law_search_path="/api/qa/v3/search/queryListCase")
+    client = DelilegalClient(settings, http_client=http_client)
+    await client.search_laws(
+        LawSearchInput(query="工伤认定", page_size=3)
+    )
+    await http_client.aclose()
+
+    assert seen["path"] == "/api/qa/v3/search/queryListCase"
+    assert seen["body"] == {
+        "pageNo": 1,
+        "pageSize": 3,
+        "sortField": "correlation",
+        "sortOrder": "desc",
+        "condition": {"keywordArr": ["工伤认定"]},
+    }
+
+
+async def test_client_maps_authentication_and_timeout_without_secret():
+    auth_client = httpx.AsyncClient(
+        base_url="https://openapi.delilegal.test",
+        transport=httpx.MockTransport(lambda _request: httpx.Response(401)),
+    )
+    client = DelilegalClient(_settings(), http_client=auth_client)
+    with pytest.raises(DelilegalAuthenticationError) as auth_error:
+        await client.search_cases(CaseSearchInput(keywords=["案例"]))
+    assert "test-secret" not in str(auth_error.value)
+    await auth_client.aclose()
+
+    def timeout(_request: httpx.Request) -> httpx.Response:
+        raise httpx.ReadTimeout("slow")
+
+    timeout_client = httpx.AsyncClient(
+        base_url="https://openapi.delilegal.test", transport=httpx.MockTransport(timeout)
+    )
+    client = DelilegalClient(_settings(), http_client=timeout_client)
+    with pytest.raises(DelilegalTimeoutError):
+        await client.search_cases(CaseSearchInput(keywords=["案例"]))
+    await timeout_client.aclose()

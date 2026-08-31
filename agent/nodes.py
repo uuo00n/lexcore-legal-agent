@@ -935,6 +935,7 @@ def _build_legal_agent_report(content: str, state: AgentState) -> dict[str, Any]
             report["analysis"] = analysis
         report["raw_response"] = content
     report["retrieved_law_count"] = len(retrieved)
+    report.setdefault("evidence_insufficient", bool(state.get("evidence_insufficient", False)))
     return report
 
 
@@ -967,22 +968,19 @@ def _legal_consult_tools_for_state(state: AgentState) -> list[Any]:
     输出参数：
         - list[Any]
     """
-    used_local_search = _has_used_legal_search_tool(state)
+    used_local_search = _has_used_local_law_tool(state)
     if used_local_search:
         return [
             tool for tool in LEGAL_CONSULT_TOOLS
-            if tool.name != "legal_search_tool"
+            if tool.name != "retrieve_local_law_tool"
         ]
-    return [
-        tool for tool in LEGAL_CONSULT_TOOLS
-        if tool.name != "web_search_tool"
-    ]
+    return list(LEGAL_CONSULT_TOOLS)
 
 
-def _has_used_legal_search_tool(state: AgentState) -> bool:
+def _has_used_local_law_tool(state: AgentState) -> bool:
     """
     函数作用：
-        判断本轮是否已经执行过本地法条检索，避免其他工具误关闭 legal_search_tool。
+        判断本轮是否已经执行过本地法条检索，避免其他工具误关闭本地检索工具。
     输入参数：
         - state: AgentState
     输出参数：
@@ -993,7 +991,7 @@ def _has_used_legal_search_tool(state: AgentState) -> bool:
     for message in state.get("messages", []):
         if not isinstance(message, ToolMessage):
             continue
-        if getattr(message, "name", None) == "legal_search_tool":
+        if getattr(message, "name", None) in {"retrieve_local_law_tool", "legal_search_tool"}:
             return True
         try:
             payload = json.loads(message.content) if isinstance(message.content, str) else message.content
@@ -1163,6 +1161,8 @@ def collect_retrieved_laws(state: AgentState) -> dict[str, Any]:
     messages = state.get("messages", [])
     all_laws: list[dict] = []
     seen_ids: set[str] = set()
+    retrieval_attempted = False
+    evidence_found = False
 
     # 从所有 ToolMessage 中提取法条（去重）
     for m in messages:
@@ -1177,8 +1177,31 @@ def collect_retrieved_laws(state: AgentState) -> dict[str, Any]:
             if isinstance(payload, list):
                 items = payload
             elif isinstance(payload, dict):
+                if payload.get("source_type") in {
+                    "local_rag", "delilegal_law", "delilegal_case"
+                } or "evidence_insufficient" in payload:
+                    retrieval_attempted = True
+                    evidence_found = evidence_found or payload.get("status") == "found"
                 if "results" in payload and isinstance(payload["results"], list):
-                    items.extend(payload["results"])
+                    if payload.get("source_type") == "delilegal_law":
+                        for law in payload["results"]:
+                            for article in law.get("relevant_articles", []):
+                                items.append({
+                                    "law_name": law.get("title", ""),
+                                    "article_no": article.get("article_no", ""),
+                                    "content": article.get("content", ""),
+                                    "source_type": "delilegal_law",
+                                    "source_id": law.get("id", ""),
+                                    "title": law.get("title", ""),
+                                    "issued_no": law.get("issued_no"),
+                                    "publisher_name": law.get("publisher_name"),
+                                    "publish_date": law.get("publish_date"),
+                                    "active_date": law.get("active_date"),
+                                    "timeliness_name": law.get("timeliness_name"),
+                                    "level_name": law.get("level_name"),
+                                })
+                    elif payload.get("source_type") != "delilegal_case":
+                        items.extend(payload["results"])
                 if "relevant_laws" in payload:
                     items.extend(payload["relevant_laws"])
                 if "law_a" in payload and "law_b" in payload:
@@ -1200,5 +1223,10 @@ def collect_retrieved_laws(state: AgentState) -> dict[str, Any]:
             name="collect_laws",
             payload={"law_count": len(all_laws), "laws": all_laws[:10]},
         )
-        return {"retrieved_laws": all_laws}
+        return {
+            "retrieved_laws": all_laws,
+            "evidence_insufficient": False,
+        }
+    if retrieval_attempted:
+        return {"evidence_insufficient": not evidence_found}
     return {}

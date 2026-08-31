@@ -21,6 +21,7 @@ class AgentState(TypedDict, total=False):
     uploaded_evidence_id: Optional[str]
     uploaded_evidence_text: Optional[str]
     retrieved_laws: list[dict]
+    evidence_insufficient: bool
     thread_id: str
     trace_id: str
     needs_follow_up: bool

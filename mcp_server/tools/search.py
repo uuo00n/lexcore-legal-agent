@@ -2,9 +2,12 @@
 from __future__ import annotations
 
 import json
+from datetime import datetime, timezone
 
 from mcp_server.server import mcp
 from services.retriever import get_retriever
+from services.local_legal_retriever import LocalLegalRetriever
+from services.delilegal.enums import SourceType
 from services.vectorstore.base import LawChunk
 
 
@@ -14,9 +17,14 @@ def _result_item(chunk: LawChunk, score: float | None = None) -> dict:
         "article_no": chunk.article_no,
         "hierarchy": chunk.hierarchy,
         "content": chunk.content,
+        "source_type": SourceType.LOCAL_RAG.value,
+        "source_id": chunk.chunk_id,
+        "title": chunk.law_name,
+        "retrieved_at": datetime.now(timezone.utc).isoformat(),
     }
     if score is not None:
         item["rerank_score"] = round(float(score), 4)
+        item["score"] = round(float(score), 4)
     return item
 
 
@@ -31,12 +39,9 @@ def legal_search(query: str, top_k: int = 5) -> str:
     输出参数：
         - str
     """
-    retriever = get_retriever()
-    score_threshold = float(getattr(retriever, "score_threshold", 0.3))
-    if hasattr(retriever, "retrieve_with_scores"):
-        scored_chunks = retriever.retrieve_with_scores(query, top_k=top_k)
-    else:
-        scored_chunks = [(chunk, None) for chunk in retriever.retrieve(query, top_k=top_k)]
+    retriever = LocalLegalRetriever(get_retriever())
+    score_threshold = retriever.score_threshold
+    scored_chunks = retriever.search(query, top_k=top_k)
 
     if not scored_chunks:
         return json.dumps(
@@ -46,10 +51,9 @@ def legal_search(query: str, top_k: int = 5) -> str:
                 "score_threshold": score_threshold,
                 "top_rerank_score": None,
                 "results": [],
-                "hint": "本地法库未命中。建议：1) 用更短、更核心的法律关键词重新检索；"
-                        "2) 拆分为多个小问题分别检索；"
-                        "3) 如确认本地库不覆盖，调用 web_search_tool 联网搜索。"
-                        "不要用相同的 query 重复检索。",
+                "evidence_insufficient": True,
+                "hint": "本地法库未命中。可尝试 Delilegal 法规或类案检索；"
+                        "若可信数据源仍无结果，必须报告证据不足，不得编造法律依据。",
             },
             ensure_ascii=False,
         )
@@ -62,7 +66,7 @@ def legal_search(query: str, top_k: int = 5) -> str:
     if is_low_quality:
         hint = (
             f"本地法库最高 rerank_score={float(top_score):.4f}，低于阈值 {score_threshold:g}。"
-            "请调用 web_search_tool 联网搜索补充裁判规则或案例。"
+            "可尝试 Delilegal 法规或类案检索；若仍无结果，必须报告证据不足。"
         )
     return json.dumps(
         {
@@ -71,6 +75,7 @@ def legal_search(query: str, top_k: int = 5) -> str:
             "score_threshold": score_threshold,
             "top_rerank_score": round(float(top_score), 4) if top_score is not None else None,
             "results": results,
+            "evidence_insufficient": is_low_quality,
             "hint": hint,
         },
         ensure_ascii=False,

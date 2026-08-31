@@ -18,7 +18,6 @@ graph TB
         MCPS[FastMCP]
         RAG[RAG Pipeline]
         KB[知识库]
-        WEB[联网搜索]
     end
 
     subgraph Models["模型层"]
@@ -39,7 +38,8 @@ graph TB
     LG --> MEM
     MCPS --> RAG
     MCPS --> KB
-    MCPS --> WEB
+    LG -->|LangChain Tools| DELI[Delilegal Service Layer]
+    DELI --> OPENAPI[Delilegal OpenAPI]
     RAG --> EMB
     RAG --> RR
     RAG --> OL

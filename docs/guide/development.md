@@ -64,7 +64,9 @@ cp .env.example .env
 | `RRF_K` | `60` | RRF 融合常数 |
 | `MAX_TOOL_CALLS` | `6` | ReAct 最大循环次数 |
 | `MAX_UPLOAD_MB` | `10` | 上传文件大小限制 |
-| `TAVILY_API_KEY` | — | 可选；配置后联网搜索使用 Tavily，否则使用 DuckDuckGo |
+| `DELILEGAL_APP_ID` / `DELILEGAL_SECRET` | — | 得理 OpenAPI 凭据，不得写入日志或提交仓库 |
+| `DELILEGAL_LAW_SEARCH_PATH` | `/api/qa/v3/search/queryListCase` | 法规检索路径 |
+| `DELILEGAL_CASE_SEARCH_PATH` | `/api/qa/v3/search/queryListCase` | 类案检索路径 |
 
 ### 4. 安装 Ollama 并拉取模型
 

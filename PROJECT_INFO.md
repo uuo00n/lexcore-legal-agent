@@ -13,7 +13,7 @@
 - 法律咨询：基于本地法律法规 RAG 检索回答，并对明确法条引用做检索结果校验。
 - 事实追问：事实明显不足时，先由 fact agent 追问关键事实。
 - 合同审查：上传合同后生成 Markdown 审查报告，支持同步接口和异步任务。
-- 工具服务：法条检索、法律对比、风险评估、合同审查、诉讼时效、文书起草、联网搜索。
+- 工具服务：本地 DOC 法条检索、得理法规与类案检索、法律对比、风险评估、合同审查、诉讼时效和文书起草。
 - 文档上下文：支持 PDF/DOCX/TXT 上传并注入对话。
 - 多层记忆：短窗口、摘要、长期语义记忆、用户画像、OpenViking 风格案件工作区。
 - 运行治理：LLM Gateway、fallback provider、模型路由、trace、LLM 调用日志、Prometheus 指标、响应缓存、每日配额、admin dashboard。
@@ -268,7 +268,8 @@ MCP Server 注册 7 个工具：
 | `contract_review` | `contract_review_tool` | 合同文本审查 |
 | `statute_of_limitations` | `statute_of_limitations_tool` | 诉讼时效计算 |
 | `legal_document_draft` | `legal_document_draft_tool` | 法律文书起草 |
-| `web_search_fallback` | `web_search_tool` | DuckDuckGo/Tavily 联网搜索兜底 |
+| `legal_search` | `retrieve_local_law_tool` | 本地 DOC 法律 RAG |
+| — | `search_law_tool` / `search_case_tool` | 经统一 Service Layer 查询得理 OpenAPI |
 
 ## 记忆与上下文系统
 
@@ -400,7 +401,11 @@ LEGAL_DAILY_REQUEST_LIMIT=200
 LEGAL_DAILY_TOKEN_LIMIT=200000
 
 ADMIN_API_KEY=
-TAVILY_API_KEY=
+DELILEGAL_BASE_URL=https://openapi.delilegal.com
+DELILEGAL_APP_ID=
+DELILEGAL_SECRET=
+DELILEGAL_LAW_SEARCH_PATH=/api/qa/v3/search/queryListCase
+DELILEGAL_CASE_SEARCH_PATH=/api/qa/v3/search/queryListCase
 ```
 
 ## 当前数据状态

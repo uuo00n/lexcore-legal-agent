@@ -78,15 +78,15 @@ async def test_local_rag_tools_are_serialized_but_other_tools_can_run_concurrent
 
     started: list[str] = []
     release_legal = asyncio.Event()
-    web_finished = asyncio.Event()
+    compare_finished = asyncio.Event()
 
     class _ConcurrentSession:
         async def call_tool(self, name, arguments, read_timeout_seconds=None):
             started.append(name)
             if name == "legal_search":
                 await release_legal.wait()
-            if name == "web_search_fallback":
-                web_finished.set()
+            if name == "law_compare":
+                compare_finished.set()
             return _ToolResult(f"{name}:ok")
 
     monkeypatch.setattr(mcp_client, "_session", _ConcurrentSession())
@@ -95,12 +95,12 @@ async def test_local_rag_tools_are_serialized_but_other_tools_can_run_concurrent
     legal_task = asyncio.create_task(mcp_client.call_tool("legal_search", {"query": "借款"}))
     await asyncio.sleep(0)
 
-    web_task = asyncio.create_task(mcp_client.call_tool("web_search_fallback", {"query": "案例"}))
-    await asyncio.wait_for(web_finished.wait(), timeout=0.5)
+    compare_task = asyncio.create_task(mcp_client.call_tool("law_compare", {"query": "案例"}))
+    await asyncio.wait_for(compare_finished.wait(), timeout=0.5)
 
-    assert started == ["legal_search", "web_search_fallback"]
-    assert web_task.done()
-    assert await web_task == "web_search_fallback:ok"
+    assert started == ["legal_search", "law_compare"]
+    assert compare_task.done()
+    assert await compare_task == "law_compare:ok"
     assert not legal_task.done()
 
     release_legal.set()

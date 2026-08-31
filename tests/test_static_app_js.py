@@ -110,7 +110,7 @@ def test_stream_events_do_not_throw_when_stream_anchor_is_detached(tmp_path):
             context.handleEvent({{ event: "tool_start", data: "{{}}" }}, detachedAiMsg);
             context.handleEvent({{
               event: "tool_end",
-              data: JSON.stringify({{ name: "legal_search_tool", output: {{ results: [] }} }}),
+              data: JSON.stringify({{ name: "retrieve_local_law_tool", output: {{ results: [] }} }}),
             }}, detachedAiMsg);
             """
         ),

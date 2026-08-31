@@ -48,7 +48,7 @@ sequenceDiagram
         MCP-->>Agent: {"status": "found", "results": [...]}
     else 无相关结果
         MCP-->>Agent: {"status": "no_relevant_result", "results": []}
-        Note over Agent: Agent 可选择调用 web_search_fallback
+        Note over Agent: Agent 可尝试 Delilegal；仍无依据则 evidence_insufficient=true
     end
 ```
 
@@ -86,5 +86,5 @@ sequenceDiagram
 1. 返回 `{"status": "no_relevant_result"}`
 2. Agent 根据 prompt 中的决策流程判断：
    - 用户问题信息不足 → 追问用户
-   - 问题明确但本地库未覆盖 → 调用 `web_search_fallback`
-   - 联网也无结果 → 告知用户未找到
+   - 问题明确但本地库未覆盖 → 可调用 `search_law_tool` 或 `search_case_tool`
+   - 可信来源均无结果 → 返回 `evidence_insufficient=true`，不得编造依据

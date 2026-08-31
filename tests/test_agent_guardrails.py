@@ -35,21 +35,22 @@ def test_agent_exposes_all_mcp_tools():
     tool_names = {tool.name for tool in ALL_TOOLS}
 
     assert tool_names == {
-        "legal_search_tool",
         "law_compare_tool",
         "risk_assess_tool",
         "contract_review_tool",
         "statute_of_limitations_tool",
         "jurisdiction_tool",
         "legal_document_draft_tool",
-        "web_search_tool",
+        "retrieve_local_law_tool",
+        "search_law_tool",
+        "search_case_tool",
     }
 
 
-def test_legal_consult_agent_has_local_and_web_search_tools():
+def test_legal_consult_agent_has_trusted_source_tools():
     """
     函数作用：
-        法律咨询专家可先查本地法库，检索质量不足时再调用联网搜索兜底。
+        法律咨询专家只可查询本地法库与得理法规、类案。
     输入参数：
         - 无
     输出参数：
@@ -59,8 +60,9 @@ def test_legal_consult_agent_has_local_and_web_search_tools():
 
     tool_names = [tool.name for tool in LEGAL_CONSULT_TOOLS]
 
-    assert "legal_search_tool" in tool_names
-    assert "web_search_tool" in tool_names
+    assert "retrieve_local_law_tool" in tool_names
+    assert "search_law_tool" in tool_names
+    assert "search_case_tool" in tool_names
     assert "statute_of_limitations_tool" in tool_names
     assert "jurisdiction_tool" in tool_names
 
@@ -121,9 +123,9 @@ def test_prompt_requires_plain_inline_law_format():
         assert "只输出 JSON" in prompt
         assert "不要输出最终用户回答" in prompt
         assert "legal_consult_agent" in prompt
-    assert "legal_search_tool 最多调用一次" in LEGAL_SYSTEM_PROMPT
-    assert "低于 0.3" in LEGAL_SYSTEM_PROMPT
-    assert "web_search_tool" in LEGAL_SYSTEM_PROMPT
+    assert "retrieve_local_law_tool 最多调用一次" in LEGAL_SYSTEM_PROMPT
+    assert "evidence_insufficient=true" in LEGAL_SYSTEM_PROMPT
+    assert "web_search_tool" not in LEGAL_SYSTEM_PROMPT
     assert "jurisdiction_tool" in LEGAL_SYSTEM_PROMPT
     assert "不要使用 Markdown 标题" in SUPERVISOR_FINAL_PROMPT
     assert "可以用短段落和简单编号换行" in SUPERVISOR_FINAL_PROMPT
@@ -205,7 +207,7 @@ async def test_legal_consult_answer_does_not_append_unmentioned_law_sources(monk
 async def test_legal_consult_agent_does_not_bind_local_search_after_retrieval(monkeypatch):
     """
     函数作用：
-        本地法条检索已执行后，法律咨询专家不应再次绑定 legal_search_tool。
+        本地法条检索已执行后，法律咨询专家不应再次绑定本地检索工具。
     输入参数：
         - monkeypatch: pytest fixture
     输出参数：
@@ -237,8 +239,9 @@ async def test_legal_consult_agent_does_not_bind_local_search_after_retrieval(mo
         "tool_call_count": 1,
     })
 
-    assert "legal_search_tool" not in fake_llm.bound_tool_names
-    assert "web_search_tool" in fake_llm.bound_tool_names
+    assert "retrieve_local_law_tool" not in fake_llm.bound_tool_names
+    assert "search_law_tool" in fake_llm.bound_tool_names
+    assert "search_case_tool" in fake_llm.bound_tool_names
 
 
 async def test_legal_consult_agent_keeps_local_search_after_jurisdiction_tool(monkeypatch):
@@ -274,9 +277,9 @@ async def test_legal_consult_agent_keeps_local_search_after_jurisdiction_tool(mo
         "tool_call_count": 1,
     })
 
-    assert "legal_search_tool" in fake_llm.bound_tool_names
+    assert "retrieve_local_law_tool" in fake_llm.bound_tool_names
     assert "jurisdiction_tool" in fake_llm.bound_tool_names
-    assert "web_search_tool" not in fake_llm.bound_tool_names
+    assert "search_law_tool" in fake_llm.bound_tool_names
 
 
 async def test_legal_consult_answer_strips_markdown_markers(monkeypatch):

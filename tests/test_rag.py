@@ -440,16 +440,16 @@ class TestLegalSearchTool:
         输出参数：
             - 未标注
         """
-        from agent.tools.search import legal_search_tool
+        from agent.tools.search import retrieve_local_law_tool
         try:
-            result = legal_search_tool.invoke({"query": "试用期"})
+            result = retrieve_local_law_tool.invoke({"query": "试用期"})
         except RuntimeError:
             pytest.skip("检索器未初始化")
 
         data = json.loads(result)
-        assert isinstance(data, list), f"返回内容应为列表，实际为 {type(data)}"
-        if data:
-            item = data[0]
+        assert isinstance(data, dict), f"返回内容应为对象，实际为 {type(data)}"
+        if data.get("results"):
+            item = data["results"][0]
             assert "law_name" in item, "每条结果应包含 law_name"
             assert "content" in item, "每条结果应包含 content"
 
@@ -462,19 +462,19 @@ class TestLegalSearchTool:
         输出参数：
             - 未标注
         """
-        from agent.tools.search import legal_search_tool
+        from agent.tools.search import retrieve_local_law_tool
         try:
-            result = legal_search_tool.invoke({"query": "试用期最长多久"})
+            result = retrieve_local_law_tool.invoke({"query": "试用期最长多久"})
         except RuntimeError:
             pytest.skip("检索器未初始化")
 
         data = json.loads(result)
-        if data:
+        if data.get("results"):
             has_trial_period = any(
-                "试用" in item.get("content", "") for item in data
+                "试用" in item.get("content", "") for item in data["results"]
             )
             assert has_trial_period, \
-                f"试用期检索结果应包含 '试用' 相关内容，实际: {[item.get('law_name', '') for item in data[:3]]}"
+                f"试用期检索结果应包含 '试用' 相关内容，实际: {[item.get('law_name', '') for item in data['results'][:3]]}"
 
     def test_search_empty_query_handled(self):
         """
@@ -485,9 +485,9 @@ class TestLegalSearchTool:
         输出参数：
             - 未标注
         """
-        from agent.tools.search import legal_search_tool
+        from agent.tools.search import retrieve_local_law_tool
         try:
-            result = legal_search_tool.invoke({"query": ""})
+            result = retrieve_local_law_tool.invoke({"query": ""})
             assert isinstance(result, str)
         except RuntimeError:
             pytest.skip("检索器未初始化")

@@ -44,8 +44,12 @@ RERANKER_SCORE_THRESHOLD=0.3
 RRF_K=60
 MAX_TOOL_CALLS=4
 
-# 可选：不配置时使用 DuckDuckGo 搜索兜底
-TAVILY_API_KEY=tvly-xxx
+# 得理法律开放平台
+DELILEGAL_BASE_URL=https://openapi.delilegal.com
+DELILEGAL_APP_ID=your_app_id
+DELILEGAL_SECRET=your_secret
+DELILEGAL_LAW_SEARCH_PATH=/api/qa/v3/search/queryListCase
+DELILEGAL_CASE_SEARCH_PATH=/api/qa/v3/search/queryListCase
 
 DOCS_DB=data/docs.sqlite
 UPLOAD_DIR=data/uploads

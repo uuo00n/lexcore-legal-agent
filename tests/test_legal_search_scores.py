@@ -66,4 +66,5 @@ def test_legal_search_marks_low_quality_when_top_score_below_threshold(monkeypat
     assert payload["top_rerank_score"] == 0.29
     assert payload["score_threshold"] == 0.3
     assert payload["results"][0]["rerank_score"] == 0.29
-    assert "web_search_tool" in payload["hint"]
+    assert payload["evidence_insufficient"] is True
+    assert "Delilegal" in payload["hint"]

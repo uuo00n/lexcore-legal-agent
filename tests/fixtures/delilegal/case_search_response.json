@@ -1,0 +1,23 @@
+{
+  "data": {
+    "queryId": "case-query-001",
+    "totalCount": 1,
+    "totalPage": 1,
+    "list": [
+      {
+        "id": "case-001",
+        "title": "张某与某公司劳动争议案",
+        "caseType": "民事案件",
+        "cause": "劳动争议",
+        "judgementType": "判决书",
+        "judgementDate": "2024-05-20",
+        "court": "某市中级人民法院",
+        "caseNumber": "（2024）示例民终1号",
+        "levelOfTrial": "二审",
+        "publishType": "1",
+        "publishTypeName": "公开",
+        "content": "经审理查明：张某在上班途中发生交通事故。\n争议焦点：该事故是否构成工伤。\n本院认为：事故发生在合理通勤时间和路线上，应结合责任认定判断。\n判决如下：驳回上诉，维持原判。"
+      }
+    ]
+  }
+}

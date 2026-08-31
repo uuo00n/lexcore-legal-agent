@@ -1,0 +1,21 @@
+{
+  "data": {
+    "queryId": "law-query-001",
+    "totalCount": 1,
+    "totalPage": 1,
+    "list": [
+      {
+        "id": "law-001",
+        "title": "中华人民共和国示例法",
+        "issuedNo": "示例令第1号",
+        "publisherName": "示例机关",
+        "publishDate": "2025-01-01",
+        "activeDate": "2025-02-01",
+        "timelinessName": "有效",
+        "levelName": "法律",
+        "content": "第一条 为了说明测试目的，制定本法。\n第二条 涉及劳动关系的，应当依法保护劳动者权益。\n第三条 其他事项依照有关规定处理。",
+        "highlights": ["第二条 涉及劳动关系的，应当依法保护劳动者权益。"]
+      }
+    ]
+  }
+}

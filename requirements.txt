@@ -29,9 +29,3 @@ transformers>=4.40
 
 # 关键词检索
 rank-bm25>=0.2.2
-
-# 联网搜索兜底
-duckduckgo-search>=6.3
-
-# 可选：配置 TAVILY_API_KEY 时启用 Tavily 搜索
-tavily-python>=0.5

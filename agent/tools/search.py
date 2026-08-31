@@ -1,4 +1,4 @@
-"""RAG 法律检索工具 —— 通过 MCP Client 调用 MCP Server 的检索能力。"""
+"""本地 DOC 法律 RAG 工具。"""
 from __future__ import annotations
 
 from langchain_core.tools import tool
@@ -7,10 +7,10 @@ from services.mcp_client import call_tool
 
 
 @tool
-async def legal_search_tool(query: str, top_k: int = 5) -> str:
+async def retrieve_local_law_tool(query: str, top_k: int = 5) -> str:
     """
     函数作用：
-        根据用户问题检索相关中国法律条款。
+        只检索项目已经索引的本地 DOC 中国法律知识库；不访问外部网络。
     输入参数：
         - query: str
         - top_k: int，默认值 5

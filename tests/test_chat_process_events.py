@@ -24,7 +24,7 @@ class _FakeGraph:
                         content="这里是模型随工具调用产生的内部分析，不应该展示给用户。",
                         tool_calls=[
                             {
-                                "name": "legal_search_tool",
+                                "name": "retrieve_local_law_tool",
                                 "args": {"query": "校园霸凌 学生欺凌"},
                                 "id": "call_1",
                             }

@@ -20,7 +20,7 @@ def test_messages_to_dicts_skips_tool_call_ai_drafts():
             content="让我先帮你查一下相关法律规定：",
             tool_calls=[
                 {
-                    "name": "legal_search_tool",
+                    "name": "retrieve_local_law_tool",
                     "args": {"query": "学生欺凌 勒索 威胁"},
                     "id": "call_1",
                 }

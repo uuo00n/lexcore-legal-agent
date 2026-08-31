@@ -4,7 +4,7 @@ title: 法智项目介绍报告
 
 # 法智项目介绍报告
 
-法智是一个面向普通用户的中国法律咨询智能助手。项目以 FastAPI 为服务入口，以 LangGraph 实现 Supervisor 多智能体流程，以 RAG 检索本地法律条文，以 MCP 统一管理工具能力，并通过 LLM Gateway、Agent Trace、记忆系统、文档上传、联网兜底和自动评测体系逐步提升回答的稳定性与可信度。
+法智是一个面向普通用户的中国法律咨询智能助手。项目以 FastAPI 为服务入口，以 LangGraph 实现 Supervisor 多智能体流程，以本地 DOC RAG 和得理 OpenAPI 提供可信法律数据，并通过 LLM Gateway、Agent Trace、记忆系统、文档上传和自动评测体系逐步提升回答的稳定性与可信度。
 
 这份报告基于当前代码仓库整理，覆盖项目定位、系统架构、模块划分、RAG 流程、MCP 工具体系、记忆系统、API、前端、评测、部署与后续优化方向。
 
@@ -37,7 +37,7 @@ title: 法智项目介绍报告
 - 对法律问题先判断事实是否足够，不足时追问关键事实。
 - 通过 Supervisor Agent 将请求路由到事实审查智能体、合同审查智能体或法律咨询智能体。
 - 使用本地法律条文库进行 RAG 检索。
-- 通过 MCP 调用法律检索、法律对比、风险评估、合同审查、诉讼时效、文书生成和联网搜索工具。
+- 通过 MCP 调用本地法律检索及其他确定性法律工具，通过统一 Service Layer 调用得理法规与类案检索。
 - 对上传文档进行解析，并把文档内容注入对话上下文。
 - 对检索到的法条进行引用收集，最终回答后附简洁法条出处。
 - 使用短期摘要、长期向量记忆和用户画像增强多轮对话。
@@ -50,7 +50,7 @@ title: 法智项目介绍报告
 
 - 不应把回答视为律师正式法律意见。
 - 不应在事实不足时直接下确定结论。
-- 不应把联网搜索结果等同于权威法律数据库。
+- 不允许使用 Web Search 或 Internet Search fallback 作为法律依据来源。
 - 不应在检索不到相关法条时编造法条。
 
 ## 二、核心设计原则
@@ -68,7 +68,7 @@ title: 法智项目介绍报告
 
 法律问题不是所有情况都能直接检索和回答。例如校园霸凌至少需要确认孩子年龄、行为方式、伤害后果、学校是否知情、证据情况。提示词要求事实不足时必须追问 1-3 个关键问题，不先检索、不引用法条、不强行下结论。
 
-这是法律助手区别于普通问答机器人的关键点。系统需要先判断“缺事实”还是“缺法条”。缺事实时追问用户；缺法条时才进入本地检索或联网搜索兜底。
+这是法律助手区别于普通问答机器人的关键点。系统需要先判断“缺事实”还是“缺法条”。缺事实时追问用户；缺法条时查询本地 DOC RAG 或得理 OpenAPI，可信来源仍无依据时返回证据不足。
 
 ### 2.3 工具逻辑集中在 MCP Server
 
@@ -214,7 +214,7 @@ flowchart TB
   MCPServer --> Review["contract_review"]
   MCPServer --> Limitations["statute_of_limitations"]
   MCPServer --> Draft["legal_document_draft"]
-  MCPServer --> WebSearch["web_search_fallback"]
+  LegalAgent --> Delilegal["Delilegal laws / cases"]
 
   LegalSearch --> Retriever["HybridRetriever"]
   Retriever --> VectorDB["ChromaDB law_chunks"]
@@ -274,7 +274,7 @@ flowchart TB
 | `/Users/didi/Desktop/Legal/mcp_server/server.py` | 创建 FastMCP 实例并注册工具模块 |
 | `/Users/didi/Desktop/Legal/mcp_server/startup.py` | MCP Server 启动时初始化 RAG |
 | `/Users/didi/Desktop/Legal/mcp_server/tools/search.py` | 本地法律检索工具 |
-| `/Users/didi/Desktop/Legal/mcp_server/tools/web_search.py` | 联网搜索兜底工具 |
+| `services/delilegal/` | 得理法规与类案统一 Service Layer |
 | `/Users/didi/Desktop/Legal/mcp_server/tools/compare.py` | 法律对比工具 |
 | `/Users/didi/Desktop/Legal/mcp_server/tools/risk.py` | 法律风险评估工具 |
 | `/Users/didi/Desktop/Legal/mcp_server/tools/review.py` | 合同审查工具 |
@@ -499,8 +499,8 @@ Reranker 使用原始用户问题作为判断依据，对 RRF 候选重新排序
 Agent 应根据问题类型决定：
 
 1. 如果是事实不足，追问用户。
-2. 如果事实足够但本地库未覆盖，调用联网搜索工具。
-3. 如果联网也无明确结果，告知“未检索到明确适用的法条”，不要编造。
+2. 如果事实足够但本地库未覆盖，调用得理法规或类案检索工具。
+3. 如果可信数据源仍无明确结果，返回 `evidence_insufficient=true`，不要编造。
 
 ## 十一、MCP 工具体系
 
@@ -534,7 +534,7 @@ sequenceDiagram
 | `contract_review` | 合同审查 | 上传文档或合同场景 |
 | `statute_of_limitations` | 诉讼时效计算 | 时效类问题 |
 | `legal_document_draft` | 法律文书生成 | 起草类能力 |
-| `web_search_fallback` | 联网搜索兜底 | 本地法库无结果时使用 |
+| `search_law_tool` / `search_case_tool` | 得理法规与类案检索 | 通过统一 Service Layer 调用 |
 
 ### 8.2 为什么不是普通函数
 
@@ -845,7 +845,9 @@ eval/
 | `RERANKER_SCORE_THRESHOLD` | 精排阈值 |
 | `RRF_K` | RRF 参数 |
 | `MAX_TOOL_CALLS` | ReAct 最大工具循环次数 |
-| `TAVILY_API_KEY` | 可选联网搜索 API Key |
+| `DELILEGAL_APP_ID` / `DELILEGAL_SECRET` | 得理 OpenAPI 凭据 |
+| `DELILEGAL_LAW_SEARCH_PATH` | 法规检索路径，默认 `/api/qa/v3/search/queryListCase` |
+| `DELILEGAL_CASE_SEARCH_PATH` | 类案检索路径 |
 
 ### 14.3 启动流程
 
@@ -947,17 +949,9 @@ FastAPI 启动时，`main.py` 的 lifespan 会执行：
 - 对引用法条做二次相关性判断。
 - 评测最终回答引用是否和主张一致。
 
-### 16.4 联网搜索需要权威来源控制
+### 16.4 可信数据源边界
 
-当前联网搜索可使用 DuckDuckGo 或 Tavily。法律项目上线后应限制优先来源，例如：
-
-- 全国人大网。
-- 最高人民法院。
-- 最高人民检察院。
-- 中国政府网。
-- 地方政府和司法机关官网。
-
-否则联网搜索可能带来低质量网页或过期信息。
+运行时法律依据严格来自本地 DOC RAG 与得理 OpenAPI。两者都没有提供充分证据时，系统明确报告证据不足，不使用外部搜索兜底。
 
 ## 二十、路线图建议
 

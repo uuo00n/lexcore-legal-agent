@@ -30,7 +30,7 @@
 | `contract_review` | 审查合同文本的法律合规性 |
 | `statute_of_limitations` | 计算诉讼时效 |
 | `legal_document_draft` | 起草法律文书（起诉状、仲裁申请书、合同） |
-| `web_search_fallback` | 本地检索无结果时联网搜索 |
+| `search_law_tool` / `search_case_tool` | 通过统一 Service Layer 查询得理法规与类案；不提供 Internet fallback |
 
 ### 记忆系统（4 层）
 
