@@ -67,14 +67,14 @@ pip install -r requirements-dev.txt
 cp .env.example .env
 ```
 
-至少需要配置一个主模型 provider。默认 provider 是 `zhipu`：
+至少需要配置一个主模型 provider。默认 provider 是 `deepseek`：
 
 ```env
-LLM_PROVIDER=zhipu
-ZHIPU_API_KEY=sk-xxx
+LLM_PROVIDER=deepseek
+DEEPSEEK_API_KEY=sk-xxx
 ```
 
-也可以切换到 `deepseek`、`qwen` 或 `ollama`。更多配置见 [开发指南](docs/guide/development.md)。
+也可以切换到 `zhipu`、`qwen` 或 `ollama`。更多配置见 [开发指南](docs/guide/development.md)。
 
 ### 3. 构建法条索引
 

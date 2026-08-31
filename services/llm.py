@@ -22,7 +22,7 @@ PROVIDERS: dict[str, dict[str, Any]] = {
 
     "deepseek": {
         "base_url": "https://api.deepseek.com",
-        "default_model": "deepseek-chat",
+        "default_model": "deepseek-v4-pro",
         "api_key_env": "DEEPSEEK_API_KEY",
         "supports_tools": True,
     },
@@ -50,7 +50,7 @@ def _resolve_provider(provider: str | None) -> str:
     输出参数：
         - str
     """
-    name = (provider or os.getenv("LLM_PROVIDER") or "zhipu").lower()
+    name = (provider or os.getenv("LLM_PROVIDER") or "deepseek").lower()
     if name not in PROVIDERS:
         raise ValueError(
             f"unknown LLM_PROVIDER: {name!r}, expected one of {list(PROVIDERS)}"

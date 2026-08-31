@@ -174,8 +174,8 @@ async def route_user_request_with_llm(
     }
     try:
         llm = get_llm(
-            provider=os.getenv("SUPERVISOR_PROVIDER", "zhipu"),
-            model=os.getenv("SUPERVISOR_MODEL", "GLM-4.6V"),
+            provider=os.getenv("SUPERVISOR_PROVIDER", "deepseek"),
+            model=os.getenv("SUPERVISOR_MODEL", "deepseek-v4-flash-vision-exp"),
             model_route="supervisor_agent",
             trace_id=trace_id,
             thread_id=thread_id,

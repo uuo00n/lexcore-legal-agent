@@ -35,7 +35,7 @@ from services.memory import (
 from services.memory_store import get_memory_store
 
 log = logging.getLogger(__name__)
-DEFAULT_MEMORY_LLM_MODEL = "glm-4.5-air"
+DEFAULT_MEMORY_LLM_MODEL = "deepseek-v4-flash"
 
 
 # ─── 提取提示词 ──────────────────────────────────────────────────────────

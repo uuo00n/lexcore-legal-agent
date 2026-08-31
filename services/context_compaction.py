@@ -25,7 +25,7 @@ from services.memory import (
 log = logging.getLogger(__name__)
 
 DOC_PREFIX = "[USER_DOCUMENT]"
-DEFAULT_COMPACTION_MODEL = "glm-4.5-air"
+DEFAULT_COMPACTION_MODEL = "deepseek-v4-flash"
 
 
 @dataclass(frozen=True)

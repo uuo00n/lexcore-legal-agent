@@ -64,15 +64,17 @@ def test_new_messages_for_archive_appends_only_unseen_suffix(monkeypatch):
     ]
 
 
-async def test_background_memory_llm_uses_air_model(monkeypatch):
+async def test_background_memory_llm_uses_flash_model(monkeypatch):
     """
     函数作用：
-        后台摘要、长期记忆和用户画像提取应使用轻量 GLM Air 模型，避免抢占主问答模型限额。
+        后台摘要、长期记忆和用户画像提取应使用轻量 DeepSeek Flash 模型，避免抢占主问答模型限额。
     输入参数：
         - monkeypatch: pytest fixture
     输出参数：
         - 未标注
     """
+    monkeypatch.delenv("MEMORY_EXTRACTOR_MODEL", raising=False)
+    monkeypatch.delenv("CONTEXT_COMPACTION_MODEL", raising=False)
     from services import memory_extractor
 
     calls = []
@@ -121,4 +123,4 @@ async def test_background_memory_llm_uses_air_model(monkeypatch):
     )
 
     assert len(calls) == 3
-    assert all(call["model"] == "glm-4.5-air" for call in calls)
+    assert all(call["model"] == "deepseek-v4-flash" for call in calls)

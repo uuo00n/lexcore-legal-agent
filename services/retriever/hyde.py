@@ -20,8 +20,8 @@ from langchain_openai import ChatOpenAI
 
 log = logging.getLogger("legal.query_enhance")
 
-DEFAULT_HYDE_MODEL = "glm-4.6v"
-DEFAULT_HYDE_LLM_BASE_URL = "https://open.bigmodel.cn/api/paas/v4"
+DEFAULT_HYDE_MODEL = "deepseek-v4-flash"
+DEFAULT_HYDE_LLM_BASE_URL = "https://api.deepseek.com"
 # 旧本地小模型配置先保留，后续如需切回可改回这两个值：
 # LEGACY_HYDE_MODEL = "qwen2.5:1.5b"
 # LEGACY_HYDE_LLM_BASE_URL = "http://localhost:11434/v1"
@@ -77,7 +77,7 @@ def _get_hyde_api_key(base_url: str) -> str:
         return explicit
     if "localhost" in base_url or "127.0.0.1" in base_url:
         return "ollama"
-    return os.getenv("ZHIPU_API_KEY", "missing-zhipu-api-key")
+    return os.getenv("DEEPSEEK_API_KEY", "missing-deepseek-api-key")
 
 
 def _get_hyde_backend() -> str:

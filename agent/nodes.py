@@ -303,8 +303,8 @@ async def _llm_supervisor_final_response(state: AgentState) -> str:
     fallback = _fallback_supervisor_final_response(state)
     try:
         llm = get_llm(
-            provider=os.getenv("SUPERVISOR_PROVIDER", "zhipu"),
-            model=os.getenv("SUPERVISOR_MODEL", "GLM-4.6V"),
+            provider=os.getenv("SUPERVISOR_PROVIDER", "deepseek"),
+            model=os.getenv("SUPERVISOR_MODEL", "deepseek-v4-flash-vision-exp"),
             model_route="supervisor_agent",
             trace_id=state.get("trace_id"),
             thread_id=state.get("thread_id"),
@@ -350,8 +350,8 @@ async def _llm_supervisor_direct_response(state: AgentState, reason: str) -> str
     }
     try:
         llm = get_llm(
-            provider=os.getenv("SUPERVISOR_PROVIDER", "zhipu"),
-            model=os.getenv("SUPERVISOR_MODEL", "GLM-4.6V"),
+            provider=os.getenv("SUPERVISOR_PROVIDER", "deepseek"),
+            model=os.getenv("SUPERVISOR_MODEL", "deepseek-v4-flash-vision-exp"),
             model_route="supervisor_agent",
             trace_id=state.get("trace_id"),
             thread_id=state.get("thread_id"),
@@ -510,8 +510,8 @@ async def _llm_fact_follow_up(
             "建议问题": decision.get("questions", []),
         }
         llm = get_llm(
-            provider=os.getenv("FACT_AGENT_PROVIDER", "zhipu"),
-            model=os.getenv("FACT_AGENT_MODEL", "GLM-4.6V"),
+            provider=os.getenv("FACT_AGENT_PROVIDER", "deepseek"),
+            model=os.getenv("FACT_AGENT_MODEL", "deepseek-v4-flash-vision-exp"),
             model_route="fact_agent",
             trace_id=state.get("trace_id"),
             thread_id=state.get("thread_id"),
@@ -622,8 +622,8 @@ async def _llm_contract_summary(state: AgentState, markdown: str) -> str:
     """
     try:
         llm = get_llm(
-            provider=os.getenv("CONTRACT_AGENT_PROVIDER", "zhipu"),
-            model=os.getenv("CONTRACT_AGENT_MODEL", "glm-4.7"),
+            provider=os.getenv("CONTRACT_AGENT_PROVIDER", "deepseek"),
+            model=os.getenv("CONTRACT_AGENT_MODEL", "deepseek-v4-pro"),
             model_route="contract_agent",
             trace_id=state.get("trace_id"),
             thread_id=state.get("thread_id"),
