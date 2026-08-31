@@ -55,13 +55,18 @@ def extract_relevant_articles(
     return {
         "id": law.id,
         "title": law.title,
+        "law_name": law.law_name,
+        "article": law.article,
         "issued_no": law.issued_no,
         "publisher_name": law.publisher_name,
         "publish_date": law.publish_date,
+        "effective_date": law.effective_date,
+        "status": law.status,
         "active_date": law.active_date,
         "timeliness_name": law.timeliness_name,
         "level_name": law.level_name,
         "source_type": law.source_type,
+        "score": law.score,
         "relevant_articles": compact,
     }
 
@@ -99,11 +104,13 @@ def compress_case_content(
         "cause": case.cause,
         "judgement_type": case.judgement_type,
         "judgement_date": case.judgement_date,
+        "case_date": case.case_date,
         "court": case.court,
         "case_number": case.case_number,
         "level_of_trial": case.level_of_trial,
         "publish_type": case.publish_type,
         "publish_type_name": case.publish_type_name,
         "source_type": case.source_type,
+        "score": case.score,
         **sections,
     }

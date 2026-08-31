@@ -25,15 +25,23 @@ class LawSearchInput(BaseModel):
 
 
 class LawSearchResult(BaseModel):
+    """法规检索的内部统一模型，不暴露得理原始响应结构。"""
+
     id: str
     title: str
+    law_name: str
+    article: str | None = None
+    content: str
+    publish_date: str | None = None
+    effective_date: str | None = None
+    status: str | None = None
+    source: str = "delilegal"
+    score: float | None = None
     issued_no: str | None = None
     publisher_name: str | None = None
-    publish_date: str | None = None
     active_date: str | None = None
     timeliness_name: str | None = None
     level_name: str | None = None
-    content: str
     highlights: list | None = None
     source_type: Literal["delilegal_law"] = "delilegal_law"
 
@@ -71,14 +79,21 @@ class CaseSearchInput(BaseModel):
 
 
 class CaseSearchResult(BaseModel):
+    """类案检索的内部统一模型，不暴露得理原始响应结构。"""
+
     id: str
     title: str
-    case_type: str | None = None
-    cause: str | None = None
-    judgement_type: str | None = None
-    judgement_date: str | None = None
     court: str | None = None
     case_number: str | None = None
+    case_date: str | None = None
+    cause: str | None = None
+    summary: str | None = None
+    judgment: str
+    source: str = "delilegal"
+    score: float | None = None
+    case_type: str | None = None
+    judgement_type: str | None = None
+    judgement_date: str | None = None
     level_of_trial: str | None = None
     publish_type: str | None = None
     publish_type_name: str | None = None

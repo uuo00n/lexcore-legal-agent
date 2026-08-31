@@ -11,23 +11,23 @@ from services.delilegal.exceptions import DelilegalConfigurationError
 class DelilegalSettings:
     """得理连接配置；实例本身不会输出或记录 secret。"""
 
-    base_url: str = "https://openapi.delilegal.com"
+    base_url: str = ""
     app_id: str = ""
     secret: str = ""
-    law_search_path: str | None = "/api/qa/v3/search/queryListCase"
+    law_search_path: str | None = "/api/qa/v3/search/queryListLaw"
     case_search_path: str = "/api/qa/v3/search/queryListCase"
     connect_timeout: float = 5.0
     read_timeout: float = 30.0
 
     @classmethod
     def from_env(cls) -> "DelilegalSettings":
-        default_search_path = "/api/qa/v3/search/queryListCase"
+        default_search_path = "/api/qa/v3/search/queryListLaw"
         law_path = (
             os.getenv("DELILEGAL_LAW_SEARCH_PATH", default_search_path).strip()
             or default_search_path
         )
         return cls(
-            base_url=os.getenv("DELILEGAL_BASE_URL", "https://openapi.delilegal.com").strip(),
+            base_url=os.getenv("DELILEGAL_BASE_URL", "").strip(),
             app_id=os.getenv("DELILEGAL_APP_ID", "").strip(),
             secret=os.getenv("DELILEGAL_SECRET", "").strip(),
             law_search_path=law_path,
@@ -42,6 +42,12 @@ class DelilegalSettings:
         if not self.app_id or not self.secret:
             raise DelilegalConfigurationError(
                 "Delilegal credentials are not configured; set DELILEGAL_APP_ID and DELILEGAL_SECRET."
+            )
+
+    def validate_base_url(self) -> None:
+        if not self.base_url:
+            raise DelilegalConfigurationError(
+                "Delilegal base URL is not configured; set DELILEGAL_BASE_URL."
             )
 
     def endpoint(self, endpoint_type: str) -> str:

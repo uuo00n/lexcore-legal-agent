@@ -79,19 +79,36 @@ def _integer(body: dict[str, Any], *keys: str) -> int:
     return 0
 
 
+def _score(item: dict[str, Any]) -> float | None:
+    for key in ("score", "correlation", "similarity"):
+        value = item.get(key)
+        if value is not None:
+            try:
+                return float(value)
+            except (TypeError, ValueError):
+                return None
+    return None
+
+
 def normalize_law_response(payload: Any) -> LawSearchResponse:
     body = _body(payload)
     items = [
         LawSearchResult(
             id=str(item.get("id") or ""),
             title=str(item.get("title") or ""),
+            law_name=str(item.get("lawName") or item.get("title") or ""),
+            article=item.get("article") or item.get("articleNo"),
+            content=str(item.get("content") or ""),
+            publish_date=item.get("publishDate"),
+            effective_date=item.get("effectiveDate") or item.get("activeDate"),
+            status=item.get("status") or item.get("timelinessName"),
+            source=str(item.get("source") or "delilegal"),
+            score=_score(item),
             issued_no=item.get("issuedNo"),
             publisher_name=item.get("publisherName"),
-            publish_date=item.get("publishDate"),
-            active_date=item.get("activeDate"),
-            timeliness_name=item.get("timelinessName"),
+            active_date=item.get("activeDate") or item.get("effectiveDate"),
+            timeliness_name=item.get("timelinessName") or item.get("status"),
             level_name=item.get("levelName"),
-            content=str(item.get("content") or ""),
             highlights=item.get("highlights"),
         )
         for item in _items(body)
@@ -111,16 +128,21 @@ def normalize_case_response(payload: Any) -> CaseSearchResponse:
         CaseSearchResult(
             id=str(item.get("id") or ""),
             title=str(item.get("title") or ""),
-            case_type=item.get("caseType"),
-            cause=item.get("cause"),
-            judgement_type=item.get("judgementType"),
-            judgement_date=item.get("judgementDate"),
             court=item.get("court"),
             case_number=item.get("caseNumber"),
+            case_date=item.get("caseDate") or item.get("judgementDate"),
+            cause=item.get("cause"),
+            summary=item.get("summary"),
+            judgment=str(item.get("judgment") or item.get("content") or ""),
+            source=str(item.get("source") or "delilegal"),
+            score=_score(item),
+            case_type=item.get("caseType"),
+            judgement_type=item.get("judgementType"),
+            judgement_date=item.get("judgementDate") or item.get("caseDate"),
             level_of_trial=item.get("levelOfTrial"),
             publish_type=item.get("publishType"),
             publish_type_name=item.get("publishTypeName"),
-            content=str(item.get("content") or ""),
+            content=str(item.get("content") or item.get("judgment") or ""),
         )
         for item in _items(body)
         if item.get("id") is not None and item.get("title") is not None

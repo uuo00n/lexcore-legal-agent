@@ -41,6 +41,7 @@ class DelilegalClient:
         trace_id: str | None = None,
     ) -> None:
         self.settings = settings or DelilegalSettings.from_env()
+        self.settings.validate_base_url()
         self.trace_id = trace_id
         self._owns_client = http_client is None
         timeout = httpx.Timeout(

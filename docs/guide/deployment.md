@@ -48,7 +48,7 @@ MAX_TOOL_CALLS=4
 DELILEGAL_BASE_URL=https://openapi.delilegal.com
 DELILEGAL_APP_ID=your_app_id
 DELILEGAL_SECRET=your_secret
-DELILEGAL_LAW_SEARCH_PATH=/api/qa/v3/search/queryListCase
+DELILEGAL_LAW_SEARCH_PATH=/api/qa/v3/search/queryListLaw
 DELILEGAL_CASE_SEARCH_PATH=/api/qa/v3/search/queryListCase
 
 DOCS_DB=data/docs.sqlite

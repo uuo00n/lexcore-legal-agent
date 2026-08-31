@@ -64,14 +64,14 @@ async def test_law_search_uses_confirmed_endpoint_and_request_body():
     http_client = httpx.AsyncClient(
         base_url="https://openapi.delilegal.test", transport=httpx.MockTransport(handler)
     )
-    settings = _settings(law_search_path="/api/qa/v3/search/queryListCase")
+    settings = _settings(law_search_path="/api/qa/v3/search/queryListLaw")
     client = DelilegalClient(settings, http_client=http_client)
     await client.search_laws(
         LawSearchInput(query="工伤认定", page_size=3)
     )
     await http_client.aclose()
 
-    assert seen["path"] == "/api/qa/v3/search/queryListCase"
+    assert seen["path"] == "/api/qa/v3/search/queryListLaw"
     assert seen["body"] == {
         "pageNo": 1,
         "pageSize": 3,
@@ -102,3 +102,26 @@ async def test_client_maps_authentication_and_timeout_without_secret():
     with pytest.raises(DelilegalTimeoutError):
         await client.search_cases(CaseSearchInput(keywords=["案例"]))
     await timeout_client.aclose()
+
+
+def test_settings_read_connection_values_from_environment(monkeypatch):
+    monkeypatch.setenv("DELILEGAL_BASE_URL", "https://environment.delilegal.test")
+    monkeypatch.setenv("DELILEGAL_APP_ID", "environment-app")
+    monkeypatch.setenv("DELILEGAL_SECRET", "environment-secret")
+    monkeypatch.delenv("DELILEGAL_LAW_SEARCH_PATH", raising=False)
+    monkeypatch.delenv("DELILEGAL_CASE_SEARCH_PATH", raising=False)
+
+    settings = DelilegalSettings.from_env()
+
+    assert settings.base_url == "https://environment.delilegal.test"
+    assert settings.app_id == "environment-app"
+    assert settings.secret == "environment-secret"
+    assert settings.law_search_path == "/api/qa/v3/search/queryListLaw"
+    assert settings.case_search_path == "/api/qa/v3/search/queryListCase"
+
+
+def test_client_requires_base_url_from_environment(monkeypatch):
+    monkeypatch.delenv("DELILEGAL_BASE_URL", raising=False)
+
+    with pytest.raises(DelilegalConfigurationError, match="DELILEGAL_BASE_URL"):
+        DelilegalClient(DelilegalSettings.from_env())

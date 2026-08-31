@@ -846,7 +846,7 @@ eval/
 | `RRF_K` | RRF 参数 |
 | `MAX_TOOL_CALLS` | ReAct 最大工具循环次数 |
 | `DELILEGAL_APP_ID` / `DELILEGAL_SECRET` | 得理 OpenAPI 凭据 |
-| `DELILEGAL_LAW_SEARCH_PATH` | 法规检索路径，默认 `/api/qa/v3/search/queryListCase` |
+| `DELILEGAL_LAW_SEARCH_PATH` | 法规检索路径，默认 `/api/qa/v3/search/queryListLaw` |
 | `DELILEGAL_CASE_SEARCH_PATH` | 类案检索路径 |
 
 ### 14.3 启动流程

@@ -20,7 +20,7 @@ Agent 不直接发送 HTTP 请求。调用链固定为：
 
 - `search_law_tool` 查询法律法规、地方性法规、司法解释等规范性内容。法规全文先经过相关条文提取，只向模型返回相关条款、必要上下文、效力 metadata 和 source id。
 - `search_case_tool` 查询相似真实裁判案例。完整裁判文书先压缩为基本事实、争议焦点、法院说理、裁判结果、法律依据和必要的证据摘要。
-- 类案与法规路径均已配置为 `/api/qa/v3/search/queryListCase`。
+- 法规路径配置为 `/api/qa/v3/search/queryListLaw`，类案路径配置为 `/api/qa/v3/search/queryListCase`。
 - 法规关键词通过 `condition.keywordArr` 提交；分页及排序使用 `pageNo`、`pageSize`、`sortField`、`sortOrder`。
 
 凭据只从 `DELILEGAL_APP_ID` 和 `DELILEGAL_SECRET` 读取，不得进入 Tool Result、日志或 Trace。调用日志只记录 trace id、endpoint type、耗时、成功状态、结果数量和错误类型。

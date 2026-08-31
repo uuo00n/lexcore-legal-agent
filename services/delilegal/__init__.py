@@ -10,9 +10,11 @@ from services.delilegal.exceptions import (
     DelilegalTimeoutError,
     DelilegalUpstreamError,
 )
+from services.delilegal.schemas import CaseSearchResult, LawSearchResult
 
 __all__ = [
     "CourtLevel",
+    "CaseSearchResult",
     "DelilegalAuthenticationError",
     "DelilegalClient",
     "DelilegalConfigurationError",
@@ -22,5 +24,6 @@ __all__ = [
     "DelilegalTimeoutError",
     "DelilegalUpstreamError",
     "JudgementType",
+    "LawSearchResult",
     "SourceType",
 ]
