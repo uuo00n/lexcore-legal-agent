@@ -26,6 +26,7 @@ class PlanStep(TypedDict, total=False):
     description: str
     status: Literal["pending", "running", "completed", "failed", "skipped"]
     assigned_agent: str
+    required: bool
     result: Any
 
 
@@ -100,7 +101,10 @@ class VerificationResult(TypedDict, total=False):
     passed: bool
     score: float
     issues: list[str]
-    reason: str
+    missing_sources: list[str]
+    invalid_citations: list[str]
+    needs_retry: bool
+    retry_reason: Optional[str]
 
 
 class ToolLoopFailure(TypedDict, total=False):
@@ -225,6 +229,7 @@ class AgentState(TypedDict, total=False):
 
     # 重试和工具调用保护计数；沿用绝对值写入，避免改变现有节点语义
     retry_count: int
+    verifier_retry_count: int
     tool_call_count: int
     tool_loop_failure: Optional[ToolLoopFailure]
 

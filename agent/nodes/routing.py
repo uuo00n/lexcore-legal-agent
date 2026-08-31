@@ -81,6 +81,15 @@ def should_execute_next(state: AgentState) -> str:
     return "end"
 
 
+def should_after_verifier(state: AgentState) -> str:
+    """Bound the Verifier loop to one retry, then always generate an answer."""
+    verification = state.get("verification_result") or {}
+    retry_count = int(state.get("verifier_retry_count", 0) or 0)
+    if verification.get("needs_retry") and retry_count <= 1:
+        return "retry"
+    return "answer_generator"
+
+
 def should_after_fact_check(state: AgentState) -> str:
     """Compatibility conditional edge for the former graph topology."""
     return "end" if state.get("needs_follow_up") else "agent"

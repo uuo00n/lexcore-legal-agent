@@ -174,12 +174,21 @@ async def test_graph_executes_plan_sequentially_before_verifier(monkeypatch):
     async def fake_statute(state):
         execution_order.append("statute_retrieval_agent")
         step_id = state["current_step"]
+        law = {
+            "law_name": "中华人民共和国劳动合同法",
+            "article_no": "第四十八条",
+            "content": "违法解除劳动合同的处理规则",
+            "source_type": "delilegal_law",
+            "source_id": "law-48",
+            "timeliness_name": "现行有效",
+        }
         return {"agent_reports": [{
             "report_id": f"{step_id}:statute_retrieval_agent",
             "task_id": step_id,
             "agent_name": "statute_retrieval_agent",
             "summary": "法条已检索",
-        }]}
+            "sources": [law],
+        }], "retrieved_laws": [law]}
 
     async def passthrough(_state):
         return {}

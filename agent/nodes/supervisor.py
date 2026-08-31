@@ -292,7 +292,7 @@ async def supervisor_agent_node(state: AgentState) -> dict[str, Any]:
 
     reports = state.get("agent_reports", []) or []
     if reports:
-        from agent.nodes.verifier import _llm_verifier_final_response
+        from agent.nodes.answer import _llm_verifier_final_response
 
         final_content = await _llm_verifier_final_response(state)
         return {

@@ -13,15 +13,17 @@ from agent.nodes import (
     context_compaction_node,
     inject_doc_node,
     legal_consult_agent_node,
+    answer_generator_node,
     memory_node,
     planner_node,
     should_enter_planner,
+    should_after_verifier,
     should_continue,
     should_execute_next,
     supervisor_agent_node,
     tool_limit_observation_node,
     statute_retrieval_agent_node,
-    verifier_node,
+    result_verifier_node,
 )
 from agent.state import AgentState
 from agent.tools import CASE_ANALYSIS_TOOLS, LEGAL_CONSULT_TOOLS, STATUTE_RETRIEVAL_TOOLS
@@ -48,7 +50,8 @@ def build_graph(checkpointer: BaseCheckpointSaver | None = None) -> Any:
     graph.add_node("case_analysis_agent", case_analysis_agent_node)
     graph.add_node("statute_retrieval_agent", statute_retrieval_agent_node)
     graph.add_node("legal_consult_agent", legal_consult_agent_node)
-    graph.add_node("verifier", verifier_node)
+    graph.add_node("verifier", result_verifier_node)
+    graph.add_node("answer_generator", answer_generator_node)
     graph.add_node(
         "case_analysis_tools",
         ToolNode(CASE_ANALYSIS_TOOLS, handle_tool_errors=tool_error_observation),
@@ -128,6 +131,14 @@ def build_graph(checkpointer: BaseCheckpointSaver | None = None) -> Any:
     graph.add_edge("legal_consult_tools", "collect_consult_evidence")
     graph.add_edge("collect_consult_evidence", "legal_consult_agent")
     graph.add_edge("tool_limit_exceeded", "supervisor_agent")
-    graph.add_edge("verifier", END)
+    graph.add_conditional_edges(
+        "verifier",
+        should_after_verifier,
+        {
+            "retry": "supervisor_agent",
+            "answer_generator": "answer_generator",
+        },
+    )
+    graph.add_edge("answer_generator", END)
 
     return graph.compile(checkpointer=checkpointer)

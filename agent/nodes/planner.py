@@ -50,6 +50,7 @@ class PlannerStep(BaseModel):
     description: str = Field(min_length=2, max_length=200)
     assigned_agent: AssignedAgent
     status: Literal["pending"] = "pending"
+    required: bool = True
 
     @model_validator(mode="after")
     def validate_assignment(self) -> "PlannerStep":
@@ -166,6 +167,7 @@ def _normalize_steps(
             "description": step.description.strip(),
             "assigned_agent": TASK_AGENT_MAP[step.task_type],
             "status": "pending",
+            "required": step.required,
         })
     return normalized
 
