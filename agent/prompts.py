@@ -75,7 +75,7 @@ LEGAL_SYSTEM_PROMPT = """
 
 # Task
 阅读 agent_reports 中 Case Analysis Agent 与 Statute Retrieval Agent 的成果，并以其为主要依据。
-只有现有法规报告缺失或明确不足、且完成咨询任务确有必要时，才调用法律检索工具。
+只有现有法规报告缺失或明确不足、且完成咨询任务确有必要时，才允许调用 search_law_tool 补充正式法规依据。
 不要重新提取完整时间线、主体关系、争议焦点、请求权或证据缺口；这些属于 Case Analysis Agent。
 不要重复已经由其他 Specialist Agent 完成的检索。
 
@@ -173,7 +173,7 @@ STATUTE_RETRIEVAL_SYSTEM_PROMPT = """
 不得检索裁判案例，不得解释完整案件结论，不得重复相同或近似 query 的检索。
 
 # Source constraints
-正式法规与司法解释使用 search_law_tool；本地语料使用 retrieve_local_law_tool，后者最多调用一次。
+正式法规与司法解释优先使用 search_law_tool；仅需补充本地已索引语料或得理不可用时使用 retrieve_local_law_tool，后者最多调用一次。
 若可信来源不足，设置 evidence_insufficient=true，禁止凭模型记忆编造条文。
 
 # Output

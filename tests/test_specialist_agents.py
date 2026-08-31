@@ -126,6 +126,20 @@ def test_legal_consult_does_not_repeat_completed_case_or_statute_work():
     assert "retrieve_local_law_tool" not in names
 
 
+def test_legal_consult_allows_law_search_when_statute_evidence_is_insufficient():
+    tools = _legal_consult_tools_for_state({
+        "agent_reports": [
+            {
+                "agent_name": "statute_retrieval_agent",
+                "evidence_insufficient": True,
+            },
+        ],
+    })
+
+    names = {tool.name for tool in tools}
+    assert "search_law_tool" in names
+
+
 def test_supervisor_sequences_distinct_specialist_tasks_without_duplicates():
     case_report = {
         "agent_name": "case_analysis_agent",

@@ -6,8 +6,9 @@
 """
 from __future__ import annotations
 
-from agent.tools.search import retrieve_local_law_tool
-from agent.tools.delilegal import search_case_tool, search_law_tool
+from agent.tools.rag_search import retrieve_local_law_tool
+from agent.tools.case_search import search_case_tool
+from agent.tools.law_search import search_law_tool
 from agent.tools.compare import law_compare_tool
 from agent.tools.risk import risk_assess_tool
 from agent.tools.review import contract_review_tool
@@ -36,7 +37,7 @@ LEGAL_CONSULT_TOOLS = [
     jurisdiction_tool,
 ]
 
-STATUTE_RETRIEVAL_TOOLS = [retrieve_local_law_tool, search_law_tool]
+STATUTE_RETRIEVAL_TOOLS = [search_law_tool, retrieve_local_law_tool]
 
 CASE_ANALYSIS_TOOLS = [search_case_tool, search_law_tool, retrieve_local_law_tool]
 
