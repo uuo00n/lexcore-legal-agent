@@ -103,6 +103,18 @@ class VerificationResult(TypedDict, total=False):
     reason: str
 
 
+class ToolLoopFailure(TypedDict, total=False):
+    """Specialist ReAct loop 被保护机制终止时的结构化原因。"""
+
+    agent_name: str
+    task_id: str
+    reason: str
+    message: str
+    tool_call_count: int
+    max_tool_calls: int
+    requested_tools: list[str]
+
+
 def _stable_item_key(item: object) -> str:
     """为无统一业务主键的兼容字典生成稳定去重键。"""
     if isinstance(item, dict):
@@ -214,6 +226,7 @@ class AgentState(TypedDict, total=False):
     # 重试和工具调用保护计数；沿用绝对值写入，避免改变现有节点语义
     retry_count: int
     tool_call_count: int
+    tool_loop_failure: Optional[ToolLoopFailure]
 
     # 分层记忆上下文（由 memory_node 填充）
     memory_profile: Optional[str]  # 用户画像

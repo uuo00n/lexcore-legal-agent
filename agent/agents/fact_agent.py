@@ -11,6 +11,7 @@ from agent.node_utils import compatibility_dependency, latest_human_message, rec
 from agent.prompts import CASE_ANALYSIS_SYSTEM_PROMPT
 from agent.reports import build_agent_report
 from agent.state import AgentState
+from agent.tool_loop import apply_tool_call_budget
 from agent.tools import CASE_ANALYSIS_TOOLS
 from services.answer_format import strip_answer_markdown
 from services.legal_analysis import build_follow_up_response, classify_legal_intent, should_ask_follow_up
@@ -154,9 +155,15 @@ async def case_analysis_agent_node(state: AgentState) -> dict[str, Any]:
         HumanMessage(content=json.dumps(context, ensure_ascii=False)),
     ])
     if getattr(response, "tool_calls", None):
+        response, tool_call_count, failure = apply_tool_call_budget(
+            response,
+            state,
+            agent_name="case_analysis_agent",
+        )
         return {
             "messages": [response],
-            "tool_call_count": state.get("tool_call_count", 0) + 1,
+            "tool_call_count": tool_call_count,
+            "tool_loop_failure": failure,
         }
 
     parsed = _extract_json(response.content or "") or {}

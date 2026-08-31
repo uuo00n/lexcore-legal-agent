@@ -194,6 +194,7 @@ def _build_state_input(
         "viking_context": "",
         "viking_context_hits": [],
         "tool_call_count": 0,
+        "tool_loop_failure": None,
     }
 
 
@@ -274,7 +275,12 @@ async def _event_stream(graph, req: ChatRequest) -> AsyncIterator[dict]:
                         node_output["context_status"],
                         ensure_ascii=False,
                     ))
-                if node_name in {"case_analysis_tools", "statute_retrieval_tools", "legal_consult_tools"}:
+                if node_name in {
+                    "case_analysis_tools",
+                    "statute_retrieval_tools",
+                    "legal_consult_tools",
+                    "tool_limit_exceeded",
+                }:
                     msgs = node_output.get("messages", [])
                     for m in msgs:
                         if hasattr(m, "name"):

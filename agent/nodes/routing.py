@@ -3,18 +3,15 @@ from __future__ import annotations
 
 import json
 import logging
-import os
 from typing import Any
 
 from langchain_core.messages import AIMessage, ToolMessage
 
 from agent.node_utils import record_trace_event
 from agent.state import AgentState
+from agent.tool_loop import MAX_TOOL_CALLS
 
 log = logging.getLogger(__name__)
-MAX_TOOL_CALLS = int(os.getenv("MAX_TOOL_CALLS", "4"))
-
-
 def should_after_supervisor(state: AgentState) -> str:
     route = state.get("supervisor_route") or "legal_consult_agent"
     if state.get("supervisor_finalized") or route in {"end", "final"}:
@@ -95,9 +92,9 @@ def should_continue(state: AgentState) -> str:
         return "end"
     last = messages[-1]
     if isinstance(last, AIMessage) and getattr(last, "tool_calls", None):
-        if state.get("tool_call_count", 0) >= MAX_TOOL_CALLS:
-            log.warning("ReAct 循环达到上限 %d 次，强制结束", MAX_TOOL_CALLS)
-            return "end"
+        if state.get("tool_loop_failure"):
+            log.warning("ReAct 循环达到上限 %d 次，返回 Supervisor", MAX_TOOL_CALLS)
+            return "limit_exceeded"
         return "tools"
     return "end"
 

@@ -62,7 +62,7 @@ cp .env.example .env
 | `RETRIEVER_TOP_K` | `20` | 每路检索候选数量 |
 | `RERANKER_SCORE_THRESHOLD` | `0.3` | Reranker 分数阈值 |
 | `RRF_K` | `60` | RRF 融合常数 |
-| `MAX_TOOL_CALLS` | `6` | ReAct 最大循环次数 |
+| `MAX_TOOL_CALLS` | `5` | 每个 Specialist 任务的最大工具调用次数 |
 | `MAX_UPLOAD_MB` | `10` | 上传文件大小限制 |
 | `DELILEGAL_BASE_URL` | — | 得理 OpenAPI 地址，必须显式配置 |
 | `DELILEGAL_APP_ID` / `DELILEGAL_SECRET` | — | 得理 OpenAPI 凭据，不得写入日志或提交仓库 |

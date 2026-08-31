@@ -105,7 +105,7 @@ async def test_supervisor_retries_running_step_without_a_report():
 
     assert result["plan"][0]["status"] == "running"
     assert result["retry_count"] == 1
-    assert result["tool_call_count"] == 0
+    assert result["tool_call_count"] == 4
     assert result["supervisor_route"] == "case_analysis_agent"
 
 

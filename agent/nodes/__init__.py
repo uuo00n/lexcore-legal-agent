@@ -47,6 +47,7 @@ from agent.nodes.routing import (
 )
 from agent.nodes.supervisor import supervisor_agent_node
 from agent.nodes.verifier import verifier_node, verify_plan_results
+from agent.tool_loop import tool_limit_observation_node
 
 __all__ = [
     "MAX_TOOL_CALLS",
@@ -69,6 +70,7 @@ __all__ = [
     "should_continue",
     "should_execute_next",
     "supervisor_agent_node",
+    "tool_limit_observation_node",
     "verifier_node",
     "verify_plan_results",
 ]

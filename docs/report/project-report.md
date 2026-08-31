@@ -360,7 +360,7 @@ flowchart LR
   Consult --> Decision{"是否有工具调用?"}
   Decision -->|否| End["END"]
   Decision -->|是且未超过上限| Tools["ToolNode"]
-  Decision -->|达到 MAX_TOOL_CALLS| End
+  Decision -->|超过 MAX_TOOL_CALLS| Supervisor
   Tools --> Collect["collect_retrieved_laws"]
   Collect --> Consult
 ```
@@ -385,7 +385,7 @@ AgentState 当前包含：
 
 ### 9.2 最大循环次数
 
-`MAX_TOOL_CALLS` 默认值为 6。Agent 如果连续调用工具达到上限，会强制结束，避免 ReAct 循环失控。
+`MAX_TOOL_CALLS` 默认值为 5。每个 Specialist 任务达到上限后仍可基于已有 Observation 形成报告；若继续请求工具，则记录失败原因并返回 Supervisor，避免 ReAct 循环失控。
 
 相关代码：
 

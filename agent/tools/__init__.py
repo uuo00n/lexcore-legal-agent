@@ -30,11 +30,8 @@ ALL_TOOLS = [
 ]
 
 LEGAL_CONSULT_TOOLS = [
-    retrieve_local_law_tool,
     search_law_tool,
-    search_case_tool,
-    statute_of_limitations_tool,
-    jurisdiction_tool,
+    retrieve_local_law_tool,
 ]
 
 STATUTE_RETRIEVAL_TOOLS = [search_law_tool, retrieve_local_law_tool]

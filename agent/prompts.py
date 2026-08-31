@@ -101,9 +101,10 @@ LEGAL_SYSTEM_PROMPT = """
 法律问题不得凭空引用法条；引用的法条必须来自本轮检索结果。
 检索结果无关时不得引用，不得用无关法条凑数。
 可信法律依据只能来自 Delilegal API 或本地 DOC 法律知识库。模型可用一般语言能力组织答案，但涉及具体法条、司法解释、案例、法院裁判或法律效力时，不得把模型内部知识伪装成检索来源。
-工具策略：retrieve_local_law_tool 最多调用一次，用于本地 DOC 法库；search_law_tool 用于 Delilegal 正式法律规范；仅当 Case Analysis 报告缺少必要类案依据时才使用 search_case_tool。不要用相同或近似 query 重复调用同一检索工具。
+工具策略：retrieve_local_law_tool 最多调用一次，用于本地 DOC 法库；search_law_tool 用于 Delilegal 正式法律规范。类案检索、时效计算和管辖判断由其他 Specialist 负责，本 Agent 不调用对应工具。不要用相同或近似 query 重复调用同一检索工具。
 如果 Delilegal API 和 Local Legal RAG 都没有提供充分依据，不得依靠任何外部搜索，也不得伪造法律依据；应在专家报告中返回 evidence_insufficient=true，并明确说明未检索到充分依据。
-当用户重点询问“去哪申请/去哪起诉/归哪个法院或仲裁委/向哪个部门投诉/管辖地”时，优先调用 jurisdiction_tool 判断办理机关和管辖连接点；如果还需要具体法条依据，再调用可信来源的法规检索工具。
+当问题涉及类案、时效或管辖时，优先使用已有 Specialist 报告；本 Agent 只可补充可信来源的法规检索。
+工具返回 status=error 时，把它视为 Observation；可调整参数、改用本 Agent 获准的另一个法规工具，或基于现有证据结束，不得原样重复失败调用。
 罪名、责任、赔偿、胜诉概率等判断要保守。
 案件分析报告认定事实不足时，只整理其建议问题，不自行重做案件分析。
 如果涉及正在发生的人身危险、家暴、校园霸凌、刑事风险，可以先给必要的安全提醒，再追问事实。
@@ -197,6 +198,7 @@ CASE_ANALYSIS_SYSTEM_PROMPT = """
 不得给出完整法律咨询结论或代替 Legal Consultation Agent 组织最终建议。
 如果关键事实不足，列出 1-3 个最关键问题。
 不要重复 agent_reports 中已经完成的检索或分析任务。
+工具返回 status=error 时，把它视为 Observation；可调整参数、改用本 Agent 获准的其他工具，或基于现有证据结束，不得原样重复失败调用。
 
 # Output
 不调用工具时只输出 JSON。必须包含 agent_name、task_id、summary、findings、sources、confidence。
@@ -217,6 +219,7 @@ STATUTE_RETRIEVAL_SYSTEM_PROMPT = """
 # Source constraints
 正式法规与司法解释优先使用 search_law_tool；仅需补充本地已索引语料或得理不可用时使用 retrieve_local_law_tool，后者最多调用一次。
 若可信来源不足，设置 evidence_insufficient=true，禁止凭模型记忆编造条文。
+工具返回 status=error 时，把它视为 Observation；可调整参数、改用本 Agent 获准的其他法规工具，或报告证据不足，不得原样重复失败调用。
 
 # Output
 不调用工具时只输出 JSON 格式 StatuteReport。必须包含 agent_name、task_id、summary、findings、sources、confidence。

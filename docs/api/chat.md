@@ -85,7 +85,7 @@ curl -N -X POST http://localhost:8000/api/chat \
 
 ## 行为说明
 
-- 每轮对话最多执行 6 次工具调用（`MAX_TOOL_CALLS` 环境变量控制）
+- 每个 Specialist 任务最多执行 5 次工具调用（`MAX_TOOL_CALLS` 环境变量控制）
 - 最终回答末尾会附加检索到的法条引用（如 `【引用法条】《劳动合同法》第四十六条`）
 - 对话结束后在后台异步执行记忆提取，不阻塞响应
 - 如果 `doc_id` 有效，文档内容会作为 SystemMessage 注入上下文

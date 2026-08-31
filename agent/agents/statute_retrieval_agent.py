@@ -12,6 +12,7 @@ from agent.node_utils import compatibility_dependency, latest_human_message, rec
 from agent.prompts import STATUTE_RETRIEVAL_SYSTEM_PROMPT
 from agent.reports import build_agent_report
 from agent.state import AgentState, StatuteReport
+from agent.tool_loop import apply_tool_call_budget
 from agent.tools import STATUTE_RETRIEVAL_TOOLS
 from services.llm import get_llm, supports_tools
 
@@ -113,9 +114,15 @@ async def statute_retrieval_agent_node(state: AgentState) -> dict[str, Any]:
         HumanMessage(content=json.dumps(context, ensure_ascii=False)),
     ])
     if getattr(response, "tool_calls", None):
+        response, tool_call_count, failure = apply_tool_call_budget(
+            response,
+            state,
+            agent_name="statute_retrieval_agent",
+        )
         return {
             "messages": [response],
-            "tool_call_count": state.get("tool_call_count", 0) + 1,
+            "tool_call_count": tool_call_count,
+            "tool_loop_failure": failure,
         }
 
     parsed = _extract_json(response.content or "") or {}

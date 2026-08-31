@@ -91,6 +91,7 @@ def _executor_update(state: AgentState) -> dict[str, Any]:
     plan: list[PlanStep] = [dict(step) for step in state.get("plan", []) or []]  # type: ignore[misc]
     current_step_id = str(state.get("current_step") or "")
     retry_count = int(state.get("retry_count", 0) or 0)
+    terminal_failure_reason = ""
 
     running = next(
         (
@@ -102,8 +103,30 @@ def _executor_update(state: AgentState) -> dict[str, Any]:
         None,
     )
     if running is not None:
+        tool_failure = state.get("tool_loop_failure")
         report = _report_for_running_step(state, running)
-        if report is not None:
+        if tool_failure:
+            running["status"] = "failed"
+            running["result"] = dict(tool_failure)
+            current_step_id = ""
+            retry_count = 0
+            terminal_failure_reason = str(
+                tool_failure.get("message")
+                or tool_failure.get("reason")
+                or "Specialist 工具循环失败"
+            )
+            record_trace_event(
+                state.get("trace_id"),
+                "plan_step_failed",
+                name="supervisor_agent",
+                payload={
+                    "step_id": running.get("step_id"),
+                    "assigned_agent": running.get("assigned_agent"),
+                    "reason": tool_failure.get("reason"),
+                    "tool_call_count": tool_failure.get("tool_call_count"),
+                },
+            )
+        elif report is not None:
             running["status"] = "completed"
             running["result"] = dict(report)
             current_step_id = ""
@@ -138,7 +161,8 @@ def _executor_update(state: AgentState) -> dict[str, Any]:
                 "completed_steps": completed,
                 "remaining_steps": remaining,
                 "retry_count": retry_count,
-                "tool_call_count": 0,
+                "tool_call_count": int(state.get("tool_call_count", 0) or 0),
+                "tool_loop_failure": None,
                 "supervisor_route": route,
                 "supervisor_reason": f"步骤 {running.get('step_id')} 未返回报告，执行第 {retry_count} 次重试",
                 "supervisor_finalized": False,
@@ -197,6 +221,7 @@ def _executor_update(state: AgentState) -> dict[str, Any]:
             "remaining_steps": remaining,
             "retry_count": 0,
             "tool_call_count": 0,
+            "tool_loop_failure": None,
             "supervisor_route": assigned_agent,
             "supervisor_reason": f"执行计划步骤 {pending.get('step_id')}: {pending.get('description')}",
             "supervisor_finalized": False,
@@ -210,7 +235,11 @@ def _executor_update(state: AgentState) -> dict[str, Any]:
         "remaining_steps": remaining,
         "retry_count": 0,
         "supervisor_route": "verify",
-        "supervisor_reason": "计划已无待执行步骤，进入结果核验",
+        "supervisor_reason": (
+            f"计划步骤失败：{terminal_failure_reason}，进入结果核验"
+            if terminal_failure_reason
+            else "计划已无待执行步骤，进入结果核验"
+        ),
         "supervisor_finalized": False,
     }
 
@@ -250,6 +279,16 @@ async def supervisor_agent_node(state: AgentState) -> dict[str, Any]:
     """Route the initial request, then execute the Planner's steps one at a time."""
     if state.get("plan"):
         return _executor_update(state)
+
+    if state.get("tool_loop_failure"):
+        failure = state["tool_loop_failure"] or {}
+        reason = str(failure.get("message") or "Specialist 工具调用达到上限")
+        return {
+            "supervisor_route": "end",
+            "supervisor_reason": reason,
+            "supervisor_finalized": True,
+            "messages": [AIMessage(content=f"本次任务未能完成：{reason}。请缩小问题范围后重试。")],
+        }
 
     reports = state.get("agent_reports", []) or []
     if reports:

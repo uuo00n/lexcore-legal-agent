@@ -18,6 +18,7 @@ from agent.prompts import (
 )
 from agent.reports import build_agent_report, report_agent_name
 from agent.state import AgentState
+from agent.tool_loop import apply_tool_call_budget
 from agent.tools import LEGAL_CONSULT_TOOLS
 from services.answer_format import strip_answer_markdown
 from services.case_retrieval import search_similar_cases
@@ -302,8 +303,16 @@ async def legal_consult_agent_node(state: AgentState) -> dict[str, Any]:
     ])
     if getattr(response, "tool_calls", None):
         response = _limit_tool_calls(response)
-        result: dict[str, Any] = {"messages": [response]}
-        result["tool_call_count"] = state.get("tool_call_count", 0) + 1
+        response, tool_call_count, failure = apply_tool_call_budget(
+            response,
+            state,
+            agent_name="legal_consult_agent",
+        )
+        result: dict[str, Any] = {
+            "messages": [response],
+            "tool_call_count": tool_call_count,
+            "tool_loop_failure": failure,
+        }
         record_trace_event(
             state.get("trace_id"),
             "agent_tool_request",

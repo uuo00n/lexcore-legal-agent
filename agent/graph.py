@@ -19,11 +19,13 @@ from agent.nodes import (
     should_continue,
     should_execute_next,
     supervisor_agent_node,
+    tool_limit_observation_node,
     statute_retrieval_agent_node,
     verifier_node,
 )
 from agent.state import AgentState
 from agent.tools import CASE_ANALYSIS_TOOLS, LEGAL_CONSULT_TOOLS, STATUTE_RETRIEVAL_TOOLS
+from agent.tool_loop import tool_error_observation
 
 
 def build_graph(checkpointer: BaseCheckpointSaver | None = None) -> Any:
@@ -47,9 +49,19 @@ def build_graph(checkpointer: BaseCheckpointSaver | None = None) -> Any:
     graph.add_node("statute_retrieval_agent", statute_retrieval_agent_node)
     graph.add_node("legal_consult_agent", legal_consult_agent_node)
     graph.add_node("verifier", verifier_node)
-    graph.add_node("case_analysis_tools", ToolNode(CASE_ANALYSIS_TOOLS))
-    graph.add_node("statute_retrieval_tools", ToolNode(STATUTE_RETRIEVAL_TOOLS))
-    graph.add_node("legal_consult_tools", ToolNode(LEGAL_CONSULT_TOOLS))
+    graph.add_node(
+        "case_analysis_tools",
+        ToolNode(CASE_ANALYSIS_TOOLS, handle_tool_errors=tool_error_observation),
+    )
+    graph.add_node(
+        "statute_retrieval_tools",
+        ToolNode(STATUTE_RETRIEVAL_TOOLS, handle_tool_errors=tool_error_observation),
+    )
+    graph.add_node(
+        "legal_consult_tools",
+        ToolNode(LEGAL_CONSULT_TOOLS, handle_tool_errors=tool_error_observation),
+    )
+    graph.add_node("tool_limit_exceeded", tool_limit_observation_node)
     graph.add_node("collect_case_evidence", collect_retrieved_laws)
     graph.add_node("collect_statute_evidence", collect_retrieved_laws)
     graph.add_node("collect_consult_evidence", collect_retrieved_laws)
@@ -85,24 +97,37 @@ def build_graph(checkpointer: BaseCheckpointSaver | None = None) -> Any:
     graph.add_conditional_edges(
         "case_analysis_agent",
         should_continue,
-        {"tools": "case_analysis_tools", "end": "supervisor_agent"},
+        {
+            "tools": "case_analysis_tools",
+            "limit_exceeded": "tool_limit_exceeded",
+            "end": "supervisor_agent",
+        },
     )
     graph.add_edge("case_analysis_tools", "collect_case_evidence")
     graph.add_edge("collect_case_evidence", "case_analysis_agent")
     graph.add_conditional_edges(
         "statute_retrieval_agent",
         should_continue,
-        {"tools": "statute_retrieval_tools", "end": "supervisor_agent"},
+        {
+            "tools": "statute_retrieval_tools",
+            "limit_exceeded": "tool_limit_exceeded",
+            "end": "supervisor_agent",
+        },
     )
     graph.add_edge("statute_retrieval_tools", "collect_statute_evidence")
     graph.add_edge("collect_statute_evidence", "statute_retrieval_agent")
     graph.add_conditional_edges(
         "legal_consult_agent",
         should_continue,
-        {"tools": "legal_consult_tools", "end": "supervisor_agent"},
+        {
+            "tools": "legal_consult_tools",
+            "limit_exceeded": "tool_limit_exceeded",
+            "end": "supervisor_agent",
+        },
     )
     graph.add_edge("legal_consult_tools", "collect_consult_evidence")
     graph.add_edge("collect_consult_evidence", "legal_consult_agent")
+    graph.add_edge("tool_limit_exceeded", "supervisor_agent")
     graph.add_edge("verifier", END)
 
     return graph.compile(checkpointer=checkpointer)

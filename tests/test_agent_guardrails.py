@@ -50,7 +50,7 @@ def test_agent_exposes_all_mcp_tools():
 def test_legal_consult_agent_has_trusted_source_tools():
     """
     函数作用：
-        法律咨询专家只可查询本地法库与得理法规、类案。
+        法律咨询专家只可查询本地法库与得理法规。
     输入参数：
         - 无
     输出参数：
@@ -60,17 +60,13 @@ def test_legal_consult_agent_has_trusted_source_tools():
 
     tool_names = [tool.name for tool in LEGAL_CONSULT_TOOLS]
 
-    assert "retrieve_local_law_tool" in tool_names
-    assert "search_law_tool" in tool_names
-    assert "search_case_tool" in tool_names
-    assert "statute_of_limitations_tool" in tool_names
-    assert "jurisdiction_tool" in tool_names
+    assert tool_names == ["search_law_tool", "retrieve_local_law_tool"]
 
 
-def test_legal_consult_agent_tool_loop_default_is_four():
+def test_specialist_tool_loop_default_is_five():
     """
     函数作用：
-        法律咨询专家工具循环默认上限应为 4，避免重复检索拖垮链路。
+        每个 Specialist 任务的工具调用默认上限应为 5，避免无限循环。
     输入参数：
         - 无
     输出参数：
@@ -78,7 +74,7 @@ def test_legal_consult_agent_tool_loop_default_is_four():
     """
     from agent.nodes import MAX_TOOL_CALLS
 
-    assert MAX_TOOL_CALLS == 4
+    assert MAX_TOOL_CALLS == 5
 
 
 def test_guard_law_citations_removes_unretrieved_reference():
@@ -126,7 +122,7 @@ def test_prompt_requires_plain_inline_law_format():
     assert "retrieve_local_law_tool 最多调用一次" in LEGAL_SYSTEM_PROMPT
     assert "evidence_insufficient=true" in LEGAL_SYSTEM_PROMPT
     assert "web_search_tool" not in LEGAL_SYSTEM_PROMPT
-    assert "jurisdiction_tool" in LEGAL_SYSTEM_PROMPT
+    assert "本 Agent 不调用对应工具" in LEGAL_SYSTEM_PROMPT
     assert "不要使用 Markdown 标题" in SUPERVISOR_FINAL_PROMPT
     assert "可以用短段落和简单编号换行" in SUPERVISOR_FINAL_PROMPT
 
@@ -241,10 +237,10 @@ async def test_legal_consult_agent_does_not_bind_local_search_after_retrieval(mo
 
     assert "retrieve_local_law_tool" not in fake_llm.bound_tool_names
     assert "search_law_tool" in fake_llm.bound_tool_names
-    assert "search_case_tool" in fake_llm.bound_tool_names
+    assert set(fake_llm.bound_tool_names) == {"search_law_tool"}
 
 
-async def test_legal_consult_agent_keeps_local_search_after_jurisdiction_tool(monkeypatch):
+async def test_legal_consult_agent_keeps_local_search_after_unrelated_tool_observation(monkeypatch):
     """
     函数作用：
         管辖路径工具调用后，不应误判为本地法条检索已执行。
@@ -278,7 +274,6 @@ async def test_legal_consult_agent_keeps_local_search_after_jurisdiction_tool(mo
     })
 
     assert "retrieve_local_law_tool" in fake_llm.bound_tool_names
-    assert "jurisdiction_tool" in fake_llm.bound_tool_names
     assert "search_law_tool" in fake_llm.bound_tool_names
 
 

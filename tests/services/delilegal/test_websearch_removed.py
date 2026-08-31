@@ -18,7 +18,7 @@ def test_agent_registries_contain_only_trusted_search_tools():
 
     assert not all_names.intersection(forbidden)
     assert not legal_names.intersection(forbidden)
-    assert {"retrieve_local_law_tool", "search_law_tool", "search_case_tool"} <= legal_names
+    assert legal_names == {"retrieve_local_law_tool", "search_law_tool"}
 
 
 def test_runtime_prompts_and_mcp_server_have_no_internet_fallback():
