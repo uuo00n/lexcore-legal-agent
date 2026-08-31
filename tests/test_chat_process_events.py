@@ -85,6 +85,18 @@ class _GraphWithSupervisorFinal:
         }
 
 
+class _GraphWithVerifierFinal:
+    """Plan Executor 链路由 Verifier 输出最终答案。"""
+
+    async def astream(self, state_input, config, stream_mode):
+        yield {
+            "verifier": {
+                "verification_result": {"passed": True, "score": 1.0},
+                "messages": [AIMessage(content="这是核验后的最终回答。")],
+            }
+        }
+
+
 class _GraphWithLegalConsultTextOnly:
     """专家节点文本不能绕过主控成为最终答案。"""
 
@@ -260,6 +272,28 @@ async def test_event_stream_uses_supervisor_final_answer(monkeypatch):
 
     assert streamed == "这是主控整理后的最终回答。"
     assert "专家报告" not in streamed
+
+
+@pytest.mark.asyncio
+async def test_event_stream_uses_verifier_final_answer(monkeypatch):
+    monkeypatch.setattr("api.chat.create_trace", lambda *args, **kwargs: None)
+    monkeypatch.setattr("api.chat.record_event", lambda *args, **kwargs: None)
+    monkeypatch.setattr("api.chat.complete_trace", lambda *args, **kwargs: None)
+    monkeypatch.setattr("api.chat.inc_counter", lambda *args, **kwargs: None)
+    monkeypatch.setattr("api.chat.observe", lambda *args, **kwargs: None)
+    monkeypatch.setattr("api.chat.get_cached_answer", lambda *args, **kwargs: None)
+    monkeypatch.setattr("api.chat.set_cached_answer", lambda *args, **kwargs: None)
+
+    events = [
+        event
+        async for event in _event_stream(
+            _GraphWithVerifierFinal(),
+            ChatRequest(thread_id="test-verifier-final-thread", message="如何维权？"),
+        )
+    ]
+    streamed = "".join(event["data"] for event in events if event["event"] == "token")
+
+    assert streamed == "这是核验后的最终回答。"
 
 
 @pytest.mark.asyncio

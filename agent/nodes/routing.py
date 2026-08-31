@@ -29,7 +29,13 @@ def should_enter_planner(state: AgentState) -> str:
     route = should_after_supervisor(state)
     if route == "end":
         return "end"
+    if state.get("plan"):
+        return should_execute_next(state)
     if state.get("agent_reports"):
+        return route
+    if not state.get("intent") and "task_complexity" not in state:
+        # Compatibility for older/custom Supervisor nodes that already return
+        # a concrete Specialist route but do not emit the Planner inputs.
         return route
     return "planner"
 
@@ -46,6 +52,35 @@ def should_after_planner(state: AgentState) -> str:
         "legal_consult_agent",
     }:
         return assigned_agent
+    return "end"
+
+
+def should_execute_next(state: AgentState) -> str:
+    """Route only to a Specialist, Verifier, or graph end after Supervisor runs."""
+    route = str(state.get("supervisor_route") or "")
+    allowed = {
+        "case_analysis_agent",
+        "statute_retrieval_agent",
+        "legal_consult_agent",
+        "verify",
+        "end",
+    }
+    if state.get("supervisor_finalized"):
+        return "end"
+    if route in allowed:
+        return route
+
+    plan = state.get("plan", []) or []
+    running = next((step for step in plan if step.get("status") == "running"), None)
+    if running is not None:
+        assigned_agent = str(running.get("assigned_agent") or "")
+        return assigned_agent if assigned_agent in allowed else "end"
+    pending = next((step for step in plan if step.get("status") == "pending"), None)
+    if pending is not None:
+        assigned_agent = str(pending.get("assigned_agent") or "")
+        return assigned_agent if assigned_agent in allowed else "end"
+    if plan:
+        return "verify"
     return "end"
 
 

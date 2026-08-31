@@ -164,6 +164,14 @@ def merge_agent_reports(
     return merge_unique_items(left, right)  # type: ignore[return-value]
 
 
+def replace_plan_steps(
+    _left: list[PlanStep] | None,
+    right: list[PlanStep] | None,
+) -> list[PlanStep]:
+    """Replace a derived plan view such as ``remaining_steps`` atomically."""
+    return [dict(step) for step in right or []]  # type: ignore[misc]
+
+
 class AgentState(TypedDict, total=False):
     """LangGraph 全局状态；所有字段均为可选，以兼容旧 checkpoint 和调用方。"""
 
@@ -190,7 +198,7 @@ class AgentState(TypedDict, total=False):
     plan: Annotated[list[PlanStep], merge_plan_steps]  # 全量结构化计划
     current_step: Optional[str]  # 当前步骤的 step_id
     completed_steps: Annotated[list[PlanStep], merge_plan_steps]  # 已完成步骤
-    remaining_steps: Annotated[list[PlanStep], merge_plan_steps]  # 尚待执行步骤
+    remaining_steps: Annotated[list[PlanStep], replace_plan_steps]  # 尚待执行步骤
 
     # 检索证据；reducer 防止并行检索结果相互覆盖
     retrieved_laws: Annotated[list[RetrievedLaw], merge_unique_items]

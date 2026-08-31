@@ -15,11 +15,12 @@ from agent.nodes import (
     legal_consult_agent_node,
     memory_node,
     planner_node,
-    should_after_planner,
     should_enter_planner,
     should_continue,
+    should_execute_next,
     supervisor_agent_node,
     statute_retrieval_agent_node,
+    verifier_node,
 )
 from agent.state import AgentState
 from agent.tools import CASE_ANALYSIS_TOOLS, LEGAL_CONSULT_TOOLS, STATUTE_RETRIEVAL_TOOLS
@@ -39,11 +40,13 @@ def build_graph(checkpointer: BaseCheckpointSaver | None = None) -> Any:
     graph.add_node("context_compaction", context_compaction_node)
     graph.add_node("memory", memory_node)
     graph.add_node("inject_doc", inject_doc_node)
+    graph.add_node("request_router", supervisor_agent_node)
     graph.add_node("supervisor_agent", supervisor_agent_node)
     graph.add_node("planner", planner_node)
     graph.add_node("case_analysis_agent", case_analysis_agent_node)
     graph.add_node("statute_retrieval_agent", statute_retrieval_agent_node)
     graph.add_node("legal_consult_agent", legal_consult_agent_node)
+    graph.add_node("verifier", verifier_node)
     graph.add_node("case_analysis_tools", ToolNode(CASE_ANALYSIS_TOOLS))
     graph.add_node("statute_retrieval_tools", ToolNode(STATUTE_RETRIEVAL_TOOLS))
     graph.add_node("legal_consult_tools", ToolNode(LEGAL_CONSULT_TOOLS))
@@ -54,25 +57,28 @@ def build_graph(checkpointer: BaseCheckpointSaver | None = None) -> Any:
     graph.set_entry_point("context_compaction")
     graph.add_edge("context_compaction", "memory")
     graph.add_edge("memory", "inject_doc")
-    graph.add_edge("inject_doc", "supervisor_agent")
+    graph.add_edge("inject_doc", "request_router")
     graph.add_conditional_edges(
-        "supervisor_agent",
+        "request_router",
         should_enter_planner,
         {
             "planner": "planner",
             "case_analysis_agent": "case_analysis_agent",
             "statute_retrieval_agent": "statute_retrieval_agent",
             "legal_consult_agent": "legal_consult_agent",
+            "verify": "verifier",
             "end": END,
         },
     )
+    graph.add_edge("planner", "supervisor_agent")
     graph.add_conditional_edges(
-        "planner",
-        should_after_planner,
+        "supervisor_agent",
+        should_execute_next,
         {
             "case_analysis_agent": "case_analysis_agent",
             "statute_retrieval_agent": "statute_retrieval_agent",
             "legal_consult_agent": "legal_consult_agent",
+            "verify": "verifier",
             "end": END,
         },
     )
@@ -97,5 +103,6 @@ def build_graph(checkpointer: BaseCheckpointSaver | None = None) -> Any:
     )
     graph.add_edge("legal_consult_tools", "collect_consult_evidence")
     graph.add_edge("collect_consult_evidence", "legal_consult_agent")
+    graph.add_edge("verifier", END)
 
     return graph.compile(checkpointer=checkpointer)

@@ -181,6 +181,7 @@ def _build_state_input(
         "remaining_steps": [],
         "completed_steps": [],
         "current_step": None,
+        "retry_count": 0,
         "intent": "",
         "intent_confidence": 0.0,
         "needs_follow_up": False,
@@ -188,6 +189,8 @@ def _build_state_input(
         "supervisor_reason": "",
         "agent_reports": [],
         "supervisor_finalized": False,
+        "verification_result": None,
+        "citations": [],
         "viking_context": "",
         "viking_context_hits": [],
         "tool_call_count": 0,
@@ -300,7 +303,7 @@ async def _event_stream(graph, req: ChatRequest) -> AsyncIterator[dict]:
                         ))
                 elif node_name in {"collect_case_evidence", "collect_statute_evidence", "collect_consult_evidence"}:
                     retrieved_laws = node_output.get("retrieved_laws", []) or retrieved_laws
-                elif node_name in {"agent", "fact_check", "fact_agent", "case_analysis_agent", "statute_retrieval_agent", "contract_agent", "legal_consult_agent", "supervisor_agent"}:
+                elif node_name in {"agent", "fact_check", "fact_agent", "case_analysis_agent", "statute_retrieval_agent", "contract_agent", "legal_consult_agent", "request_router", "supervisor_agent", "verifier"}:
                     msgs = node_output.get("messages", [])
                     for m in msgs:
                         if isinstance(m, AIMessage):
@@ -311,7 +314,7 @@ async def _event_stream(graph, req: ChatRequest) -> AsyncIterator[dict]:
                                     {"content": _build_process_message(tc_names)},
                                     ensure_ascii=False,
                                 ))
-                            elif m.content and node_name == "supervisor_agent":
+                            elif m.content and node_name in {"request_router", "supervisor_agent", "verifier"}:
                                 # 纯文字、无工具调用 → 最终回答
                                 final_content = m.content
 
