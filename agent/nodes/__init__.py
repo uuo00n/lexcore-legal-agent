@@ -34,11 +34,14 @@ from agent.nodes.context import (
 )
 from agent.nodes.document import DOC_PREFIX, inject_doc_node
 from agent.nodes.memory import memory_node
+from agent.nodes.planner import planner_node
 from agent.nodes.routing import (
     MAX_TOOL_CALLS,
     collect_retrieved_laws,
     should_after_fact_check,
+    should_after_planner,
     should_after_supervisor,
+    should_enter_planner,
     should_continue,
 )
 from agent.nodes.supervisor import supervisor_agent_node
@@ -56,8 +59,11 @@ __all__ = [
     "legal_consult_agent_node",
     "statute_retrieval_agent_node",
     "memory_node",
+    "planner_node",
     "should_after_fact_check",
+    "should_after_planner",
     "should_after_supervisor",
+    "should_enter_planner",
     "should_continue",
     "supervisor_agent_node",
 ]

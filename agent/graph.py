@@ -14,7 +14,9 @@ from agent.nodes import (
     inject_doc_node,
     legal_consult_agent_node,
     memory_node,
-    should_after_supervisor,
+    planner_node,
+    should_after_planner,
+    should_enter_planner,
     should_continue,
     supervisor_agent_node,
     statute_retrieval_agent_node,
@@ -38,6 +40,7 @@ def build_graph(checkpointer: BaseCheckpointSaver | None = None) -> Any:
     graph.add_node("memory", memory_node)
     graph.add_node("inject_doc", inject_doc_node)
     graph.add_node("supervisor_agent", supervisor_agent_node)
+    graph.add_node("planner", planner_node)
     graph.add_node("case_analysis_agent", case_analysis_agent_node)
     graph.add_node("statute_retrieval_agent", statute_retrieval_agent_node)
     graph.add_node("legal_consult_agent", legal_consult_agent_node)
@@ -54,7 +57,18 @@ def build_graph(checkpointer: BaseCheckpointSaver | None = None) -> Any:
     graph.add_edge("inject_doc", "supervisor_agent")
     graph.add_conditional_edges(
         "supervisor_agent",
-        should_after_supervisor,
+        should_enter_planner,
+        {
+            "planner": "planner",
+            "case_analysis_agent": "case_analysis_agent",
+            "statute_retrieval_agent": "statute_retrieval_agent",
+            "legal_consult_agent": "legal_consult_agent",
+            "end": END,
+        },
+    )
+    graph.add_conditional_edges(
+        "planner",
+        should_after_planner,
         {
             "case_analysis_agent": "case_analysis_agent",
             "statute_retrieval_agent": "statute_retrieval_agent",

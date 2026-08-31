@@ -2,17 +2,27 @@
 from __future__ import annotations
 
 import json
+from enum import Enum
 from typing import Annotated, Any, Literal, Optional, TypedDict
 
 from langchain_core.messages import BaseMessage
 from langgraph.graph.message import add_messages
 
 
+class TaskType(str, Enum):
+    """Planner 可分派的任务类型。"""
+
+    CASE_ANALYSIS = "case_analysis"
+    STATUTE_RETRIEVAL = "statute_retrieval"
+    CASE_RETRIEVAL = "case_retrieval"
+    LEGAL_CONSULTATION = "legal_consultation"
+
+
 class PlanStep(TypedDict, total=False):
     """Plan-and-Execute 中可独立调度、追踪和回写结果的计划步骤。"""
 
     step_id: str
-    task_type: str
+    task_type: TaskType
     description: str
     status: Literal["pending", "running", "completed", "failed", "skipped"]
     assigned_agent: str
@@ -170,6 +180,7 @@ class AgentState(TypedDict, total=False):
     # 意图识别
     intent: str  # 识别出的业务意图
     intent_confidence: float  # 意图置信度，建议范围为 0 到 1
+    task_complexity: Literal["low", "medium", "high"]  # Supervisor 判断的任务复杂度
 
     # Supervisor 的路由决策
     supervisor_route: str  # 下一节点或 Agent 名称

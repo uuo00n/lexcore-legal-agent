@@ -17,7 +17,7 @@ from agent.prompts import SUPERVISOR_DIRECT_PROMPT, SUPERVISOR_FINAL_PROMPT
 from agent.reports import report_agent_name
 from agent.state import AgentState
 from services.answer_format import strip_answer_markdown
-from services.legal_analysis import score_legal_answer
+from services.legal_analysis import classify_legal_intent, score_legal_answer
 from services.llm import get_llm
 from services.supervisor import route_user_request_with_llm
 
@@ -223,12 +223,19 @@ async def supervisor_agent_node(state: AgentState) -> dict[str, Any]:
             },
         )
         return {
+            "intent": "non_legal",
+            "intent_confidence": 0.0,
+            "task_complexity": decision.complexity,
             "supervisor_route": "end",
             "supervisor_reason": decision.reason,
             "supervisor_finalized": True,
             "messages": [AIMessage(content=final_content)],
         }
+    detected_intent = classify_legal_intent(latest_query)
     return {
+        "intent": str(detected_intent["category"]),
+        "intent_confidence": float(detected_intent["confidence"]),
+        "task_complexity": decision.complexity,
         "supervisor_route": decision.route,
         "supervisor_reason": decision.reason,
         "supervisor_finalized": False,

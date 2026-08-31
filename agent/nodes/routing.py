@@ -24,6 +24,31 @@ def should_after_supervisor(state: AgentState) -> str:
     return "legal_consult_agent"
 
 
+def should_enter_planner(state: AgentState) -> str:
+    """首轮法律任务进入 Planner；已有报告时继续现有执行链，避免重复规划。"""
+    route = should_after_supervisor(state)
+    if route == "end":
+        return "end"
+    if state.get("agent_reports"):
+        return route
+    return "planner"
+
+
+def should_after_planner(state: AgentState) -> str:
+    """按计划首步选择 Specialist Agent；非法分派直接结束。"""
+    steps = state.get("remaining_steps") or state.get("plan") or []
+    if not steps:
+        return "end"
+    assigned_agent = steps[0].get("assigned_agent")
+    if assigned_agent in {
+        "case_analysis_agent",
+        "statute_retrieval_agent",
+        "legal_consult_agent",
+    }:
+        return assigned_agent
+    return "end"
+
+
 def should_after_fact_check(state: AgentState) -> str:
     """Compatibility conditional edge for the former graph topology."""
     return "end" if state.get("needs_follow_up") else "agent"
