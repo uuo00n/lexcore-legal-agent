@@ -8,7 +8,7 @@ from services.supervisor import route_user_request, route_user_request_with_llm
 
 class _MisroutingLLM:
     async def ainvoke(self, messages):
-        return AIMessage(content='{"route":"fact_agent","reason":"需要事实","complexity":"low","need_tools":false}')
+        return AIMessage(content='{"route":"case_analysis_agent","reason":"需要案件分析","complexity":"low","need_tools":false}')
 
 
 class _ConsultLLM:
@@ -21,21 +21,21 @@ class _FailingLLM:
         raise RuntimeError("llm unavailable")
 
 
-def test_supervisor_routes_sparse_legal_question_to_fact_agent():
+def test_supervisor_routes_sparse_legal_question_to_case_analysis_agent():
     decision = route_user_request(message="房东不退押金")
 
-    assert decision.route == "fact_agent"
+    assert decision.route == "case_analysis_agent"
     assert decision.need_tools is False
 
 
-def test_supervisor_routes_uploaded_contract_to_contract_agent():
+def test_supervisor_removes_contract_agent_from_default_route():
     decision = route_user_request(
         message="帮我看看这份合同有没有坑",
         has_uploaded_doc=True,
         uploaded_doc_name="服务合同.docx",
     )
 
-    assert decision.route == "contract_agent"
+    assert decision.route == "case_analysis_agent"
     assert decision.complexity == "medium"
 
 
@@ -53,10 +53,10 @@ def test_supervisor_directly_answers_non_legal_chitchat():
     assert decision.need_tools is False
 
 
-def test_supervisor_routes_drug_plant_threshold_question_to_consult_agent():
+def test_supervisor_routes_drug_plant_threshold_question_to_statute_agent():
     decision = route_user_request(message="种植罂粟几株犯法")
 
-    assert decision.route == "legal_consult_agent"
+    assert decision.route == "statute_retrieval_agent"
     assert decision.need_tools is True
 
 
@@ -66,7 +66,7 @@ async def test_llm_supervisor_is_primary_when_available(monkeypatch):
 
     decision = await route_user_request_with_llm(message="种植罂粟几株犯法")
 
-    assert decision.route == "fact_agent"
+    assert decision.route == "case_analysis_agent"
     assert decision.need_tools is False
 
 
@@ -86,5 +86,5 @@ async def test_rules_are_only_fallback_when_llm_supervisor_fails(monkeypatch):
 
     decision = await route_user_request_with_llm(message="房东不退押金")
 
-    assert decision.route == "fact_agent"
+    assert decision.route == "case_analysis_agent"
     assert "规则兜底" in decision.reason

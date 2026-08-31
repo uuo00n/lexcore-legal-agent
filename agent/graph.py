@@ -9,18 +9,18 @@ from langgraph.prebuilt import ToolNode
 
 from agent.nodes import (
     collect_retrieved_laws,
-    contract_agent_node,
+    case_analysis_agent_node,
     context_compaction_node,
-    fact_agent_node,
     inject_doc_node,
     legal_consult_agent_node,
     memory_node,
     should_after_supervisor,
     should_continue,
     supervisor_agent_node,
+    statute_retrieval_agent_node,
 )
 from agent.state import AgentState
-from agent.tools import ALL_TOOLS
+from agent.tools import CASE_ANALYSIS_TOOLS, LEGAL_CONSULT_TOOLS, STATUTE_RETRIEVAL_TOOLS
 
 
 def build_graph(checkpointer: BaseCheckpointSaver | None = None) -> Any:
@@ -38,11 +38,15 @@ def build_graph(checkpointer: BaseCheckpointSaver | None = None) -> Any:
     graph.add_node("memory", memory_node)
     graph.add_node("inject_doc", inject_doc_node)
     graph.add_node("supervisor_agent", supervisor_agent_node)
-    graph.add_node("fact_agent", fact_agent_node)
-    graph.add_node("contract_agent", contract_agent_node)
+    graph.add_node("case_analysis_agent", case_analysis_agent_node)
+    graph.add_node("statute_retrieval_agent", statute_retrieval_agent_node)
     graph.add_node("legal_consult_agent", legal_consult_agent_node)
-    graph.add_node("tools", ToolNode(ALL_TOOLS))
-    graph.add_node("collect_laws", collect_retrieved_laws)
+    graph.add_node("case_analysis_tools", ToolNode(CASE_ANALYSIS_TOOLS))
+    graph.add_node("statute_retrieval_tools", ToolNode(STATUTE_RETRIEVAL_TOOLS))
+    graph.add_node("legal_consult_tools", ToolNode(LEGAL_CONSULT_TOOLS))
+    graph.add_node("collect_case_evidence", collect_retrieved_laws)
+    graph.add_node("collect_statute_evidence", collect_retrieved_laws)
+    graph.add_node("collect_consult_evidence", collect_retrieved_laws)
 
     graph.set_entry_point("context_compaction")
     graph.add_edge("context_compaction", "memory")
@@ -52,20 +56,32 @@ def build_graph(checkpointer: BaseCheckpointSaver | None = None) -> Any:
         "supervisor_agent",
         should_after_supervisor,
         {
-            "fact_agent": "fact_agent",
-            "contract_agent": "contract_agent",
+            "case_analysis_agent": "case_analysis_agent",
+            "statute_retrieval_agent": "statute_retrieval_agent",
             "legal_consult_agent": "legal_consult_agent",
             "end": END,
         },
     )
-    graph.add_edge("fact_agent", "supervisor_agent")
-    graph.add_edge("contract_agent", "supervisor_agent")
+    graph.add_conditional_edges(
+        "case_analysis_agent",
+        should_continue,
+        {"tools": "case_analysis_tools", "end": "supervisor_agent"},
+    )
+    graph.add_edge("case_analysis_tools", "collect_case_evidence")
+    graph.add_edge("collect_case_evidence", "case_analysis_agent")
+    graph.add_conditional_edges(
+        "statute_retrieval_agent",
+        should_continue,
+        {"tools": "statute_retrieval_tools", "end": "supervisor_agent"},
+    )
+    graph.add_edge("statute_retrieval_tools", "collect_statute_evidence")
+    graph.add_edge("collect_statute_evidence", "statute_retrieval_agent")
     graph.add_conditional_edges(
         "legal_consult_agent",
         should_continue,
-        {"tools": "tools", "end": "supervisor_agent"},
+        {"tools": "legal_consult_tools", "end": "supervisor_agent"},
     )
-    graph.add_edge("tools", "collect_laws")
-    graph.add_edge("collect_laws", "legal_consult_agent")
+    graph.add_edge("legal_consult_tools", "collect_consult_evidence")
+    graph.add_edge("collect_consult_evidence", "legal_consult_agent")
 
     return graph.compile(checkpointer=checkpointer)

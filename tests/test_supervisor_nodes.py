@@ -4,7 +4,7 @@ from langchain_core.messages import AIMessage, HumanMessage
 from langgraph.checkpoint.memory import MemorySaver
 
 from agent.graph import build_graph
-from agent.nodes import contract_agent_node, fact_agent_node, should_after_supervisor, supervisor_agent_node
+from agent.nodes import case_analysis_agent_node, contract_agent_node, should_after_supervisor, supervisor_agent_node
 from api.chat import ChatRequest, _build_state_input
 from services.supervisor import SupervisorDecision
 
@@ -20,7 +20,7 @@ class FakeLLM:
 async def test_supervisor_agent_node_sets_route(monkeypatch):
     async def fake_route(**kwargs):
         return SupervisorDecision(
-            route="fact_agent",
+            route="case_analysis_agent",
             reason="测试路由",
             complexity="low",
             need_tools=False,
@@ -31,8 +31,8 @@ async def test_supervisor_agent_node_sets_route(monkeypatch):
 
     result = await supervisor_agent_node(state)
 
-    assert result["supervisor_route"] == "fact_agent"
-    assert should_after_supervisor(result) == "fact_agent"
+    assert result["supervisor_route"] == "case_analysis_agent"
+    assert should_after_supervisor(result) == "case_analysis_agent"
 
 
 async def test_supervisor_agent_node_directly_finalizes(monkeypatch):
@@ -55,14 +55,14 @@ async def test_supervisor_agent_node_directly_finalizes(monkeypatch):
     assert should_after_supervisor(result) == "end"
 
 
-async def test_fact_agent_node_returns_follow_up_message(monkeypatch):
+async def test_case_analysis_agent_node_returns_follow_up_report(monkeypatch):
     monkeypatch.setattr("agent.nodes.get_llm", lambda **kwargs: FakeLLM("请补充租赁合同、退租原因和证据情况。"))
 
-    result = await fact_agent_node({"messages": [HumanMessage(content="房东不退押金")]})
+    result = await case_analysis_agent_node({"messages": [HumanMessage(content="房东不退押金")]})
 
     assert result["needs_follow_up"] is True
     assert "messages" not in result
-    assert result["agent_reports"][0]["agent"] == "fact_agent"
+    assert result["agent_reports"][0]["agent_name"] == "case_analysis_agent"
     assert result["agent_reports"][0]["status"] == "needs_more_facts"
     assert "请补充" in result["agent_reports"][0]["draft_response"]
 
@@ -123,13 +123,13 @@ async def test_supervisor_agent_node_finalizes_from_fact_report(monkeypatch):
     assert result["messages"][0].content == "主控整理后的追问。"
 
 
-async def test_graph_continues_to_legal_consult_when_fact_agent_does_not_ask(monkeypatch):
+async def test_graph_continues_through_specialists_when_case_facts_are_sufficient(monkeypatch):
     supervisor_calls = []
 
     async def fake_supervisor(state):
         supervisor_calls.append(state.get("agent_reports", []))
         if len(supervisor_calls) == 1:
-            return {"supervisor_route": "fact_agent", "supervisor_reason": "测试路由"}
+            return {"supervisor_route": "case_analysis_agent", "supervisor_reason": "测试路由"}
         if len(supervisor_calls) == 2:
             return {"supervisor_route": "legal_consult_agent", "supervisor_reason": "事实已补足"}
         return {
@@ -137,12 +137,13 @@ async def test_graph_continues_to_legal_consult_when_fact_agent_does_not_ask(mon
             "messages": [AIMessage(content="我会继续给出可执行建议。")],
         }
 
-    async def fake_fact_agent(state):
+    async def fake_case_analysis(state):
         return {
             "needs_follow_up": False,
             "agent_reports": [
                 {
-                    "agent": "fact_agent",
+                    "agent_name": "case_analysis_agent",
+                    "agent": "case_analysis_agent",
                     "status": "facts_sufficient",
                     "summary": "事实足够进入法律分析",
                 }
@@ -161,7 +162,7 @@ async def test_graph_continues_to_legal_consult_when_fact_agent_does_not_ask(mon
         }
 
     monkeypatch.setattr("agent.graph.supervisor_agent_node", fake_supervisor)
-    monkeypatch.setattr("agent.graph.fact_agent_node", fake_fact_agent)
+    monkeypatch.setattr("agent.graph.case_analysis_agent_node", fake_case_analysis)
     monkeypatch.setattr("agent.graph.legal_consult_agent_node", fake_legal_consult)
 
     graph = build_graph(checkpointer=None)
@@ -172,24 +173,25 @@ async def test_graph_continues_to_legal_consult_when_fact_agent_does_not_ask(mon
     assert result["messages"][-1].content == "我会继续给出可执行建议。"
 
 
-async def test_graph_returns_to_supervisor_after_fact_agent_report(monkeypatch):
+async def test_graph_returns_to_supervisor_after_case_analysis_report(monkeypatch):
     supervisor_calls = []
 
     async def fake_supervisor(state):
         supervisor_calls.append(state.get("agent_reports", []))
         if len(supervisor_calls) == 1:
-            return {"supervisor_route": "fact_agent", "supervisor_reason": "测试路由"}
+            return {"supervisor_route": "case_analysis_agent", "supervisor_reason": "测试路由"}
         return {
             "supervisor_route": "end",
             "messages": [AIMessage(content="主控整理后的追问。")],
         }
 
-    async def fake_fact_agent(state):
+    async def fake_case_analysis(state):
         return {
             "needs_follow_up": True,
             "agent_reports": [
                 {
-                    "agent": "fact_agent",
+                    "agent_name": "case_analysis_agent",
+                    "agent": "case_analysis_agent",
                     "status": "needs_more_facts",
                     "draft_response": "请补充租赁合同、退租原因和证据情况。",
                 }
@@ -197,10 +199,10 @@ async def test_graph_returns_to_supervisor_after_fact_agent_report(monkeypatch):
         }
 
     async def fake_legal_consult(state):
-        raise AssertionError("fact_agent 之后不应直接进入 legal_consult_agent")
+        raise AssertionError("事实不足时不应进入 legal_consult_agent")
 
     monkeypatch.setattr("agent.graph.supervisor_agent_node", fake_supervisor)
-    monkeypatch.setattr("agent.graph.fact_agent_node", fake_fact_agent)
+    monkeypatch.setattr("agent.graph.case_analysis_agent_node", fake_case_analysis)
     monkeypatch.setattr("agent.graph.legal_consult_agent_node", fake_legal_consult)
 
     graph = build_graph(checkpointer=None)
@@ -208,7 +210,7 @@ async def test_graph_returns_to_supervisor_after_fact_agent_report(monkeypatch):
     result = await graph.ainvoke({"messages": [HumanMessage(content="房东不退押金")]})
 
     assert len(supervisor_calls) == 2
-    assert supervisor_calls[1][0]["agent"] == "fact_agent"
+    assert supervisor_calls[1][0]["agent_name"] == "case_analysis_agent"
     assert isinstance(result["messages"][-1], AIMessage)
     assert result["messages"][-1].content == "主控整理后的追问。"
 

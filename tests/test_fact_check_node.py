@@ -17,7 +17,9 @@ async def test_fact_check_node_returns_follow_up_for_sparse_legal_question(monke
 
     assert result["needs_follow_up"] is True
     assert "messages" not in result
-    assert result["agent_reports"][0]["agent"] == "fact_agent"
+    report = result["agent_reports"][0]
+    assert report["agent_name"] == "case_analysis_agent"
+    assert {"agent_name", "task_id", "summary", "findings", "sources", "confidence"} <= report.keys()
     assert "请补充" in result["agent_reports"][0]["draft_response"]
 
 

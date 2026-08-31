@@ -36,9 +36,15 @@ LEGAL_CONSULT_TOOLS = [
     jurisdiction_tool,
 ]
 
+STATUTE_RETRIEVAL_TOOLS = [retrieve_local_law_tool, search_law_tool]
+
+CASE_ANALYSIS_TOOLS = [search_case_tool, search_law_tool, retrieve_local_law_tool]
+
 __all__ = [
     "ALL_TOOLS",
     "LEGAL_CONSULT_TOOLS",
+    "STATUTE_RETRIEVAL_TOOLS",
+    "CASE_ANALYSIS_TOOLS",
     "retrieve_local_law_tool",
     "search_law_tool",
     "search_case_tool",

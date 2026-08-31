@@ -11,7 +11,8 @@ from services.model_routing import select_model_route
 from services.supervisor import route_user_request_with_llm
 
 from agent.agents.contract_agent import contract_agent_node
-from agent.agents.fact_agent import fact_agent_node, fact_check_node
+from agent.agents.fact_agent import case_analysis_agent_node, fact_agent_node, fact_check_node
+from agent.agents.statute_retrieval_agent import statute_retrieval_agent_node
 from agent.agents.legal_consult_agent import (
     _build_legal_agent_report,
     _extract_json_object,
@@ -47,11 +48,13 @@ __all__ = [
     "agent_node",
     "collect_retrieved_laws",
     "contract_agent_node",
+    "case_analysis_agent_node",
     "context_compaction_node",
     "fact_agent_node",
     "fact_check_node",
     "inject_doc_node",
     "legal_consult_agent_node",
+    "statute_retrieval_agent_node",
     "memory_node",
     "should_after_fact_check",
     "should_after_supervisor",

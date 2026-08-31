@@ -16,10 +16,11 @@ from agent.prompts import (
     MEMORY_SUMMARY_TEMPLATE,
     VIKING_CONTEXT_TEMPLATE,
 )
+from agent.reports import build_agent_report, report_agent_name
 from agent.state import AgentState
 from agent.tools import LEGAL_CONSULT_TOOLS
 from services.answer_format import strip_answer_markdown
-from services.case_retrieval import format_cases_for_prompt, search_similar_cases
+from services.case_retrieval import search_similar_cases
 from services.llm import get_llm, supports_tools
 from services.memory import SLIDING_WINDOW_SIZE
 from services.model_routing import select_model_route
@@ -118,8 +119,7 @@ def _build_legal_agent_report(content: str, state: AgentState) -> dict[str, Any]
         analysis = strip_answer_markdown(content)
         if retrieved:
             analysis = strip_answer_markdown(_guard_law_citations(analysis, retrieved))
-        report: dict[str, Any] = {
-            "agent": "legal_consult_agent",
+        detail: dict[str, Any] = {
             "status": "analysis_ready",
             "legal_issues": [],
             "law_basis": _law_basis_from_retrieval(retrieved),
@@ -130,24 +130,40 @@ def _build_legal_agent_report(content: str, state: AgentState) -> dict[str, Any]
             "confidence": "medium",
         }
     else:
-        report = dict(parsed)
-        report["agent"] = "legal_consult_agent"
-        report.setdefault("status", "analysis_ready")
-        report.setdefault("legal_issues", [])
-        report.setdefault("law_basis", _law_basis_from_retrieval(retrieved))
-        report.setdefault("risks", [])
-        report.setdefault("next_steps", [])
-        report.setdefault("confidence", "medium")
-        if isinstance(report.get("analysis"), str):
-            analysis = strip_answer_markdown(report["analysis"])
+        detail = dict(parsed.get("findings") or parsed)
+        detail.setdefault("status", parsed.get("status", "analysis_ready"))
+        detail.setdefault("legal_issues", [])
+        detail.setdefault("law_basis", _law_basis_from_retrieval(retrieved))
+        detail.setdefault("risks", [])
+        detail.setdefault("next_steps", [])
+        detail.setdefault("confidence", parsed.get("confidence", "medium"))
+        if isinstance(detail.get("analysis"), str):
+            analysis = strip_answer_markdown(detail["analysis"])
             if retrieved:
                 analysis = strip_answer_markdown(_guard_law_citations(analysis, retrieved))
-            report["analysis"] = analysis
-        report["raw_response"] = content
-    report["retrieved_law_count"] = len(retrieved)
-    report.setdefault(
+            detail["analysis"] = analysis
+        detail["raw_response"] = content
+    detail["retrieved_law_count"] = len(retrieved)
+    detail.setdefault(
         "evidence_insufficient",
         bool(state.get("evidence_insufficient", False)),
+    )
+    summary = str((parsed or {}).get("summary") or detail.get("analysis") or "法律解释与行动建议已整理")
+    report_sources = [*retrieved, *list(state.get("retrieved_cases", []) or [])]
+    for specialist_report in state.get("agent_reports", []) or []:
+        report_sources.extend(specialist_report.get("sources", []) or [])
+    extra = {
+        key: value for key, value in detail.items()
+        if key not in {"agent", "agent_name", "task_id", "report_id", "confidence", "summary", "sources", "findings"}
+    }
+    report = build_agent_report(
+        state,
+        "legal_consult_agent",
+        summary=summary[:500],
+        findings=detail,
+        sources=report_sources,
+        confidence=str((parsed or {}).get("confidence") or detail.get("confidence") or "medium"),
+        **extra,
     )
     return report
 
@@ -194,13 +210,27 @@ def _has_used_local_law_tool(state: AgentState) -> bool:
 
 
 def _legal_consult_tools_for_state(state: AgentState) -> list[Any]:
-    if _has_used_local_law_tool(state):
-        return [
+    tools = list(LEGAL_CONSULT_TOOLS)
+    has_statute_report = any(
+        report_agent_name(report) == "statute_retrieval_agent"
+        and not report.get("evidence_insufficient", False)
+        for report in state.get("agent_reports", []) or []
+    )
+    has_case_report = any(
+        report_agent_name(report) == "case_analysis_agent"
+        for report in state.get("agent_reports", []) or []
+    )
+    if has_statute_report:
+        tools = [tool for tool in tools if tool.name not in {"retrieve_local_law_tool", "search_law_tool"}]
+    elif _has_used_local_law_tool(state):
+        tools = [
             tool
-            for tool in LEGAL_CONSULT_TOOLS
+            for tool in tools
             if tool.name != "retrieve_local_law_tool"
         ]
-    return list(LEGAL_CONSULT_TOOLS)
+    if has_case_report:
+        tools = [tool for tool in tools if tool.name != "search_case_tool"]
+    return tools
 
 
 async def legal_consult_agent_node(state: AgentState) -> dict[str, Any]:
@@ -239,16 +269,9 @@ async def legal_consult_agent_node(state: AgentState) -> dict[str, Any]:
         doc_text=state.get("uploaded_doc_text"),
         tool_call_count=state.get("tool_call_count", 0),
     )
-    case_search = compatibility_dependency("search_similar_cases", search_similar_cases)
-    similar_cases = case_search(latest_user)
-    if similar_cases:
-        full_prompt += format_cases_for_prompt(similar_cases)
-        record_trace_event(
-            state.get("trace_id"),
-            "case_retrieval",
-            name="similar_scenarios",
-            payload={"cases": similar_cases},
-        )
+    specialist_reports = state.get("agent_reports", []) or []
+    if specialist_reports:
+        full_prompt += "\n\n# Specialist Reports\n" + json.dumps(specialist_reports, ensure_ascii=False)
     record_trace_event(
         state.get("trace_id"),
         "model_route",

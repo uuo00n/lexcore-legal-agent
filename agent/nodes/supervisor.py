@@ -14,6 +14,7 @@ from agent.node_utils import (
     record_trace_event,
 )
 from agent.prompts import SUPERVISOR_DIRECT_PROMPT, SUPERVISOR_FINAL_PROMPT
+from agent.reports import report_agent_name
 from agent.state import AgentState
 from services.answer_format import strip_answer_markdown
 from services.legal_analysis import score_legal_answer
@@ -23,7 +24,7 @@ from services.supervisor import route_user_request_with_llm
 
 def _last_report_from(state: AgentState, agent_name: str) -> dict[str, Any] | None:
     for report in reversed(state.get("agent_reports", []) or []):
-        if report.get("agent") == agent_name:
+        if report_agent_name(report) == agent_name:
             return report
     return None
 
@@ -31,11 +32,18 @@ def _last_report_from(state: AgentState, agent_name: str) -> dict[str, Any] | No
 def _fallback_supervisor_final_response(state: AgentState) -> str:
     reports = state.get("agent_reports", []) or []
     latest = reports[-1] if reports else {}
+    findings = latest.get("findings") if isinstance(latest.get("findings"), dict) else {}
+    questions = latest.get("suggested_questions") or latest.get("questions") or findings.get("suggested_questions") or []
+    if latest.get("status") == "needs_more_facts" and questions:
+        lines = "\n".join(
+            f"{index}. {question}"
+            for index, question in enumerate(questions[:3], start=1)
+        )
+        return f"我还需要先确认几个关键信息：\n{lines}"
     for key in ("draft_response", "final_response", "analysis", "summary"):
         value = latest.get(key)
         if isinstance(value, str) and value.strip():
             return strip_answer_markdown(value)
-    questions = latest.get("suggested_questions") or latest.get("questions") or []
     if questions:
         lines = "\n".join(
             f"{index}. {question}"
@@ -45,16 +53,24 @@ def _fallback_supervisor_final_response(state: AgentState) -> str:
     return "我已经完成初步分析，但还需要你补充更多关键信息后，才能给出更稳妥的判断。"
 
 
+def _trusted_laws_for_final(state: AgentState) -> list[dict[str, Any]]:
+    statute_report = _last_report_from(state, "statute_retrieval_agent")
+    if statute_report is not None:
+        sources = statute_report.get("sources") or []
+        return [item for item in sources if isinstance(item, dict)]
+    return list(state.get("retrieved_laws", []) or [])
+
+
 def _next_route_after_agent_reports(state: AgentState) -> tuple[str, str]:
     latest = (state.get("agent_reports", []) or [])[-1]
-    agent = latest.get("agent")
+    agent = report_agent_name(latest)
     status = latest.get("status")
-    if (
-        agent == "fact_agent"
-        and status == "facts_sufficient"
-        and _last_report_from(state, "legal_consult_agent") is None
-    ):
-        return "legal_consult_agent", "事实智能体确认事实足够，继续交给法律咨询智能体分析"
+    if agent == "case_analysis_agent" and status == "needs_more_facts":
+        return "end", "案件分析智能体确认关键事实不足，由主控向用户追问"
+    if agent == "case_analysis_agent" and _last_report_from(state, "statute_retrieval_agent") is None:
+        return "statute_retrieval_agent", "案件结构已整理，分配独立法规检索任务"
+    if agent == "statute_retrieval_agent" and _last_report_from(state, "legal_consult_agent") is None:
+        return "legal_consult_agent", "法规报告已完成，交由法律咨询智能体综合解释和行动建议"
     return "end", f"{agent or '专家智能体'} 已返回报告，由主控生成最终回复"
 
 
@@ -63,7 +79,7 @@ async def _llm_supervisor_final_response(state: AgentState) -> str:
     payload = {
         "用户问题": latest_query,
         "专家报告": state.get("agent_reports", []) or [],
-        "检索法条": state.get("retrieved_laws", []) or [],
+        "检索法条": _trusted_laws_for_final(state),
         "上传文档": state.get("uploaded_doc_name") or "",
     }
     fallback = _fallback_supervisor_final_response(state)
@@ -92,7 +108,7 @@ async def _llm_supervisor_final_response(state: AgentState) -> str:
         )
         content = fallback
 
-    retrieved = state.get("retrieved_laws", []) or []
+    retrieved = _trusted_laws_for_final(state)
     if retrieved:
         content = _guard_law_citations(content, retrieved)
         content = strip_answer_markdown(content)

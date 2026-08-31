@@ -47,12 +47,29 @@ class AgentReport(TypedDict, total=False):
     """专业 Agent 提交给 Supervisor 的结构化报告。"""
 
     report_id: str
+    agent_name: str
+    task_id: str
+    findings: Any
+    sources: list[dict[str, Any]]
+    confidence: str
+
+    # 兼容旧 checkpoint 与调用方；新报告统一使用上面的字段。
     agent: str
     step_id: str
     status: str
     summary: str
     draft_response: str
     result: Any
+
+
+class StatuteReport(AgentReport, total=False):
+    """法规检索 Agent 的结构化产物。"""
+
+    query: str
+    keywords: list[str]
+    statutes: list[RetrievedLaw]
+    relevance_assessment: list[dict[str, Any]]
+    evidence_insufficient: bool
 
 
 class Citation(TypedDict, total=False):

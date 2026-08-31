@@ -19,7 +19,7 @@ def should_after_supervisor(state: AgentState) -> str:
     route = state.get("supervisor_route") or "legal_consult_agent"
     if state.get("supervisor_finalized") or route in {"end", "final"}:
         return "end"
-    if route in {"fact_agent", "contract_agent", "legal_consult_agent"}:
+    if route in {"case_analysis_agent", "statute_retrieval_agent", "legal_consult_agent"}:
         return route
     return "legal_consult_agent"
 
@@ -43,12 +43,14 @@ def should_continue(state: AgentState) -> str:
 
 
 def collect_retrieved_laws(state: AgentState) -> dict[str, Any]:
-    """Collect and deduplicate retrieved laws from tool messages."""
+    """Collect and deduplicate statute and case evidence from tool messages."""
     messages = state.get("messages", [])
     all_laws: list[dict] = []
     seen_ids: set[str] = set()
     retrieval_attempted = False
     evidence_found = False
+    all_cases: list[dict] = []
+    seen_case_ids: set[str] = set()
 
     for message in messages:
         if not isinstance(message, ToolMessage):
@@ -87,7 +89,21 @@ def collect_retrieved_laws(state: AgentState) -> dict[str, Any]:
                                     "timeliness_name": law.get("timeliness_name"),
                                     "level_name": law.get("level_name"),
                                 })
-                    elif payload.get("source_type") != "delilegal_case":
+                    elif payload.get("source_type") == "delilegal_case":
+                        for case in payload["results"]:
+                            source = case.get("source") or {}
+                            normalized = {
+                                **case,
+                                "case_id": case.get("id") or source.get("source_id") or "",
+                                "case_name": case.get("title") or source.get("title") or "",
+                                "source_type": "delilegal_case",
+                                "source_id": source.get("source_id") or case.get("id") or "",
+                            }
+                            key = normalized["case_id"] or json.dumps(normalized, ensure_ascii=False, sort_keys=True, default=str)
+                            if key not in seen_case_ids:
+                                seen_case_ids.add(key)
+                                all_cases.append(normalized)
+                    else:
                         items.extend(payload["results"])
                 if "relevant_laws" in payload:
                     items.extend(payload["relevant_laws"])
@@ -103,6 +119,7 @@ def collect_retrieved_laws(state: AgentState) -> dict[str, Any]:
         except (json.JSONDecodeError, TypeError, AttributeError):
             pass
 
+    result: dict[str, Any] = {}
     if all_laws:
         record_trace_event(
             state.get("trace_id"),
@@ -110,7 +127,12 @@ def collect_retrieved_laws(state: AgentState) -> dict[str, Any]:
             name="collect_laws",
             payload={"law_count": len(all_laws), "laws": all_laws[:10]},
         )
-        return {"retrieved_laws": all_laws, "evidence_insufficient": False}
+        result["retrieved_laws"] = all_laws
+    if all_cases:
+        result["retrieved_cases"] = all_cases
+    if all_laws or all_cases:
+        result["evidence_insufficient"] = False
+        return result
     if retrieval_attempted:
         return {"evidence_insufficient": not evidence_found}
-    return {}
+    return result

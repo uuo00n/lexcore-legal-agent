@@ -176,6 +176,7 @@ def _build_state_input(
         "thread_id": req.thread_id,
         "trace_id": trace_id,
         "retrieved_laws": [],
+        "retrieved_cases": [],
         "needs_follow_up": False,
         "supervisor_route": "",
         "supervisor_reason": "",
@@ -264,7 +265,7 @@ async def _event_stream(graph, req: ChatRequest) -> AsyncIterator[dict]:
                         node_output["context_status"],
                         ensure_ascii=False,
                     ))
-                if node_name == "tools":
+                if node_name in {"case_analysis_tools", "statute_retrieval_tools", "legal_consult_tools"}:
                     msgs = node_output.get("messages", [])
                     for m in msgs:
                         if hasattr(m, "name"):
@@ -291,9 +292,9 @@ async def _event_stream(graph, req: ChatRequest) -> AsyncIterator[dict]:
                             {"content": "已压缩较早对话并更新实体记忆，保留最近上下文继续处理。"},
                             ensure_ascii=False,
                         ))
-                elif node_name == "collect_laws":
+                elif node_name in {"collect_case_evidence", "collect_statute_evidence", "collect_consult_evidence"}:
                     retrieved_laws = node_output.get("retrieved_laws", []) or retrieved_laws
-                elif node_name in {"agent", "fact_check", "fact_agent", "contract_agent", "legal_consult_agent", "supervisor_agent"}:
+                elif node_name in {"agent", "fact_check", "fact_agent", "case_analysis_agent", "statute_retrieval_agent", "contract_agent", "legal_consult_agent", "supervisor_agent"}:
                     msgs = node_output.get("messages", [])
                     for m in msgs:
                         if isinstance(m, AIMessage):
