@@ -313,8 +313,3 @@ async def legal_consult_agent_node(state: AgentState) -> dict[str, Any]:
         },
     )
     return {"agent_reports": [report], "context_build_status": built.status}
-
-
-async def agent_node(state: AgentState) -> dict[str, Any]:
-    """Compatibility alias for the former generic agent node name."""
-    return await legal_consult_agent_node(state)

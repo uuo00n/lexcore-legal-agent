@@ -79,19 +79,18 @@ class _GraphWithSupervisorFinal:
             }
         }
         yield {
-            "supervisor_agent": {
+            "supervisor": {
                 "messages": [AIMessage(content="这是主控整理后的最终回答。")]
             }
         }
 
 
-class _GraphWithVerifierFinal:
-    """Plan Executor 链路由 Verifier 输出最终答案。"""
+class _GraphWithAnswerGeneratorFinal:
+    """Plan Executor 链路由 Answer Generator 输出最终答案。"""
 
     async def astream(self, state_input, config, stream_mode):
         yield {
-            "verifier": {
-                "verification_result": {"passed": True, "score": 1.0},
+            "answer_generator": {
                 "messages": [AIMessage(content="这是核验后的最终回答。")],
             }
         }
@@ -107,7 +106,7 @@ class _GraphWithLegalConsultTextOnly:
             }
         }
         yield {
-            "supervisor_agent": {
+            "supervisor": {
                 "supervisor_route": "legal_consult_agent",
                 "supervisor_reason": "继续咨询",
             }
@@ -128,7 +127,7 @@ class _GraphWithContextStatus:
             }
         }
         yield {
-            "supervisor_agent": {
+            "supervisor": {
                 "messages": [AIMessage(content="上下文状态已更新。")]
             }
         }
@@ -275,7 +274,7 @@ async def test_event_stream_uses_supervisor_final_answer(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_event_stream_uses_verifier_final_answer(monkeypatch):
+async def test_event_stream_uses_answer_generator_final_answer(monkeypatch):
     monkeypatch.setattr("api.chat.create_trace", lambda *args, **kwargs: None)
     monkeypatch.setattr("api.chat.record_event", lambda *args, **kwargs: None)
     monkeypatch.setattr("api.chat.complete_trace", lambda *args, **kwargs: None)
@@ -287,7 +286,7 @@ async def test_event_stream_uses_verifier_final_answer(monkeypatch):
     events = [
         event
         async for event in _event_stream(
-            _GraphWithVerifierFinal(),
+            _GraphWithAnswerGeneratorFinal(),
             ChatRequest(thread_id="test-verifier-final-thread", message="如何维权？"),
         )
     ]

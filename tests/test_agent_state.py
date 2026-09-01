@@ -36,14 +36,14 @@ def test_merge_plan_steps_updates_by_step_id_without_losing_other_steps() -> Non
     assert merged[1] == original[1]
 
 
-def test_agent_report_reducer_keeps_compatibility_with_explicit_clear() -> None:
+def test_agent_report_reducer_merges_current_and_legacy_reports_with_explicit_clear() -> None:
     reports = merge_agent_reports(
-        [{"agent": "fact_agent", "status": "completed"}],
+        [{"agent_name": "case_analysis_agent", "status": "completed"}],
         [{"agent": "legal_consult_agent", "status": "completed"}],
     )
 
-    assert [report["agent"] for report in reports] == [
-        "fact_agent",
+    assert [report.get("agent_name") or report.get("agent") for report in reports] == [
+        "case_analysis_agent",
         "legal_consult_agent",
     ]
     assert merge_agent_reports(reports, []) == []

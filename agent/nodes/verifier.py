@@ -508,7 +508,3 @@ async def result_verifier_node(state: AgentState) -> dict[str, Any]:
         # 仅用于读取旧 checkpoint/旧监控字段，新逻辑不得用它控制传输重试。
         result["verifier_retry_count"] = retry_count + 1
     return result
-
-
-# Backward-compatible node name; the graph uses the explicit result name.
-verifier_node = result_verifier_node

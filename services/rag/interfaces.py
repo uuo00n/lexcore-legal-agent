@@ -139,7 +139,3 @@ class LawRetriever(Protocol):
     def retrieve(self, query: str, top_k: int = 5) -> list[LawChunk]:
         """根据自然语言查询返回相关法律文档。"""
         ...
-
-
-# 兼容旧命名，供渐进迁移期间的既有调用使用。
-LawVectorStore = VectorStore

@@ -11,7 +11,7 @@ from services.model_routing import select_model_route
 from services.supervisor import route_user_request_with_llm
 
 from agent.agents.contract_agent import contract_agent_node
-from agent.agents.fact_agent import case_analysis_agent_node, fact_agent_node, fact_check_node
+from agent.agents.case_analysis_agent import case_analysis_agent_node
 from agent.agents.statute_retrieval_agent import statute_retrieval_agent_node
 from agent.agents.legal_consult_agent import (
     _build_legal_agent_report,
@@ -24,7 +24,6 @@ from agent.agents.legal_consult_agent import (
     _legal_consult_tools_for_state,
     _limit_tool_calls,
     _normalize_law_name,
-    agent_node,
     legal_consult_agent_node,
 )
 from agent.nodes.context import (
@@ -39,10 +38,6 @@ from agent.nodes.planner import planner_node
 from agent.nodes.routing import (
     MAX_TOOL_CALLS,
     collect_retrieved_laws,
-    should_after_fact_check,
-    should_after_planner,
-    should_after_supervisor,
-    should_enter_planner,
     should_after_verifier,
     should_continue,
     should_execute_next,
@@ -51,21 +46,17 @@ from agent.nodes.supervisor import intent_router_node, supervisor_agent_node
 from agent.nodes.answer import answer_generator_node
 from agent.nodes.verifier import (
     result_verifier_node,
-    verifier_node,
     verify_plan_results,
 )
 from agent.tool_loop import tool_limit_observation_node
 
 __all__ = [
     "MAX_TOOL_CALLS",
-    "agent_node",
     "answer_generator_node",
     "collect_retrieved_laws",
     "contract_agent_node",
     "case_analysis_agent_node",
     "context_compaction_node",
-    "fact_agent_node",
-    "fact_check_node",
     "inject_doc_node",
     "intent_router_node",
     "legal_consult_agent_node",
@@ -73,16 +64,11 @@ __all__ = [
     "memory_node",
     "planner_node",
     "query_rewrite_node",
-    "should_after_fact_check",
-    "should_after_planner",
-    "should_after_supervisor",
     "should_after_verifier",
-    "should_enter_planner",
     "should_continue",
     "should_execute_next",
     "supervisor_agent_node",
     "tool_limit_observation_node",
     "result_verifier_node",
-    "verifier_node",
     "verify_plan_results",
 ]

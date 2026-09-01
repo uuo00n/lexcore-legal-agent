@@ -10,9 +10,13 @@ def test_websearch_implementation_files_are_removed():
 
 
 def test_agent_registries_contain_only_trusted_search_tools():
-    from agent.tools import ALL_TOOLS, LEGAL_CONSULT_TOOLS
+    from agent.tools import CASE_ANALYSIS_TOOLS, LEGAL_CONSULT_TOOLS, STATUTE_RETRIEVAL_TOOLS
 
-    all_names = {item.name for item in ALL_TOOLS}
+    all_names = {
+        item.name
+        for tools in (CASE_ANALYSIS_TOOLS, LEGAL_CONSULT_TOOLS, STATUTE_RETRIEVAL_TOOLS)
+        for item in tools
+    }
     legal_names = {item.name for item in LEGAL_CONSULT_TOOLS}
     forbidden = {"web_search", "web_search_tool", "internet_search", "online_search"}
 

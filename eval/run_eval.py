@@ -295,11 +295,11 @@ async def run_e2e_eval(dataset: list[dict]) -> dict:
     from langchain_core.messages import HumanMessage
     from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 
-    from services.mcp_client import start_mcp_client, stop_mcp_client
     from agent.graph import build_graph
+    from services.rag.startup import initialize_rag
 
-    log.info("启动 MCP Client...")
-    await start_mcp_client()
+    log.info("初始化进程内 RAG...")
+    initialize_rag()
 
     graph = build_graph(checkpointer=None)
 
@@ -342,8 +342,6 @@ async def run_e2e_eval(dataset: list[dict]) -> dict:
         ))
 
         log.info("[%d/%d] 完成 | %s", i + 1, len(dataset), question[:30])
-
-    await stop_mcp_client()
 
     log.info("使用 RAGAS 评估回答质量...")
 

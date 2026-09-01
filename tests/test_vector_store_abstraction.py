@@ -333,7 +333,6 @@ def test_factory_defaults_to_chroma_and_supports_qdrant(monkeypatch) -> None:
     chroma = object()
     qdrant = object()
     monkeypatch.delenv("VECTOR_STORE", raising=False)
-    monkeypatch.delenv("VECTORSTORE_TYPE", raising=False)
     monkeypatch.setattr(chroma_module, "ChromaVectorStore", lambda: chroma)
     rag.reset_vector_store()
     assert rag.get_vector_store() is chroma

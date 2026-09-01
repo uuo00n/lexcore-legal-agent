@@ -1,4 +1,4 @@
-"""Case Analysis Agent, evolved from the former fact sufficiency agent."""
+"""Case Analysis Agent implementation."""
 from __future__ import annotations
 
 import json
@@ -192,13 +192,3 @@ async def case_analysis_agent_node(state: AgentState) -> dict[str, Any]:
         "agent_reports": [report],
         "context_build_status": built.status,
     }
-
-
-async def fact_agent_node(state: AgentState) -> dict[str, Any]:
-    """Compatibility alias for callers using the former node name."""
-    return await case_analysis_agent_node(state)
-
-
-async def fact_check_node(state: AgentState) -> dict[str, Any]:
-    """Compatibility alias for the former fact-check node name."""
-    return await case_analysis_agent_node(state)

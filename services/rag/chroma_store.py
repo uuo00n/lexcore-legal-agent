@@ -167,17 +167,3 @@ class ChromaVectorStore:
 
     def count(self) -> int:
         return int(self._collection.count())
-
-    # 迁移期兼容旧接口。
-    def add_chunks(
-        self,
-        chunks: list[LawChunk],
-        embeddings: list[list[float]],
-    ) -> None:
-        self.add_documents(chunks, embeddings)
-
-    def clear(self) -> None:
-        self.delete()
-
-
-ChromaLawStore = ChromaVectorStore

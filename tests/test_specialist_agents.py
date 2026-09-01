@@ -6,7 +6,7 @@ import json
 from langchain_core.messages import AIMessage, HumanMessage
 
 from agent.agents.statute_retrieval_agent import statute_retrieval_agent_node
-from agent.agents.fact_agent import case_analysis_agent_node
+from agent.agents.case_analysis_agent import case_analysis_agent_node
 from agent.agents.legal_consult_agent import _legal_consult_tools_for_state
 from agent.graph import build_graph
 from agent.nodes.supervisor import _next_route_after_agent_reports
@@ -97,7 +97,7 @@ async def test_statute_agent_emits_grounded_structured_report(monkeypatch):
 
 
 async def test_case_analysis_agent_emits_common_report_envelope(monkeypatch):
-    monkeypatch.setattr("agent.agents.fact_agent.should_ask_follow_up", lambda *args, **kwargs: {"should_ask": False})
+    monkeypatch.setattr("agent.agents.case_analysis_agent.should_ask_follow_up", lambda *args, **kwargs: {"should_ask": False})
     monkeypatch.setattr("agent.nodes.get_llm", lambda **kwargs: _CaseLLM())
     monkeypatch.setattr("agent.nodes.supports_tools", lambda provider=None: False)
 

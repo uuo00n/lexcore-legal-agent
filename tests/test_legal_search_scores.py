@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 
-from services.vectorstore.base import LawChunk
+from services.rag.interfaces import LawChunk
 
 
 class _FakeRetriever:

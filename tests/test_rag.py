@@ -67,10 +67,10 @@ def semantic_retriever():
     输出参数：
         - 未标注
     """
-    from services.retriever.semantic import SemanticRetriever
-    from services.vectorstore import get_vectorstore
+    from services.rag import get_vector_store
+    from services.rag.retriever import SemanticRetriever
     try:
-        store = get_vectorstore()
+        store = get_vector_store()
         store.search([0.0] * 384, top_k=1)
     except Exception:
         pytest.skip("向量存储未初始化或无索引数据")
@@ -92,7 +92,7 @@ class TestChunker:
             - 未标注
         """
         from services.indexer.chunker import chunk_law_file
-        from services.vectorstore.base import LawChunk
+        from services.rag.interfaces import LawChunk
 
         result = chunk_law_file(labor_law_path)
 
@@ -262,7 +262,7 @@ class TestTokenization:
         输出参数：
             - 未标注
         """
-        from services.retriever.keyword import _tokenize
+        from services.rag.bm25 import _tokenize
 
         tokens = _tokenize("劳动合同")
 
@@ -280,7 +280,7 @@ class TestTokenization:
         输出参数：
             - 未标注
         """
-        from services.retriever.keyword import _tokenize
+        from services.rag.bm25 import _tokenize
 
         tokens = _tokenize("BM25算法测试")
 
@@ -297,7 +297,7 @@ class TestTokenization:
         输出参数：
             - 未标注
         """
-        from services.retriever.keyword import _tokenize
+        from services.rag.bm25 import _tokenize
 
         tokens = _tokenize("")
         assert tokens == []
@@ -317,9 +317,9 @@ class TestKeywordRetriever:
         输出参数：
             - 未标注
         """
-        from services.retriever.keyword import KeywordRetriever
+        from services.rag.bm25 import BM25Retriever
 
-        retriever = KeywordRetriever(chunks)
+        retriever = BM25Retriever(chunks)
         results = retriever.retrieve("加班费怎么算", top_k=5)
 
         assert len(results) > 0, "检索 '加班费怎么算' 应返回至少一条结果"
@@ -334,9 +334,9 @@ class TestKeywordRetriever:
         输出参数：
             - 未标注
         """
-        from services.retriever.keyword import KeywordRetriever
+        from services.rag.bm25 import BM25Retriever
 
-        retriever = KeywordRetriever(chunks)
+        retriever = BM25Retriever(chunks)
         results = retriever.retrieve("试用期最长多久", top_k=10)
 
         # 至少有一条结果在内容或条款号中提到试用期
@@ -355,9 +355,9 @@ class TestKeywordRetriever:
         输出参数：
             - 未标注
         """
-        from services.retriever.keyword import KeywordRetriever
+        from services.rag.bm25 import BM25Retriever
 
-        retriever = KeywordRetriever(chunks)
+        retriever = BM25Retriever(chunks)
         try:
             results = retriever.retrieve("", top_k=5)
             # 如果没有抛出异常，结果应为空
@@ -382,7 +382,7 @@ class TestHybridRetriever:
         输出参数：
             - 未标注
         """
-        from services.retriever import get_retriever
+        from services.rag.retriever import get_retriever
 
         try:
             retriever = get_retriever()
@@ -403,7 +403,7 @@ class TestHybridRetriever:
         输出参数：
             - 未标注
         """
-        from services.retriever import get_retriever
+        from services.rag.retriever import get_retriever
 
         try:
             retriever = get_retriever()
@@ -426,7 +426,7 @@ class TestHybridRetriever:
         输出参数：
             - 未标注
         """
-        from services.retriever import get_retriever
+        from services.rag.retriever import get_retriever
 
         try:
             retriever = get_retriever()
@@ -458,7 +458,7 @@ class TestLegalSearchTool:
         输出参数：
             - 未标注
         """
-        from agent.tools.search import retrieve_local_law_tool
+        from agent.tools.rag_search import retrieve_local_law_tool
         try:
             result = retrieve_local_law_tool.invoke({"query": "试用期"})
         except RuntimeError:
@@ -480,7 +480,7 @@ class TestLegalSearchTool:
         输出参数：
             - 未标注
         """
-        from agent.tools.search import retrieve_local_law_tool
+        from agent.tools.rag_search import retrieve_local_law_tool
         try:
             result = retrieve_local_law_tool.invoke({"query": "试用期最长多久"})
         except RuntimeError:
@@ -503,7 +503,7 @@ class TestLegalSearchTool:
         输出参数：
             - 未标注
         """
-        from agent.tools.search import retrieve_local_law_tool
+        from agent.tools.rag_search import retrieve_local_law_tool
         try:
             result = retrieve_local_law_tool.invoke({"query": ""})
             assert isinstance(result, str)
@@ -525,8 +525,8 @@ class TestRRFFusion:
         输出参数：
             - 未标注
         """
-        from services.retriever.hybrid import HybridRetriever
-        from services.vectorstore.base import LawChunk
+        from services.rag.interfaces import LawChunk
+        from services.rag.retriever import HybridRetriever
 
         # 构造测试数据
         chunk_a = LawChunk(
@@ -557,8 +557,8 @@ class TestRRFFusion:
         输出参数：
             - 未标注
         """
-        from services.retriever.hybrid import HybridRetriever
-        from services.vectorstore.base import LawChunk
+        from services.rag.interfaces import LawChunk
+        from services.rag.retriever import HybridRetriever
 
         chunk = LawChunk(
             law_name="劳动法", hierarchy="", article_no="第一条",
@@ -592,7 +592,7 @@ class TestEndToEndRAG:
             - 未标注
         """
         from services.indexer.chunker import chunk_all_laws
-        from services.retriever.keyword import KeywordRetriever
+        from services.rag.bm25 import BM25Retriever
 
         if not LAWS_DIR.exists():
             pytest.skip(f"法律目录 {LAWS_DIR} 不存在")
@@ -602,7 +602,7 @@ class TestEndToEndRAG:
         assert len(chunks) > 0, "分块不应为空"
 
         # 2. 构建 BM25 索引
-        kw_retriever = KeywordRetriever(chunks)
+        kw_retriever = BM25Retriever(chunks)
 
         # 3. 检索
         results = kw_retriever.retrieve("试用期最长多久", top_k=5)

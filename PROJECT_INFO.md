@@ -1,17 +1,17 @@
 # 法智项目完整信息档案
 
-> 最后更新：2026-06-17
+> 最后更新：2026-09-02
 > 用途：供 AI 助手快速了解项目全貌，避免每次重新读取全部代码
 > 说明：本文是当前代码地图，不替代源码。若本文与源码冲突，以源码和测试为准。
 
 ## 项目概述
 
-法智是一个面向中国法律咨询场景的 AI Agent 应用。当前项目已经从早期的“RAG + ReAct demo”升级为更接近企业级 harness 的系统：FastAPI 提供 SSE 对话与后台 API，LangGraph 负责多智能体路由，MCP Server 承载法律工具，Hybrid RAG 负责法条检索，OpenViking Context Layer 负责上下文组织与路由辅助，可观测、配额、缓存、评测和报告链路已经接入。
+法智是一个面向中国法律咨询场景的 AI Agent 应用。当前项目已经从早期的“RAG + ReAct demo”升级为更接近企业级 harness 的系统：FastAPI 提供 SSE 对话与后台 API，LangGraph 负责计划驱动的多智能体执行，进程内 Service Layer 承载主链工具，FastMCP 作为独立扩展暴露层，Hybrid RAG 负责法条检索，OpenViking Context Layer 负责上下文组织与路由辅助，可观测、配额、缓存、评测和报告链路已经接入。
 
 核心能力：
 
 - 法律咨询：基于本地法律法规 RAG 检索回答，并对明确法条引用做检索结果校验。
-- 事实追问：事实明显不足时，先由 fact agent 追问关键事实。
+- 案件分析：Case Analysis Agent 提取事实、时间线、争议焦点和证据缺口，必要时追问关键事实。
 - 合同审查：上传合同后生成 Markdown 审查报告，支持同步接口和异步任务。
 - 工具服务：本地 DOC 法条检索、得理法规与类案检索、法律对比、风险评估、合同审查、诉讼时效和文书起草。
 - 文档上下文：支持 PDF/DOCX/TXT 上传并注入对话。
@@ -25,14 +25,13 @@
 | --- | --- | --- |
 | Web 框架 | FastAPI | HTTP API、静态页面、SSE 流式响应 |
 | 前端 | Vanilla JS SPA | `static/index.html` 对话页，`static/admin.html` 后台看板 |
-| Agent 编排 | LangGraph StateGraph | Supervisor + fact/contract/legal_consult 多智能体路由 |
-| 工具协议 | MCP | FastMCP Server，stdio 子进程，Agent 工具通过 MCP Client 代理调用 |
+| Agent 编排 | LangGraph StateGraph | Router + Planner + Supervisor + 三类 Specialist + Verifier + Answer Generator |
+| 工具协议 | 进程内 Service Layer + MCP | 主链工具直接调用服务；FastMCP 独立暴露同一服务能力 |
 | LLM 网关 | `services.gateway.GatewayChatModel` | 记录调用、fallback、token 使用、延迟和失败 |
 | 默认主模型 | 智谱 `glm-4.7` | `LLM_PROVIDER=zhipu`，OpenAI 兼容接口 |
 | 路由模型 | fast/strong/long | `services.model_routing` 根据复杂度、文档长度、工具轮次选择路由 |
 | 查询增强 | HyDE + query rewrite | 默认可走智谱 `glm-4.6v`；也支持 HF + LoRA HyDE 后端 |
-| 向量存储 | ChromaDB | 法条索引 `law_chunks`、长期记忆 `memory` |
-| 预留向量库 | Milvus | `VECTORSTORE_TYPE=milvus` 时使用预留实现 |
+| 向量存储 | Qdrant + ChromaDB | Qdrant 为部署配置；Chroma 保留本地法条 fallback 与长期记忆 |
 | Embedding | `bge-small-zh-v1.5` | 本地 sentence-transformers，384 维 |
 | Reranker | `bge-reranker-base` | CrossEncoder 精排 |
 | 关键词检索 | BM25 | 中文 unigram + bigram 分词 |
@@ -47,13 +46,15 @@
 
 ```text
 main.lifespan
+  -> init_database()                     # PostgreSQL 核心持久化
   -> init_meta_db()
+  -> init_redis()
   -> init_observability_tables()
   -> init_quota_tables()
   -> init_cache_tables()
   -> init_memory_tables()
   -> init_memory_store()                  # ChromaDB memory collection
-  -> start_mcp_client()                   # 启动 run_mcp.py 子进程
+  -> initialize_rag()                     # 进程内加载向量库、BM25 与混合检索器
   -> checkpoint_scope()                   # PostgreSQL；开发/测试可用 MemorySaver
       -> build_graph()
 ```
@@ -72,28 +73,29 @@ run_mcp.py
 ### LangGraph 拓扑
 
 ```text
-memory
+context_compaction
+  -> memory
   -> inject_doc
-  -> supervisor_agent
-       -> fact_agent
-            -> END                 # 如果需要追问事实
-            -> legal_consult_agent # 如果事实足够
-       -> contract_agent
-            -> END
-       -> legal_consult_agent
-            -> tools
-            -> collect_laws
-            -> legal_consult_agent
-            -> END
+  -> query_rewrite
+  -> intent_router
+  -> planner
+  -> supervisor
+       -> case_analysis_agent <-> case_analysis_tools
+       -> statute_retrieval_agent <-> statute_retrieval_tools
+       -> legal_consult_agent <-> legal_consult_tools
+       -> result_verifier
+            -> planner             # 最多一次 replan
+            -> answer_generator
+                 -> END
 ```
 
 关键点：
 
-- `supervisor_agent` 只负责路由，不直接回答法律问题。
-- `fact_agent` 用确定性事实完整性判断 + LLM 追问话术，避免事实不足时硬答。
-- `contract_agent` 基于上传文档生成合同审查报告，不走普通 ReAct 工具循环。
-- `legal_consult_agent` 负责普通法律咨询、RAG 工具调用、最终回答和法条引用校验。
-- `MAX_TOOL_CALLS` 默认 6，防止 ReAct 循环失控。
+- `intent_router` 与 `planner` 负责意图识别和任务拆分，`supervisor` 只推进计划与调度 Specialist。
+- `case_analysis_agent` 负责案件结构化与事实缺口，不再保留旧 `fact_agent` 节点名。
+- `contract_agent` 暂未接入默认 Graph，但合同报告 API 和独立 workflow 仍保留。
+- `result_verifier` 只做核验，最终用户回答由 `answer_generator` 生成。
+- `MAX_TOOL_CALLS` 默认 5，防止 Specialist ReAct 循环失控。
 
 ### 聊天请求链路
 
@@ -338,17 +340,19 @@ LLM_ROUTE_LONG_MODEL=glm-4.7
 # 业务 Agent 专用模型
 SUPERVISOR_PROVIDER=zhipu
 SUPERVISOR_MODEL=GLM-4.6V
-FACT_AGENT_PROVIDER=zhipu
-FACT_AGENT_MODEL=GLM-4.6V
+CASE_ANALYSIS_AGENT_PROVIDER=zhipu
+CASE_ANALYSIS_AGENT_MODEL=GLM-4.6V
 CONTRACT_AGENT_PROVIDER=zhipu
 CONTRACT_AGENT_MODEL=glm-4.7
 ```
 
-### RAG 与 MCP
+### RAG 与向量存储
 
 ```bash
 LAWS_DIR=data/laws
-VECTORSTORE_TYPE=chroma
+VECTOR_STORE=qdrant
+QDRANT_URL=http://localhost:6333
+QDRANT_COLLECTION=legal_knowledge
 CHROMA_DB_PATH=data/chroma_db
 EMBEDDING_MODEL=models/bge-small-zh-v1.5
 RERANKER_MODEL=models/bge-reranker-base

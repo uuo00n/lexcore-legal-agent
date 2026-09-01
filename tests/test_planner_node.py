@@ -8,7 +8,7 @@ from langchain_core.messages import HumanMessage
 from pydantic import ValidationError
 
 from agent.nodes.planner import PlannerOutput, TaskType, planner_node
-from agent.nodes.routing import should_after_planner, should_enter_planner
+from agent.nodes.routing import should_execute_next
 
 
 class _FakeStructuredLLM:
@@ -75,7 +75,7 @@ async def test_planner_uses_structured_output_intent_and_writes_state(monkeypatc
     assert result["plan"] == result["remaining_steps"]
     assert len(result["plan"]) == 3
     assert result["plan"][0]["task_type"] == TaskType.CASE_ANALYSIS
-    assert should_after_planner(result) == "case_analysis_agent"
+    assert should_execute_next(result) == "case_analysis_agent"
     payload = json.loads(fake_llm.structured.messages[-1].content)
     assert payload["intent"] == "labor"
     assert payload["complexity"] == "medium"
@@ -127,10 +127,6 @@ async def test_non_legal_query_does_not_call_planner_model(monkeypatch):
     })
 
     assert result == {"plan": [], "remaining_steps": []}
-    assert should_enter_planner({
-        "supervisor_route": "end",
-        "supervisor_finalized": True,
-    }) == "end"
 
 
 def test_planner_schema_rejects_more_than_six_steps():
@@ -174,12 +170,3 @@ def test_planner_schema_rejects_invalid_enum_assignment_and_duplicate_step():
                 {"step_id": "step_2", **duplicate},
             ]
         })
-
-
-def test_completed_reports_do_not_reenter_planner():
-    state = {
-        "supervisor_route": "statute_retrieval_agent",
-        "agent_reports": [{"agent_name": "case_analysis_agent"}],
-    }
-
-    assert should_enter_planner(state) == "statute_retrieval_agent"

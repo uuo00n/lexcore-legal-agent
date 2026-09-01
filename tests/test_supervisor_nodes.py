@@ -4,7 +4,7 @@ from langchain_core.messages import AIMessage, HumanMessage
 from langgraph.checkpoint.memory import MemorySaver
 
 from agent.graph import build_graph
-from agent.nodes import case_analysis_agent_node, contract_agent_node, should_after_supervisor, supervisor_agent_node
+from agent.nodes import case_analysis_agent_node, contract_agent_node, supervisor_agent_node
 from api.chat import ChatRequest, _build_state_input
 from services.supervisor import SupervisorDecision
 
@@ -32,7 +32,6 @@ async def test_supervisor_agent_node_sets_route(monkeypatch):
     result = await supervisor_agent_node(state)
 
     assert result["supervisor_route"] == "case_analysis_agent"
-    assert should_after_supervisor(result) == "case_analysis_agent"
 
 
 async def test_supervisor_agent_node_directly_finalizes(monkeypatch):
@@ -52,7 +51,6 @@ async def test_supervisor_agent_node_directly_finalizes(monkeypatch):
     assert result["supervisor_route"] == "end"
     assert result["supervisor_finalized"] is True
     assert result["messages"][0].content == "我在，你慢慢说。"
-    assert should_after_supervisor(result) == "end"
 
 
 async def test_case_analysis_agent_node_returns_follow_up_report(monkeypatch):
@@ -103,14 +101,14 @@ async def test_contract_agent_node_returns_structured_contract_report(tmp_path, 
     assert report["report_id"].startswith("contract-")
 
 
-async def test_supervisor_agent_node_finalizes_from_fact_report(monkeypatch):
+async def test_supervisor_agent_node_finalizes_from_case_analysis_report(monkeypatch):
     monkeypatch.setattr("agent.nodes.get_llm", lambda **kwargs: FakeLLM("主控整理后的追问。"))
 
     result = await supervisor_agent_node({
         "messages": [HumanMessage(content="房东不退押金")],
         "agent_reports": [
             {
-                "agent": "fact_agent",
+                "agent_name": "case_analysis_agent",
                 "status": "needs_more_facts",
                 "draft_response": "请补充租赁合同、退租原因和证据情况。",
             }

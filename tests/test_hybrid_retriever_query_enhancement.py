@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import pytest
 
-from services.retriever.hybrid import HybridRetriever
-from services.vectorstore.base import LawChunk
+from services.rag.interfaces import LawChunk
+from services.rag.retriever import HybridRetriever
 
 
 class _FakeSemantic:

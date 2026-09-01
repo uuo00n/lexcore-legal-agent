@@ -614,6 +614,3 @@ def reset_retriever() -> None:
     """重置检索器单例。"""
     global _retriever
     _retriever = None
-
-
-KeywordRetriever = BM25Retriever

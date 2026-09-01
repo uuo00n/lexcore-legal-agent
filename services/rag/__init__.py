@@ -19,21 +19,15 @@ __all__ = [
     "MetadataFilter",
     "VectorStore",
     "get_vector_store",
-    "get_vectorstore",
     "reset_vector_store",
-    "reset_store",
 ]
 
 _store: Optional[VectorStore] = None
 
 
 def _configured_backend() -> str:
-    """读取新配置，并兼容迁移前的 VECTORSTORE_TYPE。"""
-    return (
-        os.getenv("VECTOR_STORE")
-        or os.getenv("VECTORSTORE_TYPE")
-        or "chroma"
-    ).strip().lower()
+    """读取向量存储后端配置。"""
+    return os.getenv("VECTOR_STORE", "chroma").strip().lower()
 
 
 def get_vector_store() -> VectorStore:
@@ -62,8 +56,3 @@ def reset_vector_store() -> None:
     """重置工厂单例，主要用于测试或配置热切换。"""
     global _store
     _store = None
-
-
-# 旧工厂函数兼容别名。
-get_vectorstore = get_vector_store
-reset_store = reset_vector_store

@@ -421,7 +421,7 @@ async def _run_event_stream(
                         ))
                 elif node_name in {"collect_case_evidence", "collect_statute_evidence", "collect_consult_evidence"}:
                     retrieved_laws = node_output.get("retrieved_laws", []) or retrieved_laws
-                elif node_name in {"agent", "fact_check", "fact_agent", "case_analysis_agent", "statute_retrieval_agent", "contract_agent", "legal_consult_agent", "request_router", "supervisor_agent", "verifier", "intent_router", "supervisor", "result_verifier", "answer_generator"}:
+                elif node_name in {"case_analysis_agent", "statute_retrieval_agent", "contract_agent", "legal_consult_agent", "intent_router", "supervisor", "result_verifier", "answer_generator"}:
                     msgs = node_output.get("messages", [])
                     for m in msgs:
                         if isinstance(m, AIMessage):

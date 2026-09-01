@@ -13,44 +13,6 @@ from agent.tool_loop import MAX_TOOL_CALLS
 from agent.replan import MAX_AGENT_REPLAN_RETRIES, replan_retry_count
 
 log = logging.getLogger(__name__)
-def should_after_supervisor(state: AgentState) -> str:
-    route = state.get("supervisor_route") or "legal_consult_agent"
-    if state.get("supervisor_finalized") or route in {"end", "final"}:
-        return "end"
-    if route in {"case_analysis_agent", "statute_retrieval_agent", "legal_consult_agent"}:
-        return route
-    return "legal_consult_agent"
-
-
-def should_enter_planner(state: AgentState) -> str:
-    """首轮法律任务进入 Planner；已有报告时继续现有执行链，避免重复规划。"""
-    route = should_after_supervisor(state)
-    if route == "end":
-        return "end"
-    if state.get("plan"):
-        return should_execute_next(state)
-    if state.get("agent_reports"):
-        return route
-    if not state.get("intent") and "task_complexity" not in state:
-        # Compatibility for older/custom Supervisor nodes that already return
-        # a concrete Specialist route but do not emit the Planner inputs.
-        return route
-    return "planner"
-
-
-def should_after_planner(state: AgentState) -> str:
-    """按计划首步选择 Specialist Agent；非法分派直接结束。"""
-    steps = state.get("remaining_steps") or state.get("plan") or []
-    if not steps:
-        return "end"
-    assigned_agent = steps[0].get("assigned_agent")
-    if assigned_agent in {
-        "case_analysis_agent",
-        "statute_retrieval_agent",
-        "legal_consult_agent",
-    }:
-        return assigned_agent
-    return "end"
 
 
 def should_execute_next(state: AgentState) -> str:
@@ -93,11 +55,6 @@ def should_after_verifier(state: AgentState) -> str:
     ):
         return "replan"
     return "answer_generator"
-
-
-def should_after_fact_check(state: AgentState) -> str:
-    """Compatibility conditional edge for the former graph topology."""
-    return "end" if state.get("needs_follow_up") else "agent"
 
 
 def should_continue(state: AgentState) -> str:

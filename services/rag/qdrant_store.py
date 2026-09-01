@@ -275,17 +275,3 @@ class QdrantVectorStore:
         if not self._collection_exists():
             return 0
         return int(self._client.count(self._collection_name, exact=True).count)
-
-    # 迁移期兼容旧接口。
-    def add_chunks(
-        self,
-        chunks: list[LawChunk],
-        embeddings: list[list[float]],
-    ) -> None:
-        self.add_documents(chunks, embeddings)
-
-    def clear(self) -> None:
-        self.delete()
-
-
-QdrantLawStore = QdrantVectorStore

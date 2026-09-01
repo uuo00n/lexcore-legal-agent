@@ -56,7 +56,3 @@ class BM25Retriever:
             for index, score in ranked
             if score > 0
         ]
-
-
-# 旧类名兼容别名。
-KeywordRetriever = BM25Retriever

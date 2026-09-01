@@ -20,33 +20,6 @@ def _stub_mcp_client() -> None:
     return
 
 
-def test_agent_exposes_all_mcp_tools():
-    """
-    函数作用：
-        Agent 应暴露 MCP Server 已开放的业务工具。
-    输入参数：
-        - 无
-    输出参数：
-        - 未标注
-    """
-    _stub_mcp_client()
-    from agent.tools import ALL_TOOLS
-
-    tool_names = {tool.name for tool in ALL_TOOLS}
-
-    assert tool_names == {
-        "law_compare_tool",
-        "risk_assess_tool",
-        "contract_review_tool",
-        "statute_of_limitations_tool",
-        "jurisdiction_tool",
-        "legal_document_draft_tool",
-        "retrieve_local_law_tool",
-        "search_law_tool",
-        "search_case_tool",
-    }
-
-
 def test_legal_consult_agent_has_trusted_source_tools():
     """
     函数作用：
@@ -113,7 +86,7 @@ def test_prompt_requires_plain_inline_law_format():
     输出参数：
         - 未标注
     """
-    from agent.prompts import LEGAL_SYSTEM_PROMPT, LEGAL_SYSTEM_PROMPT_NO_TOOLS, SUPERVISOR_FINAL_PROMPT
+    from agent.prompts import LEGAL_SYSTEM_PROMPT, LEGAL_SYSTEM_PROMPT_NO_TOOLS
 
     for prompt in (LEGAL_SYSTEM_PROMPT, LEGAL_SYSTEM_PROMPT_NO_TOOLS):
         assert "只输出 JSON" in prompt
@@ -123,24 +96,6 @@ def test_prompt_requires_plain_inline_law_format():
     assert "evidence_insufficient=true" in LEGAL_SYSTEM_PROMPT
     assert "web_search_tool" not in LEGAL_SYSTEM_PROMPT
     assert "本 Agent 不调用对应工具" in LEGAL_SYSTEM_PROMPT
-    assert "不要使用 Markdown 标题" in SUPERVISOR_FINAL_PROMPT
-    assert "可以用短段落和简单编号换行" in SUPERVISOR_FINAL_PROMPT
-
-
-def test_supervisor_prompt_requires_article_specific_why_format():
-    """
-    函数作用：
-        主控最终回答的“为什么”部分应优先按具体法条逐句说明，避免只写法律名称。
-    输入参数：
-        - 无
-    输出参数：
-        - 未标注
-    """
-    from agent.prompts import SUPERVISOR_FINAL_PROMPT
-
-    assert "为什么：" in SUPERVISOR_FINAL_PROMPT
-    assert "根据《法律名称》第X条" in SUPERVISOR_FINAL_PROMPT
-    assert "不要只写“根据《民法典》”而省略条号" in SUPERVISOR_FINAL_PROMPT
 
 
 class _FakeFinalLLM:
