@@ -7,6 +7,7 @@ import re
 from pathlib import Path
 from typing import Any, Optional
 
+from services.cache.retrieval import get_cached_results, set_cached_results
 from services.rag import get_vector_store
 from services.rag.bm25 import BM25Retriever
 from services.rag.fusion import (
@@ -449,13 +450,59 @@ class HybridRetriever:
             )
             return final_results, False
 
+    def _cache_params(self, final_limit: int) -> dict[str, Any]:
+        """
+        函数作用：
+            汇总影响召回结果的检索参数，作为缓存 key 的一部分。
+            任何一项变化都会得到不同的 key，避免调参后命中旧结果。
+        输入参数：
+            - final_limit: int，本次请求的最终 TopK
+        输出参数：
+            - dict[str, Any]
+        """
+        return {
+            "final_top_k": final_limit,
+            "vector_top_k": self._vector_top_k,
+            "bm25_top_k": self._bm25_top_k,
+            "rrf_k": self._rrf_k,
+            "reranker": self._reranker is not None,
+            "keyword": self._keyword is not None,
+        }
+
+    def _run_pipeline_cached(
+        self,
+        query: str,
+        *,
+        top_k: int | None = None,
+        trace_id: str | None = None,
+    ) -> tuple[list[DocumentResult], bool]:
+        """
+        函数作用：
+            带 Redis 缓存的检索入口。缓存未命中或 Redis 不可用时执行完整管线，
+            因此 Redis 挂掉只会退化为「每次都真检索」，不影响可用性。
+        输入参数：
+            - query: str
+            - top_k: int | None，默认值 None
+            - trace_id: str | None，默认值 None
+        输出参数：
+            - tuple[list[DocumentResult], bool]，(结果, 是否已精排)
+        """
+        final_limit = top_k if top_k is not None else self._final_top_k
+        params = self._cache_params(final_limit)
+        cached = get_cached_results(query, params, trace_id=trace_id)
+        if cached is not None:
+            return cached
+        results, reranked = self._run_pipeline(query, top_k=top_k, trace_id=trace_id)
+        set_cached_results(query, results, reranked=reranked, params=params)
+        return results, reranked
+
     def retrieve_with_scores(
         self,
         query: str,
         top_k: int | None = None,
         trace_id: str | None = None,
     ) -> list[DocumentResult]:
-        results, _reranked = self._run_pipeline(
+        results, _reranked = self._run_pipeline_cached(
             query,
             top_k=top_k,
             trace_id=trace_id,
@@ -468,7 +515,7 @@ class HybridRetriever:
         top_k: int | None = None,
         trace_id: str | None = None,
     ) -> list[LawChunk]:
-        results, reranked = self._run_pipeline(
+        results, reranked = self._run_pipeline_cached(
             query,
             top_k=top_k,
             trace_id=trace_id,

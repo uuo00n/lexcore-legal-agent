@@ -16,7 +16,7 @@
 - 工具服务：本地 DOC 法条检索、得理法规与类案检索、法律对比、风险评估、合同审查、诉讼时效和文书起草。
 - 文档上下文：支持 PDF/DOCX/TXT 上传并注入对话。
 - 多层记忆：短窗口、摘要、长期语义记忆、用户画像、OpenViking 风格案件工作区。
-- 运行治理：LLM Gateway、fallback provider、模型路由、trace、LLM 调用日志、Prometheus 指标、响应缓存、每日配额、admin dashboard。
+- 运行治理：LLM Gateway、fallback provider、模型路由、trace、LLM 调用日志、Prometheus 指标、响应缓存、Redis 缓存/突发限流/幂等、每日配额、admin dashboard。
 - 评测闭环：retrieval、e2e、context_ab、openviking_ab 多种评测模式。
 
 ## 技术栈
@@ -38,6 +38,7 @@
 | 关键词检索 | BM25 | 中文 unigram + bigram 分词 |
 | Context Layer | OpenViking + 本地 fallback | Resource / Memory / Skill，`viking://` URI，L0/L1/L2 分层上下文 |
 | 持久化 | PostgreSQL + SQLite + ChromaDB | PostgreSQL 存核心业务数据与 LangGraph checkpoint，SQLite 保留辅助数据，Chroma 存向量 |
+| 缓存/限流 | Redis | 检索缓存、得理响应缓存、突发限流、会话元数据、幂等标记；挂掉时全部降级，不是主数据库 |
 | 评测 | 自研 retrieval metrics + RAGAS | 100 条法律场景数据集 |
 
 ## 当前核心链路
@@ -167,7 +168,7 @@ Legal/
 │   ├── memory.py                   # messages_archive、summaries、user_profiles
 │   ├── memory_extractor.py         # 后台摘要、长期记忆、画像、OpenViking 案件工作区
 │   ├── memory_store.py             # ChromaDB 长期语义记忆
-│   ├── cache.py                    # 精确问题响应缓存
+│   ├── cache/                      # 缓存与限流：response(SQLite) + retrieval/delilegal/rate_limit/session/idempotency(Redis)
 │   ├── quota.py                    # thread_id 级每日请求/token 配额
 │   ├── observability.py            # trace、event、LLM call、eval run 存储
 │   ├── metrics.py                  # 轻量 Prometheus text format
@@ -304,6 +305,12 @@ Prometheus 指标：
 - `legal_llm_latency_ms`
 - `legal_response_cache_hits_total`
 - `legal_response_cache_misses_total`
+- `legal_cache_lookups_total{namespace,outcome}`：outcome 为 hit / miss / degraded
+- `legal_rate_limit_decisions_total{scope,outcome}`：outcome 为 allow / block / degraded / disabled
+- `legal_redis_degraded_total{op}`：Redis 降级次数
+
+缓存命中同时写入 trace：命中记 `cache_hit`，未命中记 `cache_miss`，被限流记 `rate_limited`，
+payload 只有命名空间、摘要 key 与 `degraded` 标记，不含缓存值。
 
 ## 环境变量
 
@@ -396,6 +403,16 @@ MAX_UPLOAD_MB=10
 
 RESPONSE_CACHE_ENABLED=true
 RESPONSE_CACHE_TTL_SECONDS=3600
+RESPONSE_CACHE_DOC_TTL_SECONDS=300
+
+# Redis：缓存 / 限流 / 会话元数据 / 幂等；留空即全部降级运行
+REDIS_URL=redis://localhost:6379/0
+RETRIEVAL_CACHE_TTL_SECONDS=1800
+DELILEGAL_CACHE_TTL_SECONDS=3600
+RATE_LIMIT_REQUESTS=30
+RATE_LIMIT_WINDOW_SECONDS=60
+SESSION_METADATA_TTL_SECONDS=86400
+IDEMPOTENCY_TTL_SECONDS=600
 
 LEGAL_DAILY_REQUEST_LIMIT=200
 LEGAL_DAILY_TOKEN_LIMIT=200000
@@ -510,11 +527,12 @@ pytest tests/test_cache.py tests/test_quota.py tests/test_reports_api.py -q
 4. **OpenViking 是 Context Layer**：用于 Resource / Memory / Skill 定位和 trace 可解释，不替代 LangGraph、ChromaDB 或法条检索工具。
 5. **法条引用必须可校验**：最终回答中的明确法条引用会与本轮检索结果比对，不支持的引用会被移除或提示。
 6. **LLM Gateway 统一治理**：所有模型调用经 `GatewayChatModel` 记录延迟、错误、fallback 和 token usage。
-7. **精确响应缓存**：只缓存完全归一化后的问题 + doc_id，避免法律场景中模糊缓存误复用。
-8. **配额先按 thread_id 做 subject**：当前没有登录系统，后续可替换为 user_id。
-9. **异步任务队列是进程内版本**：适合第一版合同报告任务；服务重启会丢失任务状态，生产级需替换 SQLite/RQ/Celery。
-10. **MemorySaver 与 SQLite 分工**：MemorySaver 用于运行时 LangGraph 状态，SQLite 用于可恢复归档和治理数据。
-11. **评测驱动迭代**：检索、上下文路由、真实 OpenViking 和端到端回答都应进入 eval，而不是只靠手测。
+7. **精确响应缓存**：只缓存完全归一化后的问题 + doc_id，避免法律场景中模糊缓存误复用。带 doc_id 的回答用独立短 TTL，不长期缓存合同相关正文。
+8. **Redis 只放可丢弃的热数据**：检索缓存、得理响应缓存、限流、会话元数据、幂等标记全部经统一降级入口（`infrastructure/redis.py`），Redis 挂掉时限流与幂等 fail-open、缓存退化为重算，Agent 主链照常运行；key 只放摘要，不含提问、合同正文与凭据。
+9. **配额先按 thread_id 做 subject**：当前没有登录系统，后续可替换为 user_id。
+10. **异步任务队列是进程内版本**：适合第一版合同报告任务；服务重启会丢失任务状态，生产级需替换 SQLite/RQ/Celery。
+11. **MemorySaver 与 SQLite 分工**：MemorySaver 用于运行时 LangGraph 状态，SQLite 用于可恢复归档和治理数据。
+12. **评测驱动迭代**：检索、上下文路由、真实 OpenViking 和端到端回答都应进入 eval，而不是只靠手测。
 
 ## 给后续 AI 的注意事项
 

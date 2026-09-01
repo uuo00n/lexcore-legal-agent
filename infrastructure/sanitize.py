@@ -37,7 +37,8 @@ _SECRET_VALUE_RE = re.compile(
 )
 
 # 连接串密码段，用于日志中安全展示 DSN。
-_DSN_PASSWORD_RE = re.compile(r"(?P<head>://[^\s:@/]+:)(?P<password>[^\s@/]+)(?P<tail>@)")
+# 用户名段允许为空，覆盖 Redis 常见的 redis://:password@host 写法。
+_DSN_PASSWORD_RE = re.compile(r"(?P<head>://[^\s:@/]*:)(?P<password>[^\s@/]+)(?P<tail>@)")
 
 
 def redact_text(value: str) -> str:

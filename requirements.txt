@@ -37,3 +37,6 @@ rank-bm25>=0.2.2
 sqlalchemy[asyncio]>=2.0.36
 alembic>=1.14
 asyncpg>=0.30
+
+# Redis 缓存 / 限流 / 会话元数据 / 幂等（infrastructure/redis.py、services/cache/）
+redis>=5.0

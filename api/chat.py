@@ -16,6 +16,9 @@ from services.checkpoint import load_doc
 from services.evidence_video import evidence_prompt_summary
 from services.legal_analysis import analyze_legal_message
 from services.cache import get_cached_answer, set_cached_answer
+from services.cache.idempotency import claim as claim_idempotency, mark_completed, release
+from services.cache.rate_limit import check_rate_limit
+from services.cache.session import touch_session
 from services.metrics import inc_counter, observe
 from services.observability import (
     complete_trace,
@@ -36,6 +39,9 @@ from services.persistence import (
 
 log = logging.getLogger(__name__)
 router = APIRouter()
+
+# 幂等标记的业务场景名，进入 Redis key 的明文部分。
+IDEMPOTENCY_SCOPE = "chat"
 
 
 class ChatRequest(BaseModel):
@@ -247,6 +253,8 @@ async def _event_stream(graph, req: ChatRequest) -> AsyncIterator[dict]:
     emit_done = True
     create_trace(trace_id, req.thread_id, req.message)
     record_event(trace_id, "chat_start", name="chat", payload={"doc_id": req.doc_id, "evidence_id": req.evidence_id})
+    # 会话元数据热层：只记活跃时间、请求计数与是否带文档，不写标题与正文。
+    await touch_session(req.thread_id, trace_id=trace_id, has_document=bool(req.doc_id))
     config = {"configurable": {"thread_id": req.thread_id}}
 
     doc_text: Optional[str] = None
@@ -284,9 +292,8 @@ async def _event_stream(graph, req: ChatRequest) -> AsyncIterator[dict]:
         ))
         final_content = ""
         retrieved_laws: list[dict] = []
-        cached = get_cached_answer(req.message, doc_id=req.doc_id)
+        cached = get_cached_answer(req.message, doc_id=req.doc_id, trace_id=trace_id)
         if cached:
-            record_event(trace_id, "cache_hit", name="response_cache")
             inc_counter("legal_response_cache_hits_total")
             final_content = cached
             chunk_size = 4
@@ -468,10 +475,12 @@ async def _async_extract_memory(thread_id: str, messages):
 async def chat(req: ChatRequest, request: Request, background_tasks: BackgroundTasks):
     """
     函数作用：
-        待补充。
+        受理一次对话请求：突发限流、每日配额、幂等校验后返回 SSE 流。
+        限流与幂等都建立在 Redis 上，Redis 不可用时二者自动放行，
+        由 SQLite 每日配额继续兜底，主链不会因缓存层故障而不可用。
     输入参数：
         - req: ChatRequest
-        - request: Request
+        - request: Request，用于读取 Idempotency-Key 请求头
         - background_tasks: BackgroundTasks
     输出参数：
         - 未标注
@@ -480,6 +489,19 @@ async def chat(req: ChatRequest, request: Request, background_tasks: BackgroundT
         raise HTTPException(400, "message is empty")
     if not req.thread_id.strip():
         raise HTTPException(400, "thread_id is empty")
+
+    limit = await check_rate_limit(req.thread_id, scope="chat")
+    if not limit.allowed:
+        raise HTTPException(
+            429,
+            {
+                "message": limit.reason,
+                "limit": limit.limit,
+                "window_seconds": limit.window_seconds,
+                "retry_after": limit.retry_after,
+            },
+            headers={"Retry-After": str(limit.retry_after)},
+        )
 
     quota = consume_request(req.thread_id)
     if not quota.allowed:
@@ -494,20 +516,44 @@ async def chat(req: ChatRequest, request: Request, background_tasks: BackgroundT
             },
         )
 
+    # 客户端重试与断线重连会重复 POST 同一轮对话；只有显式带 Idempotency-Key
+    # 才做幂等拦截，避免把用户真正的重复提问误判为重放。
+    idempotency_token = (request.headers.get("Idempotency-Key") or "").strip()
+    idempotency_claim = await claim_idempotency(IDEMPOTENCY_SCOPE, idempotency_token)
+    if idempotency_claim.duplicate:
+        raise HTTPException(
+            409,
+            {
+                "message": "该请求已在处理或已完成，请勿重复提交。",
+                "state": (idempotency_claim.record or {}).get("state", ""),
+            },
+        )
+
     await ensure_conversation(req.thread_id, title_seed=req.message.strip())
     graph = request.app.state.graph
 
     async def _wrapped_stream():
         """
         函数作用：
-            待补充。
+            包装 SSE 事件流：流结束后落幂等完成标记并触发后台记忆提取。
         输入参数：
             - 无
         输出参数：
             - 未标注
         """
-        async for event in _event_stream(graph, req):
-            yield event
+        try:
+            async for event in _event_stream(graph, req):
+                yield event
+        except (asyncio.CancelledError, GeneratorExit):
+            # 客户端断开时不能再 await，否则生成器关闭会抛 RuntimeError；
+            # in_progress 标记留给 TTL 自然过期。
+            raise
+        except BaseException:
+            # 未跑完的请求不能留下 in_progress 标记，否则重试会被 409 挡住。
+            await release(IDEMPOTENCY_SCOPE, idempotency_token)
+            raise
+        else:
+            await mark_completed(IDEMPOTENCY_SCOPE, idempotency_token)
 
         # 流结束后在后台执行记忆提取，不阻塞响应
         try:

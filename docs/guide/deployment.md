@@ -54,6 +54,16 @@ DELILEGAL_CASE_SEARCH_PATH=/api/qa/v3/search/queryListCase
 DOCS_DB=data/docs.sqlite
 UPLOAD_DIR=data/uploads
 MAX_UPLOAD_MB=10
+
+# Redis：检索缓存、得理响应缓存、突发限流、会话元数据、幂等标记
+# 留空即全部降级运行，不影响接口可用性
+REDIS_URL=redis://localhost:6379/0
+RETRIEVAL_CACHE_TTL_SECONDS=1800
+DELILEGAL_CACHE_TTL_SECONDS=3600
+RATE_LIMIT_REQUESTS=30
+RATE_LIMIT_WINDOW_SECONDS=60
+SESSION_METADATA_TTL_SECONDS=86400
+IDEMPOTENCY_TTL_SECONDS=600
 ```
 
 ### 3. 启动 Ollama
@@ -82,6 +92,12 @@ gunicorn main:app \
 
 ::: warning 注意
 由于 MCP Server 作为子进程运行，多 worker 模式下每个 worker 会启动独立的 MCP Server 实例。建议 worker 数不超过 CPU 核数。
+:::
+
+::: tip 多 worker 与 Redis
+突发限流、幂等标记与检索/得理响应缓存都在 Redis 上，因此多 worker 之间共享同一份计数与
+缓存。未配置 `REDIS_URL` 时这些能力按 fail-open 降级（限流与幂等放行、缓存退化为重算），
+每日配额仍由 SQLite 兜底。
 :::
 
 ## Nginx 反向代理
@@ -117,12 +133,19 @@ server {
 | `data/docs.sqlite` | 线程元数据 + 上传文档文本 | 定期备份 |
 | `data/uploads/` | 用户上传的原始文件 | 按需备份 |
 | `data/laws/` | 法律原文 | 只读，随代码版本管理 |
+| Redis | 检索/得理响应缓存、限流计数、会话元数据、幂等标记 | 无需备份，全部带 TTL 且可重建 |
+
+::: tip Redis 配置建议
+Redis 只存可丢弃的热数据，因此可以关闭 RDB/AOF 持久化，并把 `maxmemory-policy` 设为
+`allkeys-lru`。所有 key 带 `legal:` 前缀（`REDIS_KEY_PREFIX` 可改），与同实例上的其他应用隔离。
+:::
 
 ## 健康检查
 
 ```bash
 curl http://localhost:8000/api/health
-# {"status":"ok","provider":"zhipu"}
+# {"status":"ok","provider":"zhipu","database":"ok","redis":"ok"}
 ```
 
-可用于负载均衡器或监控系统的健康探测。
+可用于负载均衡器或监控系统的健康探测。`status` 只反映 PostgreSQL；Redis 降级时整体仍报
+`ok`，只有 `redis` 字段变为 `degraded`。

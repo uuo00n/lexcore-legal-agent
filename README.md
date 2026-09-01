@@ -31,7 +31,7 @@
 - **ReAct 工具智能体**：本地 DOC 法条检索、得理法规与类案检索、法律对比、风险评估、合同审查、诉讼时效、管辖判断、文书起草；证据不足时明确停止检索。
 - **合同审查**：支持上传合同，输出结构化 Markdown 审查报告。
 - **上下文与记忆**：短期窗口、增量摘要、长期语义记忆、用户画像和 OpenViking-style context layer。
-- **工程治理**：LLM Gateway、fallback provider、模型路由、trace、LLM 调用日志、Prometheus 指标、响应缓存、每日配额、Admin dashboard。
+- **工程治理**：LLM Gateway、fallback provider、模型路由、trace、LLM 调用日志、Prometheus 指标、响应缓存、Redis 缓存与突发限流、每日配额、Admin dashboard。
 - **评测闭环**：retrieval、context A/B、OpenViking A/B 等评测脚本与历史结果。
 
 ## 技术栈
@@ -43,7 +43,8 @@
 | 工具协议 | MCP / FastMCP |
 | 检索 | ChromaDB、BM25、RRF、bge-small-zh-v1.5、bge-reranker-base |
 | LLM 接入 | OpenAI-compatible provider abstraction：Zhipu、DeepSeek、Qwen、Ollama |
-| 存储 | SQLite、ChromaDB |
+| 存储 | PostgreSQL、SQLite、ChromaDB |
+| 缓存/限流 | Redis（可降级，非主数据库） |
 | 文档 | VitePress、Mermaid |
 | 测试 | pytest |
 

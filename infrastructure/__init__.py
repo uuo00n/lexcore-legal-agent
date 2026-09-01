@@ -1,11 +1,14 @@
-"""PostgreSQL 持久化基础设施。
+"""持久化与缓存基础设施。
 
 分层：
-- `database`：连接配置、引擎、会话工厂与生命周期。
+- `database`：PostgreSQL 连接配置、引擎、会话工厂与生命周期。
 - `models`：SQLAlchemy 2 ORM 模型（全部带 created_at / updated_at）。
 - `repositories`：唯一的写入入口，所有 JSONB 与 error 字段在此脱敏。
 - `migrations`：Alembic 迁移脚本。
 - `sanitize`：脱敏工具，保证 API Key / 凭据不会落库。
+- `redis`：缓存 / 限流 / 会话元数据 / 幂等的连接与降级入口。
+  与 `database` 存在同名函数（`get_settings` / `ping` / `init_*`），
+  因此不在本包顶层再导出，请直接 `from infrastructure.redis import ...`。
 """
 from __future__ import annotations
 

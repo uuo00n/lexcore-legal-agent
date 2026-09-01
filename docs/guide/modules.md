@@ -24,6 +24,10 @@ graph TD
     MEMORY --> CHROMA
     MEMORY --> SQLITE["SQLite"]
     CP --> SQLITE
+
+    API --> CACHE["services/cache/<br/>缓存 / 限流 / 幂等"]
+    RETRIEVER --> CACHE
+    CACHE --> REDIS["infrastructure/redis<br/>Redis（可降级）"]
 ```
 
 ## 模块职责
@@ -46,10 +50,13 @@ graph TD
 | `services/vectorstore/` | chroma_store.py, milvus_store.py | 向量存储抽象层 | chromadb, pymilvus |
 | `services/checkpoint.py` | — | LangGraph PostgreSQL checkpoint 生命周期 + Memory fallback | langgraph-checkpoint-postgres |
 | `services/doc_parser.py` | — | PDF/DOCX/TXT 文档解析 | pypdf, python-docx |
+| `infrastructure/redis.py` | — | Redis 连接、熔断与统一降级入口 | redis |
+| `services/cache/` | retrieval.py, delilegal.py, rate_limit.py, session.py, idempotency.py, response.py | 检索/得理响应缓存、突发限流、会话元数据、幂等标记（Redis）+ 响应缓存（SQLite） | redis, sqlite3 |
 
 ## 设计原则
 
 - **MCP 解耦**：所有工具通过 MCP 协议调用，Agent 不直接依赖 RAG 实现
 - **Protocol 抽象**：检索器和向量存储通过 Python Protocol 定义接口，便于替换实现
 - **依赖注入**：HybridRetriever 通过构造函数注入各组件，不硬编码
+- **缓存可降级**：Redis 只放可丢弃的热数据，所有访问经统一降级入口，挂掉时主链照常运行
 - **环境变量驱动**：所有可配置项通过 `.env` 管理，支持不同部署环境

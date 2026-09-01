@@ -10,6 +10,7 @@ from services.checkpoint import (
     get_checkpointer,
 )
 from services.answer_format import strip_answer_markdown
+from services.cache.session import clear_session_metadata
 from services.context_compaction import build_context_status, compact_state_context
 from services.persistence import (
     delete_conversation,
@@ -281,7 +282,8 @@ async def compact_thread(thread_id: str, request: Request):
 async def remove_thread(thread_id: str):
     """
     函数作用：
-        待补充。
+        删除会话：清理 checkpoint、持久化记录与 Redis 会话元数据热层，
+        避免已删会话在缓存里留下活跃痕迹。
     输入参数：
         - thread_id: str
     输出参数：
@@ -290,4 +292,5 @@ async def remove_thread(thread_id: str):
     cp = get_checkpointer()
     await cp.adelete_thread(thread_id)
     await delete_conversation(thread_id)
+    await clear_session_metadata(thread_id)
     return {"deleted": thread_id}

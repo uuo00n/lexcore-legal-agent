@@ -14,6 +14,13 @@ from fastapi.staticfiles import StaticFiles
 from agent.graph import build_graph
 from api import admin, chat, evidence, reports, threads, upload
 from infrastructure.database import dispose_database, init_database, ping as ping_database
+from infrastructure.redis import (
+    dispose_redis,
+    init_redis,
+    ping as ping_redis,
+    redis_enabled,
+    redis_status,
+)
 from services.checkpoint import checkpoint_scope, init_meta_db
 from services.llm import current_provider
 
@@ -75,6 +82,17 @@ async def lifespan(app: FastAPI):
 
     init_meta_db()
 
+    # Redis 只承担缓存、限流、会话元数据与幂等标记，不可用时全链路降级，
+    # 因此探活失败只告警，绝不阻塞启动。
+    init_redis()
+    if redis_enabled():
+        if await ping_redis():
+            log.info("Redis 可用：缓存、限流、会话元数据与幂等标记已启用")
+        else:
+            log.warning("Redis 不可用，缓存与限流降级运行（不影响 Agent 主链）")
+    else:
+        log.info("Redis 未启用（REDIS_URL 未配置），缓存与限流降级运行")
+
     from services.observability import init_observability_tables
     init_observability_tables()
     from services.quota import init_quota_tables
@@ -106,6 +124,7 @@ async def lifespan(app: FastAPI):
             yield
     finally:
         await stop_mcp_client()
+        await dispose_redis()
         await dispose_database()
 
 
@@ -149,7 +168,8 @@ async def admin_page():
 async def health():
     """
     函数作用：
-        待补充。
+        返回服务健康状态。Redis 只影响缓存与限流，不参与 status 判定，
+        因此 Redis 降级时整体仍报 ok，只在 redis 字段体现。
     输入参数：
         - 无
     输出参数：
@@ -160,6 +180,7 @@ async def health():
         "status": "ok" if database_ok else "degraded",
         "provider": current_provider(),
         "database": "ok" if database_ok else "unavailable",
+        "redis": redis_status()["state"],
     }
 
 

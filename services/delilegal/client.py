@@ -7,6 +7,7 @@ from typing import Any
 
 import httpx
 
+from services.cache.delilegal import get_cached_response, set_cached_response
 from services.delilegal.config import DelilegalSettings
 from services.delilegal.exceptions import (
     DelilegalAuthenticationError,
@@ -74,6 +75,15 @@ class DelilegalClient:
         }
 
     async def _post(self, endpoint_type: str, payload: dict[str, Any]) -> Any:
+        # 得理是外部计费接口，先查响应缓存；Redis 不可用时 get 返回 None，照常请求上游。
+        cached = await get_cached_response(endpoint_type, payload, trace_id=self.trace_id)
+        if cached is not None:
+            log.info(
+                "delilegal_request trace_id=%s endpoint_type=%s cached=true",
+                self.trace_id or "-",
+                endpoint_type,
+            )
+            return cached
         path = self.settings.endpoint(endpoint_type)
         started = time.perf_counter()
         success = False
@@ -100,6 +110,8 @@ class DelilegalClient:
                     if isinstance(body.get(key), list):
                         result_count = len(body[key])
                         break
+            # 只缓存成功响应；失败与异常不写缓存，避免把一次抖动固化整个 TTL。
+            await set_cached_response(endpoint_type, payload, data)
             return data
         except httpx.TimeoutException as exc:
             error_type = "timeout"

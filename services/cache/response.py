@@ -1,7 +1,14 @@
-"""响应缓存。
+"""响应缓存（SQLite）。
 
-第一版只做精确问题缓存，避免法律场景中因为模糊匹配导致错误复用。
+只做精确问题缓存，避免法律场景中因为模糊匹配导致错误复用。
 缓存默认开启，可通过 RESPONSE_CACHE_ENABLED=false 关闭。
+
+本模块刻意留在 SQLite 上：它是主图前的短路分支，语义上属于业务数据而非
+可随时丢弃的热缓存，Redis 只承担第十九阶段列出的五类用途。
+
+敏感数据约束：带 doc_id 的回答是针对上传合同/文书生成的，正文可能夹带
+合同条款原文，因此使用独立的短 TTL（RESPONSE_CACHE_DOC_TTL_SECONDS，默认 300s），
+不做长期缓存。
 """
 from __future__ import annotations
 
@@ -10,7 +17,10 @@ import os
 import time
 from typing import Optional
 
+from services.cache.trace import record_cache_event
 from services.checkpoint import get_meta_conn
+
+NAMESPACE = "cache:response"
 
 
 def init_cache_tables() -> None:
@@ -49,22 +59,24 @@ def cache_enabled() -> bool:
     return os.getenv("RESPONSE_CACHE_ENABLED", "true").lower() not in {"0", "false", "no"}
 
 
-def _ttl_seconds() -> int:
+def _ttl_seconds(doc_id: str | None = None) -> int:
     """
     函数作用：
-        读取缓存 TTL。
+        读取缓存 TTL。带上传文档的回答使用更短的 TTL，避免长期缓存合同正文。
     输入参数：
-        - 无
+        - doc_id: str | None，默认值 None
     输出参数：
         - int
     """
+    if doc_id:
+        return int(os.getenv("RESPONSE_CACHE_DOC_TTL_SECONDS", "300"))
     return int(os.getenv("RESPONSE_CACHE_TTL_SECONDS", "3600"))
 
 
 def make_cache_key(question: str, *, doc_id: str | None = None) -> str:
     """
     函数作用：
-        生成精确问题缓存 key。
+        生成精确问题缓存 key。原始提问只参与哈希，不出现在 key 中。
     输入参数：
         - question: str
         - doc_id: str | None，默认值 None
@@ -76,13 +88,19 @@ def make_cache_key(question: str, *, doc_id: str | None = None) -> str:
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()
 
 
-def get_cached_answer(question: str, *, doc_id: str | None = None) -> Optional[str]:
+def get_cached_answer(
+    question: str,
+    *,
+    doc_id: str | None = None,
+    trace_id: str | None = None,
+) -> Optional[str]:
     """
     函数作用：
-        查询未过期的精确问题缓存。
+        查询未过期的精确问题缓存，并把命中与否记入 trace。
     输入参数：
         - question: str
         - doc_id: str | None，默认值 None
+        - trace_id: str | None，默认值 None
     输出参数：
         - Optional[str]
     """
@@ -96,13 +114,22 @@ def get_cached_answer(question: str, *, doc_id: str | None = None) -> Optional[s
         (key, now),
     )
     row = cur.fetchone()
-    return row[0] if row else None
+    answer = row[0] if row else None
+    record_cache_event(
+        trace_id,
+        NAMESPACE,
+        hit=answer is not None,
+        key=key[:32],
+        backend="sqlite",
+        doc_scoped=bool(doc_id),
+    )
+    return answer
 
 
 def set_cached_answer(question: str, answer: str, *, doc_id: str | None = None) -> None:
     """
     函数作用：
-        写入响应缓存。
+        写入响应缓存。带 doc_id 时使用短 TTL，不长期保留合同相关正文。
     输入参数：
         - question: str
         - answer: str
@@ -118,6 +145,22 @@ def set_cached_answer(question: str, answer: str, *, doc_id: str | None = None) 
         """INSERT OR REPLACE INTO response_cache
            (cache_key, question, answer, created_at, expires_at)
            VALUES (?, ?, ?, ?, ?)""",
-        (make_cache_key(question, doc_id=doc_id), question, answer, now, now + _ttl_seconds()),
+        (
+            make_cache_key(question, doc_id=doc_id),
+            question,
+            answer,
+            now,
+            now + _ttl_seconds(doc_id),
+        ),
     )
     conn.commit()
+
+
+__all__ = [
+    "NAMESPACE",
+    "cache_enabled",
+    "get_cached_answer",
+    "init_cache_tables",
+    "make_cache_key",
+    "set_cached_answer",
+]
