@@ -11,6 +11,7 @@ graph TB
     subgraph Server["FastAPI 服务"]
         API[API 路由层]
         LG[LangGraph Agent]
+        CTX[Context Builder]
         MEM[记忆系统]
     end
 
@@ -29,11 +30,14 @@ graph TB
 
     subgraph Storage["存储层"]
         CHROMA[(ChromaDB)]
-        SQLITE[(SQLite)]
+        POSTGRES[(PostgreSQL)]
+        SQLITE[(SQLite 辅助元数据)]
     end
 
     UI -->|SSE| API
     API --> LG
+    LG --> CTX
+    CTX --> MEM
     LG -->|MCP stdio| MCPS
     LG --> MEM
     MCPS --> RAG
@@ -46,6 +50,7 @@ graph TB
     LG --> DS
     MEM --> CHROMA
     MEM --> SQLITE
+    LG -->|Checkpoint| POSTGRES
     RAG --> CHROMA
 ```
 
@@ -53,15 +58,15 @@ graph TB
 
 ```mermaid
 flowchart LR
-    A[用户提问] --> B[memory_node<br/>加载记忆]
-    B --> C[inject_doc_node<br/>注入文档]
-    C --> D[agent_node<br/>LLM 推理]
-    D -->|有工具调用| E[ToolNode<br/>执行工具]
-    E --> F[collect_laws<br/>收集法条]
+    A[用户提问] --> B[context_compaction<br/>长会话压缩]
+    B --> C[memory_node<br/>加载摘要与相关长期记忆]
+    C --> D[Context Builder<br/>分层预算构造模型输入]
+    D --> E[Specialist / Tool Loop]
+    E -->|工具结果| F[collector<br/>提取并限制 Top-N 证据]
     F --> D
-    D -->|无工具调用| G[附加法条引用]
-    G --> H[SSE 流式响应]
-    H --> I[后台记忆提取]
+    E -->|专家报告| G[Verifier + Answer Generator]
+    G --> H[SSE 响应]
+    H --> I[后台归档与长期记忆提取]
 ```
 
 ## 子系统说明
@@ -89,8 +94,12 @@ FastAPI 提供 RESTful 接口，核心是 `/api/chat` 端点通过 SSE（Server-
 
 ### 记忆系统
 
-4 层架构实现跨会话上下文理解：
-1. 滑动窗口（8 条）— 短期工作记忆
-2. 增量摘要 — 历史压缩
-3. 长期语义记忆 — ChromaDB 向量检索
-4. 用户画像 — 实体级别的用户理解
+记忆和持久化明确分为五层：
+
+1. Working Memory：当前 `AgentState`；
+2. Conversation Memory：`messages`，模型只读取有界近期窗口；
+3. Summary Memory：长会话滚动摘要；
+4. Long-term Memory：用户相关、值得跨轮保存的信息，使用独立且隔离的向量存储；
+5. Persistent Workflow State：PostgreSQL checkpoint，只负责工作流恢复，不等同于长期 Memory。
+
+每次模型调用均由 Context Builder 按 system、relevant memory、conversation summary、recent messages、current plan、retrieved evidence 和 current task 分配 token。详见 [Context Engineering 与 Memory](/architecture/context-engineering-memory)。

@@ -57,7 +57,10 @@ _INCREMENTAL_SUMMARY_PROMPT = """你是一个对话摘要助手。请将以下�
 
 更新后的摘要："""
 
-_MEMORY_EXTRACT_PROMPT = """从以下对话中提取值得长期记忆的信息。每条记忆应是一个独立的知识点或完整交互总结。
+_MEMORY_EXTRACT_PROMPT = """从以下对话中提取与当前用户长期交互有关、值得跨轮保留的信息。每条记忆应独立、简短。
+
+只保留：用户明确陈述的稳定身份与偏好、持续关注领域、仍在推进的案件事实或用户要求记住的信息。
+不要保存模型给出的通用法律知识、法条、临时工具结果、推测、敏感凭据或仅对当前一步有用的内容。
 
 返回 JSON 数组，每个元素格式：
 {{
@@ -66,8 +69,8 @@ _MEMORY_EXTRACT_PROMPT = """从以下对话中提取值得长期记忆的信息�
 }}
 
 类型说明：
-- semantic（语义记忆）：法律知识点、结论性信息。例："试用期最长不超过6个月"
-- episodic（情节记忆）：具体交互事件。例："用户咨询了关于加班费计算的问题"
+- semantic（语义记忆）：用户稳定事实。例："用户是餐饮企业经营者"
+- episodic（情节记忆）：仍可能影响后续对话的用户事件。例："用户正在处理未支付加班费的劳动争议"
 - procedural（程序记忆）：用户行为模式/偏好。例："用户习惯先了解风险再问解决方案"
 
 对话内容：
@@ -135,6 +138,11 @@ def _format_messages_text(messages: list[dict], max_items: int = 12) -> str:
         content = m["content"][:500]
         lines.append(f"{role_label}：{content}")
     return "\n".join(lines)
+
+
+def _user_messages(messages: list[dict]) -> list[dict]:
+    """Long-term user memory must be derived from user statements, not model output."""
+    return [item for item in messages if item.get("role") in {"human", "user"}]
 
 
 def _safe_parse_json(text: str):
@@ -211,6 +219,8 @@ def _new_messages_for_archive(
 async def extract_and_save_memory(
     thread_id: str,
     messages: list[BaseMessage],
+    *,
+    user_id: str | None = None,
 ) -> None:
     """
     函数作用：
@@ -218,6 +228,7 @@ async def extract_and_save_memory(
     输入参数：
         - thread_id: str
         - messages: list[BaseMessage]
+        - user_id: str | None，长期记忆 namespace；缺省时按 thread 隔离
     输出参数：
         - 无
     """
@@ -287,30 +298,35 @@ async def extract_and_save_memory(
 
     # 3. 长期记忆提取（存入 ChromaDB）
     try:
-        conversation_text = _format_messages_text(new_msg_dicts or msg_dicts)
-        llm = _get_memory_llm()
-        memory_resp = await llm.ainvoke(
-            _MEMORY_EXTRACT_PROMPT.format(conversation=conversation_text)
-        )
-        memories = _safe_parse_json(memory_resp.content)
+        conversation_text = _format_messages_text(_user_messages(new_msg_dicts or msg_dicts))
+        if conversation_text:
+            llm = _get_memory_llm()
+            memory_resp = await llm.ainvoke(
+                _MEMORY_EXTRACT_PROMPT.format(conversation=conversation_text)
+            )
+            memories = _safe_parse_json(memory_resp.content)
 
-        if memories and isinstance(memories, list):
-            store = get_memory_store()
-            for mem in memories:
-                if isinstance(mem, dict) and "content" in mem and "type" in mem:
-                    store.add_memory(
-                        thread_id=thread_id,
-                        content=mem["content"],
-                        memory_type=mem["type"],
-                    )
-            log.info("长期记忆已提取: thread=%s, count=%d", thread_id, len(memories))
+            if memories and isinstance(memories, list):
+                store = get_memory_store()
+                for mem in memories:
+                    if isinstance(mem, dict) and "content" in mem and "type" in mem:
+                        store.add_memory(
+                            thread_id=thread_id,
+                            content=mem["content"],
+                            memory_type=mem["type"],
+                            owner_id=user_id or thread_id,
+                        )
+                log.info("长期记忆已提取: thread=%s, count=%d", thread_id, len(memories))
     except Exception as e:
         log.warning("长期记忆提取失败: %s", e)
 
     # 4. 用户画像更新（实体记忆）
     try:
         existing_profile = get_user_profile(thread_id) or {}
-        conversation_text = _format_messages_text(new_msg_dicts or msg_dicts, max_items=8)
+        conversation_text = _format_messages_text(
+            _user_messages(new_msg_dicts or msg_dicts),
+            max_items=8,
+        )
         llm = _get_memory_llm()
         profile_resp = await llm.ainvoke(
             _PROFILE_EXTRACT_PROMPT.format(

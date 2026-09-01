@@ -5,25 +5,18 @@ import json
 import re
 from typing import Any
 
-from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
+from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 
 from agent.node_utils import compatibility_dependency, record_trace_event
-from agent.prompts import (
-    LEGAL_SYSTEM_PROMPT,
-    LEGAL_SYSTEM_PROMPT_NO_TOOLS,
-    MEMORY_LONGTERM_TEMPLATE,
-    MEMORY_PROFILE_TEMPLATE,
-    MEMORY_SUMMARY_TEMPLATE,
-    VIKING_CONTEXT_TEMPLATE,
-)
+from agent.prompts import LEGAL_SYSTEM_PROMPT, LEGAL_SYSTEM_PROMPT_NO_TOOLS
 from agent.reports import build_agent_report, report_agent_name
 from agent.state import AgentState
 from agent.tool_loop import apply_tool_call_budget
 from agent.tools import LEGAL_CONSULT_TOOLS
 from services.answer_format import strip_answer_markdown
 from services.case_retrieval import search_similar_cases
+from services.context_builder import build_model_context
 from services.llm import get_llm, supports_tools
-from services.memory import SLIDING_WINDOW_SIZE
 from services.model_routing import select_model_route
 
 _LAW_CITATION_RE = re.compile(
@@ -238,28 +231,9 @@ async def legal_consult_agent_node(state: AgentState) -> dict[str, Any]:
     """Run the memory-aware legal consultation and trusted-tool loop."""
     tool_support = compatibility_dependency("supports_tools", supports_tools)
     base_prompt = LEGAL_SYSTEM_PROMPT if tool_support() else LEGAL_SYSTEM_PROMPT_NO_TOOLS
-    full_prompt = base_prompt
-
-    profile = state.get("memory_profile", "")
-    if profile:
-        full_prompt += MEMORY_PROFILE_TEMPLATE.format(profile=profile)
-    longterm = state.get("memory_longterm", "")
-    if longterm:
-        full_prompt += MEMORY_LONGTERM_TEMPLATE.format(longterm=longterm)
-    summary = state.get("memory_summary", "")
-    if summary:
-        full_prompt += MEMORY_SUMMARY_TEMPLATE.format(summary=summary)
-    viking_context = state.get("viking_context", "")
-    if viking_context:
-        full_prompt += VIKING_CONTEXT_TEMPLATE.format(context=viking_context)
-
-    all_messages = list(state.get("messages", []))
-    windowed_messages = all_messages[-SLIDING_WINDOW_SIZE:]
-    while windowed_messages and isinstance(windowed_messages[0], ToolMessage):
-        windowed_messages = windowed_messages[1:]
 
     latest_user = ""
-    for item in reversed(windowed_messages):
+    for item in reversed(state.get("messages", []) or []):
         if isinstance(item, HumanMessage):
             latest_user = item.content
             break
@@ -270,9 +244,11 @@ async def legal_consult_agent_node(state: AgentState) -> dict[str, Any]:
         doc_text=state.get("uploaded_doc_text"),
         tool_call_count=state.get("tool_call_count", 0),
     )
-    specialist_reports = state.get("agent_reports", []) or []
-    if specialist_reports:
-        full_prompt += "\n\n# Specialist Reports\n" + json.dumps(specialist_reports, ensure_ascii=False)
+    task_context = {
+        "task_id": state.get("current_step") or state.get("trace_id") or "current-request:legal_consult_agent",
+        "query": state.get("rewritten_query") or latest_user,
+    }
+    built = build_model_context(state, base_prompt, task_context=task_context)
     record_trace_event(
         state.get("trace_id"),
         "model_route",
@@ -297,10 +273,13 @@ async def legal_consult_agent_node(state: AgentState) -> dict[str, Any]:
     if tool_support(route.provider):
         llm = llm.bind_tools(_legal_consult_tools_for_state(state))
 
-    response = await llm.ainvoke([
-        SystemMessage(content=full_prompt),
-        *windowed_messages,
-    ])
+    record_trace_event(
+        state.get("trace_id"),
+        "context_build",
+        name="legal_consult_agent",
+        payload=built.status,
+    )
+    response = await llm.ainvoke(built.messages)
     if getattr(response, "tool_calls", None):
         response = _limit_tool_calls(response)
         response, tool_call_count, failure = apply_tool_call_budget(
@@ -312,6 +291,7 @@ async def legal_consult_agent_node(state: AgentState) -> dict[str, Any]:
             "messages": [response],
             "tool_call_count": tool_call_count,
             "tool_loop_failure": failure,
+            "context_build_status": built.status,
         }
         record_trace_event(
             state.get("trace_id"),
@@ -332,7 +312,7 @@ async def legal_consult_agent_node(state: AgentState) -> dict[str, Any]:
             "analysis_preview": str(report.get("analysis") or "")[:500],
         },
     )
-    return {"agent_reports": [report]}
+    return {"agent_reports": [report], "context_build_status": built.status}
 
 
 async def agent_node(state: AgentState) -> dict[str, Any]:

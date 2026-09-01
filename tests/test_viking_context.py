@@ -64,6 +64,32 @@ def test_memory_node_injects_viking_context(monkeypatch):
     assert any(hit["context_type"] == "skill" for hit in result["viking_context_hits"])
 
 
+def test_memory_node_never_runs_an_unscoped_longterm_search(monkeypatch):
+    captured = {}
+
+    monkeypatch.setattr("services.memory.get_user_profile", lambda thread_id: None)
+    monkeypatch.setattr("services.memory.get_summary", lambda thread_id: None)
+
+    class CapturingMemoryStore:
+        def search_memories(self, query, thread_id=None, top_k=3, owner_id=None):
+            captured.update({"thread_id": thread_id, "owner_id": owner_id})
+            return []
+
+    class EmptyContext:
+        prompt = ""
+        hits = []
+
+    monkeypatch.setattr("services.memory_store.get_memory_store", lambda: CapturingMemoryStore())
+    monkeypatch.setattr("services.openviking_context.retrieve_agent_context", lambda *args, **kwargs: EmptyContext())
+
+    memory_node({
+        "thread_id": "thread-private",
+        "messages": [HumanMessage(content="记住我的争议")],
+    })
+
+    assert captured == {"thread_id": "thread-private", "owner_id": None}
+
+
 async def test_legal_consult_agent_injects_viking_context_into_system_prompt(monkeypatch):
     captured = {}
 

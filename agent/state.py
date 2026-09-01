@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import os
 from enum import Enum
 from typing import Annotated, Any, Literal, Optional, TypedDict
 
@@ -126,6 +127,13 @@ def _stable_item_key(item: object) -> str:
             value = item.get(field)
             if value:
                 return f"{field}:{value}"
+        law_name = item.get("law_name") or item.get("title")
+        article_no = item.get("article_no")
+        if law_name and article_no:
+            return f"law:{law_name}:{article_no}"
+        source_id = item.get("source_id")
+        if source_id:
+            return f"source:{item.get('source_type', '')}:{source_id}"
         try:
             return json.dumps(item, ensure_ascii=False, sort_keys=True, default=str)
         except (TypeError, ValueError):
@@ -145,6 +153,56 @@ def merge_unique_items(left: list[Any] | None, right: list[Any] | None) -> list[
             merged.append(item)
             seen.add(key)
     return merged
+
+
+def _retrieval_score(item: object) -> float:
+    if not isinstance(item, dict):
+        return 0.0
+    for field in ("rerank_score", "relevance_score", "score", "similarity", "final_score"):
+        try:
+            if item.get(field) is not None:
+                return float(item[field])
+        except (TypeError, ValueError):
+            continue
+    return 0.0
+
+
+def _merge_top_retrieved(
+    left: list[Any] | None,
+    right: list[Any] | None,
+    *,
+    limit: int,
+) -> list[Any]:
+    """Deduplicate and retain only the highest-ranked evidence in working state."""
+    merged = merge_unique_items(left, right)
+    if right == [] or len(merged) <= limit:
+        return merged
+    ranked = list(enumerate(merged))
+    ranked.sort(key=lambda pair: (-_retrieval_score(pair[1]), pair[0]))
+    return [item for _, item in ranked[:limit]]
+
+
+def _retrieval_limit(name: str, default: int) -> int:
+    try:
+        return max(1, int(os.getenv(name, str(default))))
+    except (TypeError, ValueError):
+        return default
+
+
+def merge_retrieved_laws(left: list[Any] | None, right: list[Any] | None) -> list[Any]:
+    return _merge_top_retrieved(
+        left,
+        right,
+        limit=_retrieval_limit("CONTEXT_RETRIEVED_LAW_TOP_N", 6),
+    )
+
+
+def merge_retrieved_cases(left: list[Any] | None, right: list[Any] | None) -> list[Any]:
+    return _merge_top_retrieved(
+        left,
+        right,
+        limit=_retrieval_limit("CONTEXT_RETRIEVED_CASE_TOP_N", 4),
+    )
 
 
 def merge_plan_steps(
@@ -217,8 +275,8 @@ class AgentState(TypedDict, total=False):
     remaining_steps: Annotated[list[PlanStep], replace_plan_steps]  # 尚待执行步骤
 
     # 检索证据；reducer 防止并行检索结果相互覆盖
-    retrieved_laws: Annotated[list[RetrievedLaw], merge_unique_items]
-    retrieved_cases: Annotated[list[RetrievedCase], merge_unique_items]
+    retrieved_laws: Annotated[list[RetrievedLaw], merge_retrieved_laws]
+    retrieved_cases: Annotated[list[RetrievedCase], merge_retrieved_cases]
 
     # 专业 Agent 报告；空列表仍可在新请求开始时清空历史报告
     agent_reports: Annotated[list[AgentReport], merge_agent_reports]
@@ -252,3 +310,4 @@ class AgentState(TypedDict, total=False):
     viking_context_hits: Annotated[list[dict[str, Any]], merge_unique_items]  # 上下文命中项
     context_status: dict[str, Any]  # 上下文压缩状态详情
     context_compacted: bool  # 本轮是否执行过上下文压缩
+    context_build_status: dict[str, Any]  # 最近一次模型调用的分层 token 分配

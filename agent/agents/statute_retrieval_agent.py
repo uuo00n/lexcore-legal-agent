@@ -6,8 +6,6 @@ import os
 import re
 from typing import Any
 
-from langchain_core.messages import HumanMessage, SystemMessage
-
 from agent.node_utils import compatibility_dependency, latest_human_message, record_trace_event
 from agent.prompts import STATUTE_RETRIEVAL_SYSTEM_PROMPT
 from agent.reports import build_agent_report
@@ -15,6 +13,7 @@ from agent.state import AgentState, StatuteReport
 from agent.tool_loop import apply_tool_call_budget
 from agent.tools import STATUTE_RETRIEVAL_TOOLS
 from services.llm import get_llm, supports_tools
+from services.context_builder import build_model_context
 
 
 def _extract_json(content: str) -> dict[str, Any] | None:
@@ -108,11 +107,14 @@ async def statute_retrieval_agent_node(state: AgentState) -> dict[str, Any]:
         if state.get("retrieved_laws"):
             tools = [tool for tool in tools if tool.name != "retrieve_local_law_tool"]
         llm = llm.bind_tools(tools)
-    response = await llm.ainvoke([
-        SystemMessage(content=STATUTE_RETRIEVAL_SYSTEM_PROMPT),
-        *list(state.get("messages", [])),
-        HumanMessage(content=json.dumps(context, ensure_ascii=False)),
-    ])
+    built = build_model_context(state, STATUTE_RETRIEVAL_SYSTEM_PROMPT, task_context=context)
+    record_trace_event(
+        state.get("trace_id"),
+        "context_build",
+        name="statute_retrieval_agent",
+        payload=built.status,
+    )
+    response = await llm.ainvoke(built.messages)
     if getattr(response, "tool_calls", None):
         response, tool_call_count, failure = apply_tool_call_budget(
             response,
@@ -123,6 +125,7 @@ async def statute_retrieval_agent_node(state: AgentState) -> dict[str, Any]:
             "messages": [response],
             "tool_call_count": tool_call_count,
             "tool_loop_failure": failure,
+            "context_build_status": built.status,
         }
 
     parsed = _extract_json(response.content or "") or {}
@@ -171,4 +174,4 @@ async def statute_retrieval_agent_node(state: AgentState) -> dict[str, Any]:
         name="statute_retrieval_agent",
         payload={"law_count": len(laws), "evidence_insufficient": evidence_insufficient},
     )
-    return {"agent_reports": [report]}
+    return {"agent_reports": [report], "context_build_status": built.status}

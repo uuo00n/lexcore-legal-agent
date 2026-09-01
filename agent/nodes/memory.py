@@ -48,7 +48,17 @@ def memory_node(state: AgentState) -> dict[str, Any]:
     if latest_query:
         try:
             store = get_memory_store()
-            relevant_memories = store.search_memories(latest_query, top_k=3)
+            owner_id = str(state.get("user_id") or "").strip() or None
+            try:
+                relevant_memories = store.search_memories(
+                    latest_query,
+                    thread_id=None if owner_id else thread_id,
+                    owner_id=owner_id,
+                    top_k=3,
+                )
+            except TypeError:
+                # Compatibility for custom/test stores using the former API.
+                relevant_memories = store.search_memories(latest_query, top_k=3)
             if relevant_memories:
                 result["memory_longterm"] = "\n".join(
                     f"- [{memory.memory_type}] {memory.content}"

@@ -106,6 +106,7 @@ class MemoryStore:
         content: str,
         memory_type: str,
         metadata: Optional[dict] = None,
+        owner_id: Optional[str] = None,
     ) -> str:
         """
         函数作用：
@@ -115,6 +116,7 @@ class MemoryStore:
             - content: str
             - memory_type: str
             - metadata: Optional[dict]，默认值 None
+            - owner_id: Optional[str]，长期记忆 namespace；缺省时使用 thread_id
         输出参数：
             - str
         """
@@ -123,10 +125,11 @@ class MemoryStore:
         embedding = self._embed(content)
 
         meta = {
+            **(metadata or {}),
             "thread_id": thread_id,
+            "owner_id": owner_id or thread_id,
             "memory_type": memory_type,
             "created_at": now,
-            **(metadata or {}),
         }
 
         self._collection.upsert(
@@ -143,6 +146,7 @@ class MemoryStore:
         query: str,
         thread_id: Optional[str] = None,
         top_k: int = 5,
+        owner_id: Optional[str] = None,
     ) -> list[MemoryItem]:
         """
         函数作用：
@@ -151,6 +155,7 @@ class MemoryStore:
             - query: str
             - thread_id: Optional[str]，默认值 None
             - top_k: int，默认值 5
+            - owner_id: Optional[str]，认证用户 namespace；优先于 thread_id
         输出参数：
             - list[MemoryItem]
         """
@@ -160,7 +165,14 @@ class MemoryStore:
         query_embedding = self._embed(query)
 
         # ChromaDB 检索（取 top_k * 3 候选，留余量给新鲜度重排）
-        where_filter = {"thread_id": thread_id} if thread_id else None
+        # Long-term memory is user-scoped when an authenticated owner is known.
+        # Otherwise it is deliberately restricted to the current thread; an
+        # unscoped global similarity search could leak another user's memory.
+        where_filter = (
+            {"owner_id": owner_id}
+            if owner_id
+            else ({"thread_id": thread_id} if thread_id else None)
+        )
         n_results = min(top_k * 3, self._collection.count())
 
         results = self._collection.query(

@@ -454,7 +454,7 @@ async def _event_stream(graph, req: ChatRequest) -> AsyncIterator[dict]:
             yield _sse("done", "")
 
 
-async def _async_extract_memory(thread_id: str, messages):
+async def _async_extract_memory(thread_id: str, messages, user_id: str | None = None):
     """
     函数作用：
         后台异步记忆提取（由 BackgroundTasks 调度，不阻塞响应）。
@@ -466,7 +466,7 @@ async def _async_extract_memory(thread_id: str, messages):
     """
     try:
         from services.memory_extractor import extract_and_save_memory
-        await extract_and_save_memory(thread_id, messages)
+        await extract_and_save_memory(thread_id, messages, user_id=user_id)
     except Exception as e:
         log.warning("记忆提取失败（不影响对话）: %s", e)
 
@@ -561,7 +561,12 @@ async def chat(req: ChatRequest, request: Request, background_tasks: BackgroundT
             snapshot = await graph.aget_state(config)
             messages = snapshot.values.get("messages", [])
             if messages:
-                background_tasks.add_task(_async_extract_memory, req.thread_id, messages)
+                background_tasks.add_task(
+                    _async_extract_memory,
+                    req.thread_id,
+                    messages,
+                    snapshot.values.get("user_id"),
+                )
         except Exception as e:
             log.warning("无法获取对话状态用于记忆提取: %s", e)
 

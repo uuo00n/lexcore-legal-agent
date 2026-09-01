@@ -231,6 +231,9 @@ def _summary_msg_count(thread_id: str, compacted_count: int) -> int:
         existing = get_summary_msg_count(thread_id)
     except Exception:
         existing = 0
+    # ``msg_count`` is an archive offset, not a count of checkpoint deletions.
+    # Runtime compaction can summarize messages already covered by the
+    # background archiver, so adding here would skip future archive entries.
     return max(existing, compacted_count)
 
 

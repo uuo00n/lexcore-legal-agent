@@ -60,6 +60,17 @@ export default withMermaid({
           ]
         }
       ],
+      '/architecture/': [
+        {
+          text: '架构专题',
+          items: [
+            { text: 'Context Engineering 与 Memory', link: '/architecture/context-engineering-memory' },
+            { text: 'PostgreSQL 持久化', link: '/architecture/postgresql-persistence' },
+            { text: 'Redis 缓存', link: '/architecture/redis-cache' },
+            { text: '法律数据源', link: '/architecture/data-sources' },
+          ]
+        }
+      ],
     },
 
     outline: { level: [2, 3], label: '目录' },
