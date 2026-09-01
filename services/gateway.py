@@ -90,6 +90,24 @@ class GatewayChatModel:
         ]
         return GatewayChatModel(bound_clients, trace_id=self._trace_id, thread_id=self._thread_id)
 
+    def with_structured_output(self, schema: Any, **kwargs: Any) -> "GatewayChatModel":
+        """对结构化输出后的 Runnable 继续保留统一 LLM Trace 与 fallback。"""
+        structured_clients = [
+            LLMClientConfig(
+                provider=item.provider,
+                model=item.model,
+                base_url=item.base_url,
+                model_route=item.model_route,
+                client=item.client.with_structured_output(schema, **kwargs),
+            )
+            for item in self._clients
+        ]
+        return GatewayChatModel(
+            structured_clients,
+            trace_id=self._trace_id,
+            thread_id=self._thread_id,
+        )
+
     async def ainvoke(self, input: Any, **kwargs: Any) -> Any:
         """
         函数作用：
@@ -109,6 +127,7 @@ class GatewayChatModel:
             try:
                 response = await item.client.ainvoke(input, **kwargs)
                 latency_ms = int((time.perf_counter() - started) * 1000)
+                usage = _extract_usage(response)
                 record_llm_call(
                     provider=item.provider,
                     model=item.model,
@@ -119,11 +138,25 @@ class GatewayChatModel:
                     thread_id=self._thread_id,
                     fallback_from=fallback_from,
                     model_route=item.model_route,
-                    usage=_extract_usage(response),
+                    usage=usage,
+                )
+                record_event(
+                    self._trace_id,
+                    "llm_call",
+                    name=item.provider,
+                    payload={
+                        "thread_id": self._thread_id,
+                        "model": item.model,
+                        "model_route": item.model_route,
+                        "latency_ms": latency_ms,
+                        "token_usage": usage,
+                        "success": True,
+                        "retry_count": index,
+                        "fallback_from": fallback_from,
+                    },
                 )
                 observe("legal_llm_latency_ms", latency_ms, {"provider": item.provider, "status": "success"})
                 inc_counter("legal_llm_calls_total", {"provider": item.provider, "status": "success", "route": item.model_route or ""})
-                usage = _extract_usage(response)
                 try:
                     from services.quota import add_token_usage
                     add_token_usage(self._thread_id, usage.get("total_tokens"))
@@ -159,7 +192,17 @@ class GatewayChatModel:
                     self._trace_id or "",
                     "llm_error",
                     name=item.provider,
-                    payload={"model": item.model, "error": str(exc)},
+                    payload={
+                        "thread_id": self._thread_id,
+                        "model": item.model,
+                        "model_route": item.model_route,
+                        "latency_ms": latency_ms,
+                        "token_usage": {},
+                        "success": False,
+                        "error": str(exc),
+                        "retry_count": index,
+                        "fallback_from": fallback_from,
+                    },
                 )
 
         raise first_error or RuntimeError("all LLM gateway attempts failed")

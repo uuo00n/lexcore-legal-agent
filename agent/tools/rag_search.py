@@ -17,6 +17,7 @@ from agent.tools._runtime import (
 )
 from agent.tools.schemas import RagSearchToolInput, RetrievalToolOutput
 from services.mcp_client import call_tool
+from services.observability import get_trace_context
 
 
 @tool(
@@ -60,9 +61,16 @@ async def retrieve_local_law_tool(
             ).model_dump_json(exclude_none=True)
         )
     try:
+        trace_context = get_trace_context()
         raw = await call_tool(
             "legal_search",
-            {"query": query, "top_k": top_k, "trace_id": trace_id},
+            {
+                "query": query,
+                "top_k": top_k,
+                "trace_id": trace_id,
+                "thread_id": trace_context.thread_id,
+                "agent_name": trace_context.agent_name,
+            },
         )
         payload: dict[str, Any] = json.loads(raw) if isinstance(raw, str) else dict(raw)
         raw_results = payload.get("results") if isinstance(payload.get("results"), list) else []

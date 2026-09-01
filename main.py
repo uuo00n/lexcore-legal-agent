@@ -3,11 +3,12 @@ from __future__ import annotations
 
 import logging
 import os
+import time
 from contextlib import asynccontextmanager
 
 import httpx
 from dotenv import load_dotenv
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.responses import FileResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -21,14 +22,20 @@ from infrastructure.redis import (
     redis_enabled,
     redis_status,
 )
+from infrastructure.sanitize import RedactingFormatter
 from services.checkpoint import checkpoint_scope, init_meta_db
 from services.llm import current_provider
+from services.observability import new_trace_id, trace_context
 
 
 load_dotenv()
+_log_handler = logging.StreamHandler()
+_log_handler.setFormatter(
+    RedactingFormatter("%(asctime)s [%(levelname)s] %(name)s: %(message)s")
+)
 logging.basicConfig(
     level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+    handlers=[_log_handler],
 )
 log = logging.getLogger("legal")
 
@@ -129,6 +136,33 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="Legal Agent", lifespan=lifespan)
+
+
+@app.middleware("http")
+async def bind_request_trace(request: Request, call_next):
+    """每个 HTTP 请求只生成一个 trace_id，并通过请求状态与响应头传播。"""
+    trace_id = new_trace_id()
+    request.state.trace_id = trace_id
+    started = time.perf_counter()
+    status_code = 500
+    with trace_context(trace_id=trace_id, node_name="fastapi.request"):
+        try:
+            response = await call_next(request)
+            status_code = response.status_code
+            response.headers["X-Trace-ID"] = trace_id
+            return response
+        finally:
+            # 只记录请求元数据，绝不记录请求体、提示词或上传文档正文。
+            log.info(
+                "http_request trace_id=%s method=%s path=%s status=%s latency_ms=%s",
+                trace_id,
+                request.method,
+                request.url.path,
+                status_code,
+                int((time.perf_counter() - started) * 1000),
+            )
+
+
 app.include_router(chat.router, prefix="/api")
 app.include_router(upload.router, prefix="/api")
 app.include_router(threads.router, prefix="/api")

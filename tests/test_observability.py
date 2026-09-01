@@ -13,6 +13,7 @@ from services.observability import (
     record_eval_run,
     record_event,
     record_llm_call,
+    trace_context,
 )
 
 
@@ -82,3 +83,45 @@ def test_legacy_observability_mirror_redacts_credentials(tmp_path, monkeypatch):
     assert "abcdef123456" not in serialized
     assert "s3cret" not in serialized
     assert "***REDACTED***" in serialized
+
+
+def test_event_schema_is_enriched_from_unified_trace_context(tmp_path, monkeypatch):
+    monkeypatch.setenv("DOCS_DB", str(tmp_path / "meta.sqlite"))
+    init_meta_db()
+    init_observability_tables()
+    create_trace("trace-context", "thread-context", "测试统一 trace")
+
+    with trace_context(
+        trace_id="trace-context",
+        thread_id="thread-context",
+        node_name="statute_retrieval_tools",
+        agent_name="statute_retrieval_agent",
+        tool_name="retrieve_local_law_tool",
+        retry_count=2,
+    ):
+        record_event(
+            None,
+            "rag_retrieval",
+            name="hybrid_retrieval",
+            payload={
+                "latency_ms": 18,
+                "result_count": 4,
+                "cache_hit": True,
+                "api_key": "sk-1234567890abcdef",
+            },
+        )
+
+    event = get_trace("trace-context")["events"][0]
+    payload = event["payload"]
+    assert payload["thread_id"] == "thread-context"
+    assert payload["node_name"] == "statute_retrieval_tools"
+    assert payload["agent_name"] == "statute_retrieval_agent"
+    assert payload["tool_name"] == "retrieve_local_law_tool"
+    assert payload["latency_ms"] == 18
+    assert payload["token_usage"] == {}
+    assert payload["success"] is True
+    assert payload["error"] == ""
+    assert payload["retrieval_count"] == 4
+    assert payload["retry_count"] == 2
+    assert payload["cache_hit"] is True
+    assert payload["api_key"] == "***REDACTED***"

@@ -1,8 +1,11 @@
 """脱敏工具单测 —— 对应要求「API Key 不能写数据库日志」。"""
 from __future__ import annotations
 
+import logging
+
 from infrastructure.sanitize import (
     REDACTED,
+    RedactingFormatter,
     is_sensitive_key,
     mask_dsn,
     redact,
@@ -27,7 +30,15 @@ def test_sensitive_keys_cover_project_credentials():
         "DATABASE_URL_DSN",
     ):
         assert is_sensitive_key(key), key
-    for key in ("query", "top_k", "tool_name", "result_count", "latency_ms"):
+    for key in (
+        "query",
+        "top_k",
+        "tool_name",
+        "result_count",
+        "latency_ms",
+        "token_usage",
+        "total_tokens",
+    ):
         assert not is_sensitive_key(key), key
 
 
@@ -83,3 +94,21 @@ def test_mask_dsn_hides_password_only():
     assert "s3cret" not in masked
     assert "db.internal:5432/legal" in masked
     assert mask_dsn("sqlite+aiosqlite:///:memory:") == "sqlite+aiosqlite:///:memory:"
+
+
+def test_logging_formatter_redacts_inline_secret():
+    formatter = RedactingFormatter("%(message)s")
+    record = logging.LogRecord(
+        "test",
+        logging.INFO,
+        __file__,
+        1,
+        "request failed with Authorization: Bearer abcdef1234567890",
+        (),
+        None,
+    )
+
+    rendered = formatter.format(record)
+
+    assert "abcdef1234567890" not in rendered
+    assert REDACTED in rendered

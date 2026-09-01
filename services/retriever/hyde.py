@@ -235,10 +235,11 @@ def rewrite_query(query: str) -> str:
         prompt = _REWRITE_PROMPT.format(query=query)
         response = llm.invoke(prompt)
         rewritten = response.content.strip()
-        log.debug("问题重写: %s -> %s", query, rewritten)
+        # 只记长度，不把可能含个人隐私的原始问题或改写文本写入普通日志。
+        log.debug("问题重写完成: input_chars=%s output_chars=%s", len(query), len(rewritten))
         return rewritten
-    except Exception as e:
-        log.warning("问题重写失败，回退到原始 query: %s", e)
+    except Exception as exc:
+        log.warning("问题重写失败，回退到原始 query: error_type=%s", type(exc).__name__)
         return query
 
 
@@ -254,10 +255,14 @@ def generate_hypothetical_doc(query: str) -> str:
     if _get_hyde_backend() == "hf_lora":
         try:
             hypothetical = _generate_hyde_with_hf_lora(query)
-            log.debug("HyDE LoRA 假设文档: %s -> %s", query, hypothetical[:80])
+            log.debug(
+                "HyDE LoRA 假设文档生成完成: input_chars=%s output_chars=%s",
+                len(query),
+                len(hypothetical),
+            )
             return hypothetical
-        except Exception as e:
-            log.warning("HyDE LoRA 生成失败，回退到原始 query: %s", e)
+        except Exception as exc:
+            log.warning("HyDE LoRA 生成失败，回退到原始 query: error_type=%s", type(exc).__name__)
             return query
 
     try:
@@ -265,8 +270,12 @@ def generate_hypothetical_doc(query: str) -> str:
         prompt = _HYDE_PROMPT.format(query=query)
         response = llm.invoke(prompt)
         hypothetical = response.content.strip()
-        log.debug("HyDE 假设文档: %s -> %s", query, hypothetical[:80])
+        log.debug(
+            "HyDE 假设文档生成完成: input_chars=%s output_chars=%s",
+            len(query),
+            len(hypothetical),
+        )
         return hypothetical
-    except Exception as e:
-        log.warning("HyDE 生成失败，回退到原始 query: %s", e)
+    except Exception as exc:
+        log.warning("HyDE 生成失败，回退到原始 query: error_type=%s", type(exc).__name__)
         return query

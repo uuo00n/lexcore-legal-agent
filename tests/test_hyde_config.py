@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-from services.retriever.hyde import _get_enhance_llm
+import logging
+
+from services.retriever.hyde import _get_enhance_llm, rewrite_query
 
 
 def test_hyde_defaults_to_deepseek_v4_flash_with_deepseek_openai_endpoint(monkeypatch):
@@ -27,3 +29,18 @@ def test_hyde_can_still_be_switched_back_to_local_ollama_qwen(monkeypatch):
     assert llm.model_name == "qwen2.5:1.5b"
     assert llm.openai_api_base == "http://localhost:11434/v1"
     assert llm.openai_api_key.get_secret_value() == "ollama"
+
+
+def test_hyde_does_not_log_private_query_or_exception_message(monkeypatch, caplog):
+    private_query = "身份证号110101199001011234，完整合同内容属于隐私"
+
+    class BrokenLLM:
+        def invoke(self, _prompt):
+            raise RuntimeError(private_query)
+
+    monkeypatch.setenv("HYDE_REWRITE_ENABLED", "true")
+    monkeypatch.setattr("services.retriever.hyde._get_enhance_llm", lambda: BrokenLLM())
+    caplog.set_level(logging.DEBUG)
+
+    assert rewrite_query(private_query) == private_query
+    assert private_query not in caplog.text

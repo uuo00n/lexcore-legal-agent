@@ -25,6 +25,7 @@ from services.observability import (
     create_trace,
     new_trace_id,
     record_event,
+    trace_context,
 )
 from services.quota import consume_request
 from services.persistence import (
@@ -42,6 +43,11 @@ router = APIRouter()
 
 # 幂等标记的业务场景名，进入 Redis key 的明文部分。
 IDEMPOTENCY_SCOPE = "chat"
+SELF_TRACED_TOOLS = {
+    "search_case_tool",
+    "search_law_tool",
+    "retrieve_local_law_tool",
+}
 
 
 class ChatRequest(BaseModel):
@@ -236,7 +242,27 @@ def _build_state_input(
     }
 
 
-async def _event_stream(graph, req: ChatRequest) -> AsyncIterator[dict]:
+async def _event_stream(
+    graph,
+    req: ChatRequest,
+    trace_id: str | None = None,
+) -> AsyncIterator[dict]:
+    """在 FastAPI 生成的请求 Trace 上下文中执行完整 SSE 工作流。"""
+    effective_trace_id = trace_id or new_trace_id()
+    with trace_context(
+        trace_id=effective_trace_id,
+        thread_id=req.thread_id,
+        node_name="fastapi.chat",
+    ):
+        async for event in _run_event_stream(graph, req, effective_trace_id):
+            yield event
+
+
+async def _run_event_stream(
+    graph,
+    req: ChatRequest,
+    trace_id: str,
+) -> AsyncIterator[dict]:
     """
     函数作用：
         流式执行 LangGraph 并输出 SSE 事件。
@@ -246,7 +272,6 @@ async def _event_stream(graph, req: ChatRequest) -> AsyncIterator[dict]:
     输出参数：
         - AsyncIterator[dict]
     """
-    trace_id = new_trace_id()
     trace_started = time.perf_counter()
     trace_completed = False
     run_completed = False
@@ -255,7 +280,10 @@ async def _event_stream(graph, req: ChatRequest) -> AsyncIterator[dict]:
     record_event(trace_id, "chat_start", name="chat", payload={"doc_id": req.doc_id, "evidence_id": req.evidence_id})
     # 会话元数据热层：只记活跃时间、请求计数与是否带文档，不写标题与正文。
     await touch_session(req.thread_id, trace_id=trace_id, has_document=bool(req.doc_id))
-    config = {"configurable": {"thread_id": req.thread_id}}
+    config = {
+        "configurable": {"thread_id": req.thread_id, "trace_id": trace_id},
+        "metadata": {"thread_id": req.thread_id, "trace_id": trace_id},
+    }
 
     doc_text: Optional[str] = None
     doc_name: Optional[str] = None
@@ -315,12 +343,6 @@ async def _event_stream(graph, req: ChatRequest) -> AsyncIterator[dict]:
 
         async for chunk in graph.astream(state_input, config, stream_mode="updates"):
             for node_name, node_output in chunk.items():
-                record_event(
-                    trace_id,
-                    "graph_node",
-                    name=node_name,
-                    payload={"keys": list(node_output.keys()) if isinstance(node_output, dict) else []},
-                )
                 if isinstance(node_output, dict) and (
                     node_output.get("plan") is not None or node_output.get("intent")
                 ):
@@ -343,19 +365,12 @@ async def _event_stream(graph, req: ChatRequest) -> AsyncIterator[dict]:
                     msgs = node_output.get("messages", [])
                     for m in msgs:
                         if hasattr(m, "name"):
-                            record_event(trace_id, "tool_start", name=m.name or "")
                             yield _sse("tool_start", json.dumps({"name": m.name or ""}))
                             content = m.content if hasattr(m, "content") else ""
                             try:
                                 parsed = json.loads(content) if isinstance(content, str) else content
                             except (json.JSONDecodeError, TypeError):
                                 parsed = content
-                            record_event(
-                                trace_id,
-                                "tool_end",
-                                name=m.name or "",
-                                payload={"output_preview": parsed if isinstance(parsed, dict) else str(parsed)[:1000]},
-                            )
                             call_id = str(getattr(m, "tool_call_id", "") or "")
                             pending = pending_tool_calls.pop(call_id, {})
                             error = ""
@@ -363,6 +378,23 @@ async def _event_stream(graph, req: ChatRequest) -> AsyncIterator[dict]:
                                 error = str(parsed.get("error"))
                             success = getattr(m, "status", None) != "error" and not error
                             started = float(pending.get("started", time.perf_counter()))
+                            if str(m.name or "") not in SELF_TRACED_TOOLS:
+                                record_event(
+                                    trace_id,
+                                    "tool_end",
+                                    name=m.name or "",
+                                    payload={
+                                        **_summarize_tool_output(parsed),
+                                        "success": success,
+                                        "error": error,
+                                        "latency_ms": max(
+                                            0,
+                                            int((time.perf_counter() - started) * 1000),
+                                        ),
+                                        "node_name": node_name,
+                                        "agent_name": str(pending.get("agent_name") or node_name),
+                                    },
+                                )
                             await record_tool_call(
                                 trace_id,
                                 agent_name=str(pending.get("agent_name") or node_name),
@@ -394,12 +426,27 @@ async def _event_stream(graph, req: ChatRequest) -> AsyncIterator[dict]:
                                 tc_names = [tc.get("name", "") for tc in m.tool_calls]
                                 for tc in m.tool_calls:
                                     call_id = str(tc.get("id") or f"{node_name}:{len(pending_tool_calls)}")
+                                    tool_name = str(tc.get("name") or "")
                                     pending_tool_calls[call_id] = {
                                         "agent_name": node_name,
-                                        "tool_name": tc.get("name", ""),
+                                        "tool_name": tool_name,
                                         "input_payload": tc.get("args") or {},
                                         "started": time.perf_counter(),
                                     }
+                                    if tool_name not in SELF_TRACED_TOOLS:
+                                        record_event(
+                                            trace_id,
+                                            "tool_start",
+                                            name=tool_name,
+                                            payload={
+                                                "node_name": node_name,
+                                                "agent_name": node_name,
+                                                "input_keys": sorted(
+                                                    str(key)
+                                                    for key in (tc.get("args") or {}).keys()
+                                                )[:20],
+                                            },
+                                        )
                                 yield _sse("thought", json.dumps(
                                     {"content": _build_process_message(tc_names)},
                                     ensure_ascii=False,
@@ -542,7 +589,11 @@ async def chat(req: ChatRequest, request: Request, background_tasks: BackgroundT
             - 未标注
         """
         try:
-            async for event in _event_stream(graph, req):
+            async for event in _event_stream(
+                graph,
+                req,
+                trace_id=getattr(request.state, "trace_id", None),
+            ):
                 yield event
         except (asyncio.CancelledError, GeneratorExit):
             # 客户端断开时不能再 await，否则生成器关闭会抛 RuntimeError；

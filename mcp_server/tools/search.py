@@ -8,6 +8,7 @@ from mcp_server.server import mcp
 from services.rag.retriever import get_retriever
 from services.local_legal_retriever import LocalLegalRetriever
 from services.delilegal.enums import SourceType
+from services.observability import trace_context
 from services.rag.interfaces import LawChunk
 
 
@@ -33,6 +34,8 @@ def legal_search(
     query: str,
     top_k: int = 5,
     trace_id: str | None = None,
+    thread_id: str | None = None,
+    agent_name: str | None = None,
 ) -> str:
     """
     函数作用：
@@ -43,9 +46,16 @@ def legal_search(
     输出参数：
         - str
     """
-    retriever = LocalLegalRetriever(get_retriever())
-    score_threshold = retriever.score_threshold
-    scored_chunks = retriever.search(query, top_k=top_k, trace_id=trace_id)
+    with trace_context(
+        trace_id=trace_id or "",
+        thread_id=thread_id or "",
+        node_name="rag.hybrid_retrieval",
+        agent_name=agent_name or "",
+        tool_name="retrieve_local_law_tool",
+    ):
+        retriever = LocalLegalRetriever(get_retriever())
+        score_threshold = retriever.score_threshold
+        scored_chunks = retriever.search(query, top_k=top_k, trace_id=trace_id)
 
     if not scored_chunks:
         return json.dumps(

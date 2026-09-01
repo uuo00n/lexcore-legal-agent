@@ -9,10 +9,118 @@ from __future__ import annotations
 import json
 import time
 import uuid
+from contextlib import contextmanager
+from contextvars import ContextVar, Token
+from dataclasses import dataclass, replace
+from collections.abc import Iterator
 from typing import Any, Optional
 
 from services.checkpoint import get_meta_conn
 from infrastructure.sanitize import redact, redact_text
+
+
+@dataclass(frozen=True)
+class TraceContext:
+    """跨 FastAPI、LangGraph、Tool、RAG 与 LLM 传播的请求上下文。"""
+
+    trace_id: str = ""
+    thread_id: str = ""
+    node_name: str = ""
+    agent_name: str = ""
+    tool_name: str = ""
+    model: str = ""
+    retry_count: int = 0
+
+
+_TRACE_CONTEXT: ContextVar[TraceContext] = ContextVar(
+    "legal_trace_context",
+    default=TraceContext(),
+)
+
+
+def get_trace_context() -> TraceContext:
+    """返回当前异步任务所处的 Trace 上下文。"""
+    return _TRACE_CONTEXT.get()
+
+
+def set_trace_context(**values: Any) -> Token[TraceContext]:
+    """合并并设置 Trace 上下文，返回可用于恢复上层上下文的 token。"""
+    current = get_trace_context()
+    updates = {
+        key: value
+        for key, value in values.items()
+        if key in TraceContext.__dataclass_fields__ and value is not None
+    }
+    return _TRACE_CONTEXT.set(replace(current, **updates))
+
+
+def reset_trace_context(token: Token[TraceContext]) -> None:
+    """恢复进入当前组件前的 Trace 上下文。"""
+    _TRACE_CONTEXT.reset(token)
+
+
+@contextmanager
+def trace_context(**values: Any) -> Iterator[TraceContext]:
+    """在一个同步或异步调用片段内绑定统一 Trace 上下文。"""
+    token = set_trace_context(**values)
+    try:
+        yield get_trace_context()
+    finally:
+        reset_trace_context(token)
+
+
+def _retrieval_count(payload: dict[str, Any]) -> int:
+    for key in ("retrieval_count", "result_count", "count"):
+        value = payload.get(key)
+        if isinstance(value, int) and not isinstance(value, bool):
+            return max(0, value)
+    hits = payload.get("hits")
+    return len(hits) if isinstance(hits, list) else 0
+
+
+def _standard_event_payload(
+    event_type: str,
+    name: str,
+    payload: dict[str, Any],
+) -> dict[str, Any]:
+    """为所有事件补齐统一字段；只保留元数据，不主动采集提示词或文档正文。"""
+    context = get_trace_context()
+    error = payload.get("error") or payload.get("error_type") or ""
+    success = payload.get("success")
+    if success is None:
+        success = False if error or event_type.endswith("_error") else True
+    latency = payload.get("latency_ms", payload.get("elapsed_ms", 0))
+    try:
+        latency = max(0, float(latency or 0))
+    except (TypeError, ValueError):
+        latency = 0
+    retry_count = payload.get("retry_count", context.retry_count)
+    try:
+        retry_count = max(0, int(retry_count or 0))
+    except (TypeError, ValueError):
+        retry_count = 0
+    cache_hit = payload.get("cache_hit")
+    if cache_hit is None and event_type in {"cache_hit", "cache_miss"}:
+        cache_hit = event_type == "cache_hit"
+    tool_name = payload.get("tool_name") or context.tool_name
+    if not tool_name and event_type.startswith("tool_"):
+        tool_name = name
+    model = payload.get("model") or context.model
+    return {
+        **payload,
+        "thread_id": payload.get("thread_id") or context.thread_id,
+        "node_name": payload.get("node_name") or context.node_name,
+        "agent_name": payload.get("agent_name") or context.agent_name,
+        "tool_name": tool_name,
+        "model": model,
+        "latency_ms": latency,
+        "token_usage": payload.get("token_usage") or {},
+        "success": bool(success),
+        "error": str(error),
+        "retrieval_count": _retrieval_count(payload),
+        "retry_count": retry_count,
+        "cache_hit": cache_hit,
+    }
 
 
 def _json_dumps(value: Any) -> str:
@@ -220,7 +328,7 @@ def complete_trace(
 
 
 def record_event(
-    trace_id: str,
+    trace_id: str | None,
     event_type: str,
     *,
     name: str = "",
@@ -237,13 +345,21 @@ def record_event(
     输出参数：
         - 无
     """
-    if not trace_id:
+    effective_trace_id = trace_id or get_trace_context().trace_id
+    if not effective_trace_id:
         return
+    normalized_payload = _standard_event_payload(event_type, name, payload or {})
     conn = get_meta_conn()
     conn.execute(
         """INSERT INTO agent_events (trace_id, event_type, name, payload, created_at)
            VALUES (?, ?, ?, ?, ?)""",
-        (trace_id, event_type, name, _json_dumps(payload or {}), int(time.time() * 1000)),
+        (
+            effective_trace_id,
+            event_type,
+            redact_text(name),
+            _json_dumps(normalized_payload),
+            int(time.time() * 1000),
+        ),
     )
     conn.commit()
 
@@ -280,6 +396,9 @@ def record_llm_call(
         - 无
     """
     usage = usage or {}
+    context = get_trace_context()
+    trace_id = trace_id or context.trace_id or None
+    thread_id = thread_id or context.thread_id or None
     conn = get_meta_conn()
     conn.execute(
         """INSERT INTO llm_call_logs
@@ -295,8 +414,8 @@ def record_llm_call(
             status,
             latency_ms,
             redact_text(error),
-            fallback_from,
-            model_route,
+            redact_text(fallback_from),
+            redact_text(model_route),
             usage.get("prompt_tokens") or usage.get("input_tokens"),
             usage.get("completion_tokens") or usage.get("output_tokens"),
             usage.get("total_tokens"),
@@ -548,7 +667,11 @@ def get_trace_timeline(trace_id: str) -> Optional[dict[str, Any]]:
         "bm25_hits": "BM25 检索命中",
         "fused_hits": "RRF 融合命中",
         "reranker_hits": "Reranker 精排命中",
+        "rag_retrieval": "RAG 检索完成",
+        "cache_hit": "缓存命中",
+        "cache_miss": "缓存未命中",
         "citation_guard": "法条引用校验",
+        "llm_call": "LLM 调用完成",
         "llm_error": "LLM 调用失败",
         "llm_fallback": "LLM Fallback",
         "final_answer": "生成最终回答",
@@ -597,6 +720,13 @@ def _summarize_event(event_type: str, payload: dict[str, Any]) -> str:
         return f"收集到 {payload.get('law_count', 0)} 条法条"
     if event_type in {"vector_hits", "bm25_hits", "fused_hits", "reranker_hits"}:
         return f"命中 {len(payload.get('hits', []))} 条"
+    if event_type == "rag_retrieval":
+        return (
+            f"命中 {payload.get('retrieval_count', 0)} 条 · "
+            f"{payload.get('latency_ms', 0)} ms"
+        )
+    if event_type in {"cache_hit", "cache_miss"}:
+        return f"{payload.get('namespace', '')} · cache_hit={payload.get('cache_hit')}"
     if event_type == "citation_guard":
         return "回答引用已调整" if payload.get("changed") else "回答引用通过"
     if event_type == "final_answer":
@@ -605,6 +735,10 @@ def _summarize_event(event_type: str, payload: dict[str, Any]) -> str:
         return f"{payload.get('elapsed_ms', 0)} ms"
     if event_type == "llm_fallback":
         return f"{payload.get('from')} -> {payload.get('to')}"
+    if event_type == "llm_call":
+        usage = payload.get("token_usage") or {}
+        total = usage.get("total_tokens") or usage.get("total_token_count") or 0
+        return f"{payload.get('model', '')} · {payload.get('latency_ms', 0)} ms · {total} tokens"
     if event_type == "llm_error":
         return payload.get("error", "")
     return ""

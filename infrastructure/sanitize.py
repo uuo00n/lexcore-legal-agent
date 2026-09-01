@@ -7,6 +7,7 @@
 """
 from __future__ import annotations
 
+import logging
 import re
 from typing import Any
 
@@ -24,6 +25,16 @@ _SENSITIVE_KEY_RE = re.compile(
     r"|admin[_-]?key|session[_-]?id|dsn|connection[_-]?string",
     re.IGNORECASE,
 )
+
+# Token 计数是可观测性指标，不是认证凭据；这些精确键名必须允许落库。
+_NON_SECRET_TELEMETRY_KEYS = {
+    "token_usage",
+    "prompt_tokens",
+    "completion_tokens",
+    "total_tokens",
+    "input_tokens",
+    "output_tokens",
+}
 
 # 值内嵌片段命中即局部替换，覆盖 key 名无害但值本身是凭据的场景。
 _SECRET_VALUE_RE = re.compile(
@@ -62,6 +73,8 @@ def is_sensitive_key(key: str) -> bool:
     输出参数：
         - bool
     """
+    if key.lower() in _NON_SECRET_TELEMETRY_KEYS:
+        return False
     return bool(_SENSITIVE_KEY_RE.search(key))
 
 
@@ -121,3 +134,10 @@ def mask_dsn(dsn: str) -> str:
         - str
     """
     return _DSN_PASSWORD_RE.sub(rf"\g<head>{REDACTED}\g<tail>", dsn)
+
+
+class RedactingFormatter(logging.Formatter):
+    """在普通日志最终输出前统一移除 Token、Secret 与带密码连接串。"""
+
+    def format(self, record: logging.LogRecord) -> str:
+        return redact_text(super().format(record))

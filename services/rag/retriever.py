@@ -4,6 +4,7 @@ from __future__ import annotations
 import logging
 import os
 import re
+import time
 from pathlib import Path
 from typing import Any, Optional
 
@@ -179,6 +180,23 @@ def _record_retrieval_event(
         )
     except Exception as exc:
         log.debug("retrieval trace event skipped: %s", exc)
+
+
+def _record_rag_summary(trace_id: str | None, **payload: Any) -> None:
+    """记录 RAG 汇总指标；未初始化观测存储时不得影响独立检索调用。"""
+    if not trace_id:
+        return
+    try:
+        from services.observability import record_event
+
+        record_event(
+            trace_id,
+            "rag_retrieval",
+            name="hybrid_retrieval",
+            payload=payload,
+        )
+    except Exception as exc:
+        log.debug("rag summary trace skipped: %s", exc)
 
 
 class HybridRetriever:
@@ -489,11 +507,37 @@ class HybridRetriever:
         """
         final_limit = top_k if top_k is not None else self._final_top_k
         params = self._cache_params(final_limit)
+        started = time.perf_counter()
         cached = get_cached_results(query, params, trace_id=trace_id)
         if cached is not None:
+            _record_rag_summary(
+                trace_id,
+                latency_ms=int((time.perf_counter() - started) * 1000),
+                retrieval_count=len(cached[0]),
+                cache_hit=True,
+                success=True,
+            )
             return cached
-        results, reranked = self._run_pipeline(query, top_k=top_k, trace_id=trace_id)
+        try:
+            results, reranked = self._run_pipeline(query, top_k=top_k, trace_id=trace_id)
+        except Exception as exc:
+            _record_rag_summary(
+                trace_id,
+                latency_ms=int((time.perf_counter() - started) * 1000),
+                retrieval_count=0,
+                cache_hit=False,
+                success=False,
+                error=str(exc),
+            )
+            raise
         set_cached_results(query, results, reranked=reranked, params=params)
+        _record_rag_summary(
+            trace_id,
+            latency_ms=int((time.perf_counter() - started) * 1000),
+            retrieval_count=len(results),
+            cache_hit=False,
+            success=True,
+        )
         return results, reranked
 
     def retrieve_with_scores(

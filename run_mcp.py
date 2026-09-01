@@ -16,9 +16,15 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
+from infrastructure.sanitize import RedactingFormatter
+
+_log_handler = logging.StreamHandler()
+_log_handler.setFormatter(
+    RedactingFormatter("%(asctime)s [%(levelname)s] %(name)s: %(message)s")
+)
 logging.basicConfig(
     level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+    handlers=[_log_handler],
 )
 
 from mcp_server.startup import initialize_rag
