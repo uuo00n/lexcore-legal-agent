@@ -37,7 +37,7 @@
 | Reranker | `bge-reranker-base` | CrossEncoder 精排 |
 | 关键词检索 | BM25 | 中文 unigram + bigram 分词 |
 | Context Layer | OpenViking + 本地 fallback | Resource / Memory / Skill，`viking://` URI，L0/L1/L2 分层上下文 |
-| 持久化 | SQLite + ChromaDB | `data/docs.sqlite` 存元数据/trace/quota/cache/memory，Chroma 存向量 |
+| 持久化 | PostgreSQL + SQLite + ChromaDB | PostgreSQL 存核心业务数据与 LangGraph checkpoint，SQLite 保留辅助数据，Chroma 存向量 |
 | 评测 | 自研 retrieval metrics + RAGAS | 100 条法律场景数据集 |
 
 ## 当前核心链路
@@ -47,14 +47,14 @@
 ```text
 main.lifespan
   -> init_meta_db()
-  -> init_checkpointer()                  # LangGraph MemorySaver, 运行时状态
   -> init_observability_tables()
   -> init_quota_tables()
   -> init_cache_tables()
   -> init_memory_tables()
   -> init_memory_store()                  # ChromaDB memory collection
   -> start_mcp_client()                   # 启动 run_mcp.py 子进程
-  -> build_graph()
+  -> checkpoint_scope()                   # PostgreSQL；开发/测试可用 MemorySaver
+      -> build_graph()
 ```
 
 MCP Server 启动时：

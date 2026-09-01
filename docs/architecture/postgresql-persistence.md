@@ -14,8 +14,8 @@ PostgreSQL 负责：
 - `tool_calls`
 
 上传文档、缓存、配额、评测历史、LLM 调用统计、会话摘要和用户画像暂时保留在
-SQLite；LangGraph checkpoint 仍使用进程内 `MemorySaver`。这些辅助数据将在后续阶段
-按独立迁移计划处理。
+SQLite。LangGraph 的 thread-scoped state 默认通过 `AsyncPostgresSaver` 写入 PostgreSQL；
+开发和测试可显式设置 `CHECKPOINT_BACKEND=memory` 使用进程内后端。
 
 后台时间线使用的通用 `agent_events` 与旧版 trace 展示镜像暂时仍在 SQLite；运行状态
 的权威记录是 PostgreSQL `agent_runs`，工具调用的权威记录是 `tool_calls`。该镜像只为
@@ -31,6 +31,8 @@ SQLite；LangGraph checkpoint 仍使用进程内 `MemorySaver`。这些辅助数
 
 ```dotenv
 DATABASE_URL=postgresql+asyncpg://legal:change-me@localhost:5432/legal
+CHECKPOINT_BACKEND=postgres
+LANGGRAPH_STRICT_MSGPACK=true
 POSTGRES_REQUIRED=true
 ```
 
@@ -50,6 +52,19 @@ alembic downgrade base
 
 应用启动只做连接探活，不自动建表或自动执行迁移。`POSTGRES_REQUIRED=false` 仅用于
 临时开发降级；此时核心持久化被禁用，不能作为生产配置。
+
+LangGraph checkpoint 表由 `langgraph-checkpoint-postgres` 自带的 schema migration
+管理，不进入本项目 Alembic revision。`CHECKPOINT_AUTO_SETUP=true`（默认）会在启动时
+幂等调用 `AsyncPostgresSaver.setup()`；严格变更管理的生产环境可以在部署步骤完成
+setup 后关闭该选项。checkpointer 默认复用 `DATABASE_URL`，也可设置独立的
+`CHECKPOINT_DATABASE_URL=postgresql://...`。
+
+PostgreSQL 状态恢复集成测试需要专用测试库：
+
+```bash
+CHECKPOINT_INTEGRATION_DSN=postgresql://legal:test@localhost:5432/legal_test \
+python -m pytest -q tests/integration/test_postgres_checkpointer.py
+```
 
 ## 敏感信息
 

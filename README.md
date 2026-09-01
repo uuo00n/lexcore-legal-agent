@@ -88,6 +88,7 @@ python -m services.indexer.builder
 
 ```bash
 uvicorn main:app --host 0.0.0.0 --port 8000 --reload \
+  --loop services.checkpoint:selector_event_loop_factory \
   --reload-exclude 'data/*' \
   --reload-exclude 'data/**' \
   --reload-exclude 'models/*' \
@@ -95,6 +96,9 @@ uvicorn main:app --host 0.0.0.0 --port 8000 --reload \
   --reload-exclude '*.sqlite' \
   --reload-exclude '*.sqlite-*'
 ```
+
+自定义 loop 在 Windows 上确保 PostgreSQL checkpointer 使用 psycopg 支持的
+`SelectorEventLoop`，其他平台也可以沿用同一条命令。
 
 访问：
 

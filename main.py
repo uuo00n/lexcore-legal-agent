@@ -14,7 +14,7 @@ from fastapi.staticfiles import StaticFiles
 from agent.graph import build_graph
 from api import admin, chat, evidence, reports, threads, upload
 from infrastructure.database import dispose_database, init_database, ping as ping_database
-from services.checkpoint import init_checkpointer, init_meta_db
+from services.checkpoint import checkpoint_scope, init_meta_db
 from services.llm import current_provider
 
 
@@ -74,7 +74,6 @@ async def lifespan(app: FastAPI):
         await dispose_database()
 
     init_meta_db()
-    cp = init_checkpointer()
 
     from services.observability import init_observability_tables
     init_observability_tables()
@@ -94,20 +93,20 @@ async def lifespan(app: FastAPI):
     # 启动 MCP Client（连接 MCP Server 子进程）
     from services.mcp_client import start_mcp_client, stop_mcp_client
     await start_mcp_client()
+    try:
+        # Checkpointer 连接必须覆盖 compiled graph 的完整生命周期。
+        async with checkpoint_scope() as checkpointer:
+            app.state.graph = build_graph(checkpointer)
 
-    # 构建 LangGraph 图
-    app.state.graph = build_graph(cp)
+            provider = current_provider()
+            log.info("LLM provider: %s", provider)
+            if provider == "ollama":
+                await _probe_ollama()
 
-    provider = current_provider()
-    log.info("LLM provider: %s", provider)
-    if provider == "ollama":
-        await _probe_ollama()
-
-    yield
-
-    # 关闭 MCP Client
-    await stop_mcp_client()
-    await dispose_database()
+            yield
+    finally:
+        await stop_mcp_client()
+        await dispose_database()
 
 
 app = FastAPI(title="Legal Agent", lifespan=lifespan)

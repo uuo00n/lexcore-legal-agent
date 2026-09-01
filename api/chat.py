@@ -124,6 +124,18 @@ def _checkpoint_has_messages(graph, thread_id: str) -> bool:
         return False
 
 
+async def _acheckpoint_has_messages(graph, thread_id: str) -> bool:
+    """异步读取 checkpoint；测试替身不支持异步接口时回退同步读取。"""
+    aget_state = getattr(graph, "aget_state", None)
+    if aget_state is None:
+        return _checkpoint_has_messages(graph, thread_id)
+    try:
+        snapshot = await aget_state({"configurable": {"thread_id": thread_id}})
+        return bool(snapshot and snapshot.values and snapshot.values.get("messages"))
+    except Exception:
+        return False
+
+
 def _archive_item_to_message(item: dict) -> HumanMessage | AIMessage | SystemMessage | None:
     """
     函数作用：
@@ -154,6 +166,7 @@ def _build_state_input(
     doc_name: Optional[str],
     trace_id: str,
     archived_items: list[dict] | None = None,
+    checkpoint_has_messages: bool | None = None,
 ) -> dict:
     """
     函数作用：
@@ -168,7 +181,12 @@ def _build_state_input(
         - dict
     """
     messages: list[HumanMessage | AIMessage | SystemMessage] = []
-    if not _checkpoint_has_messages(graph, req.thread_id):
+    has_checkpoint = (
+        _checkpoint_has_messages(graph, req.thread_id)
+        if checkpoint_has_messages is None
+        else checkpoint_has_messages
+    )
+    if not has_checkpoint:
         for item in archived_items or []:
             message = _archive_item_to_message(item)
             if message is not None:
@@ -243,8 +261,9 @@ async def _event_stream(graph, req: ChatRequest) -> AsyncIterator[dict]:
         doc_text = doc["text"]
         doc_name = doc["filename"]
 
+    checkpoint_has_messages = await _acheckpoint_has_messages(graph, req.thread_id)
     archived_items = None
-    if not _checkpoint_has_messages(graph, req.thread_id):
+    if not checkpoint_has_messages:
         archived_items = await load_persisted_messages(req.thread_id)
     state_input = _build_state_input(
         graph,
@@ -253,6 +272,7 @@ async def _event_stream(graph, req: ChatRequest) -> AsyncIterator[dict]:
         doc_name=doc_name,
         trace_id=trace_id,
         archived_items=archived_items,
+        checkpoint_has_messages=checkpoint_has_messages,
     )
     await start_agent_run(trace_id, req.thread_id)
     pending_tool_calls: dict[str, dict] = {}

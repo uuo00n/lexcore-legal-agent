@@ -21,6 +21,14 @@ from services.persistence import (
 router = APIRouter()
 
 
+async def _aget_graph_state(graph, config: dict):
+    """读取图状态，并兼容仅实现同步接口的单元测试替身。"""
+    aget_state = getattr(graph, "aget_state", None)
+    if aget_state is not None:
+        return await aget_state(config)
+    return graph.get_state(config)
+
+
 def _msg_to_dict(m: Any) -> dict:
     """
     函数作用：
@@ -93,6 +101,16 @@ def _archive_item_to_message(item: dict) -> HumanMessage | AIMessage | SystemMes
     return None
 
 
+def _visible_archived_messages(archived_items: list[dict] | None) -> list[dict]:
+    """把持久消息归档转换为前端可见历史。"""
+    messages = []
+    for item in archived_items or []:
+        message = _archive_item_to_message(item)
+        if message is not None:
+            messages.append(message)
+    return _visible_history_messages(messages)
+
+
 def _history_messages_for_thread(
     graph,
     thread_id: str,
@@ -117,19 +135,14 @@ def _history_messages_for_thread(
                 return visible
     except Exception:
         pass
-    messages = []
-    for item in archived_items or []:
-        message = _archive_item_to_message(item)
-        if message is not None:
-            messages.append(message)
-    return _visible_history_messages(messages)
+    return _visible_archived_messages(archived_items)
 
 
 async def _persistent_history_messages_for_thread(graph, thread_id: str) -> list[dict]:
     """生产历史读取：优先内存 checkpoint，缺失时回退 PostgreSQL 消息归档。"""
     config = {"configurable": {"thread_id": thread_id}}
     try:
-        snapshot = graph.get_state(config)
+        snapshot = await _aget_graph_state(graph, config)
         if snapshot is not None and snapshot.values:
             visible = _visible_history_messages(snapshot.values.get("messages", []))
             if visible:
@@ -137,11 +150,7 @@ async def _persistent_history_messages_for_thread(graph, thread_id: str) -> list
     except Exception:
         pass
     archived = await load_persisted_messages(thread_id)
-    return _history_messages_for_thread(
-        graph,
-        thread_id,
-        archived_items=archived,
-    )
+    return _visible_archived_messages(archived)
 
 
 def _context_status_for_thread(graph, thread_id: str) -> dict:
@@ -165,6 +174,19 @@ def _context_status_for_thread(graph, thread_id: str) -> dict:
     return status
 
 
+async def _acontext_status_for_thread(graph, thread_id: str) -> dict:
+    """从异步 checkpointer 读取上下文窗口状态。"""
+    config = {"configurable": {"thread_id": thread_id}}
+    try:
+        snapshot = await _aget_graph_state(graph, config)
+        values = snapshot.values if snapshot is not None and snapshot.values else {}
+    except Exception:
+        values = {}
+    status = build_context_status(values.get("messages", []))
+    status["thread_id"] = thread_id
+    return status
+
+
 async def _manual_compact_thread(graph, thread_id: str) -> dict:
     """
     函数作用：
@@ -177,7 +199,7 @@ async def _manual_compact_thread(graph, thread_id: str) -> dict:
     """
     config = {"configurable": {"thread_id": thread_id}}
     try:
-        snapshot = graph.get_state(config)
+        snapshot = await _aget_graph_state(graph, config)
         values = dict(snapshot.values if snapshot is not None and snapshot.values else {})
     except Exception:
         values = {}
@@ -237,7 +259,7 @@ async def get_context(thread_id: str, request: Request):
         - dict
     """
     graph = request.app.state.graph
-    return _context_status_for_thread(graph, thread_id)
+    return await _acontext_status_for_thread(graph, thread_id)
 
 
 @router.post("/threads/{thread_id}/compact")
@@ -266,9 +288,6 @@ async def remove_thread(thread_id: str):
         - 未标注
     """
     cp = get_checkpointer()
-    try:
-        cp.delete_thread(thread_id)
-    except AttributeError:
-        pass
+    await cp.adelete_thread(thread_id)
     await delete_conversation(thread_id)
     return {"deleted": thread_id}

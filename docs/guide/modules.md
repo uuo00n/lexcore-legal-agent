@@ -38,13 +38,13 @@ graph TD
 | `mcp_server/knowledge/` | limitations_table.py, templates/ | 诉讼时效规则、文书模板 | — |
 | `services/llm.py` | — | 多 Provider LLM 工厂 | langchain-openai |
 | `services/mcp_client.py` | — | MCP stdio 客户端生命周期 | mcp |
-| `services/memory.py` | — | SQLite 记忆表（摘要、画像、归档） | sqlite3 |
+| `services/memory.py` | — | SQLite 辅助记忆表（摘要、画像） | sqlite3 |
 | `services/memory_extractor.py` | — | 后台异步记忆提取 | — |
 | `services/memory_store.py` | — | ChromaDB 长期记忆向量存储 | chromadb |
 | `services/indexer/` | builder.py, chunker.py | 法条文本分块 + 索引构建 | — |
 | `services/retriever/` | hybrid.py, semantic.py, keyword.py, hyde.py, reranker.py | 混合检索管线 | sentence-transformers, rank-bm25 |
 | `services/vectorstore/` | chroma_store.py, milvus_store.py | 向量存储抽象层 | chromadb, pymilvus |
-| `services/checkpoint.py` | — | LangGraph MemorySaver + 线程元数据 | langgraph |
+| `services/checkpoint.py` | — | LangGraph PostgreSQL checkpoint 生命周期 + Memory fallback | langgraph-checkpoint-postgres |
 | `services/doc_parser.py` | — | PDF/DOCX/TXT 文档解析 | pypdf, python-docx |
 
 ## 设计原则

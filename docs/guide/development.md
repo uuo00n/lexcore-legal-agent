@@ -97,6 +97,7 @@ python -m services.indexer.builder --rebuild
 
 ```bash
 uvicorn main:app --host 0.0.0.0 --port 8000 --reload \
+  --loop services.checkpoint:selector_event_loop_factory \
   --reload-exclude 'data/*' \
   --reload-exclude 'data/**' \
   --reload-exclude 'models/*' \
@@ -104,6 +105,9 @@ uvicorn main:app --host 0.0.0.0 --port 8000 --reload \
   --reload-exclude '*.sqlite' \
   --reload-exclude '*.sqlite-*'
 ```
+
+`--loop services.checkpoint:selector_event_loop_factory` 用于确保 Windows 下的
+psycopg 异步连接运行在 `SelectorEventLoop`；Linux/macOS 也可使用同一命令。
 
 注意：不要让 `--reload` 监听 `data/`、`models/` 或 SQLite 文件。聊天、记忆、缓存和 checkpoint 会频繁写入这些文件；如果被热重载监听，长对话会在生成途中被重启打断，前端表现为一直停在“正在分析...”。
 
