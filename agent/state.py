@@ -262,6 +262,7 @@ class AgentState(TypedDict, total=False):
     # 意图识别
     intent: str  # 识别出的业务意图
     intent_confidence: float  # 意图置信度，建议范围为 0 到 1
+    intent_routed: bool  # 本轮请求是否已经经过独立 Intent Router
     task_complexity: Literal["low", "medium", "high"]  # Supervisor 判断的任务复杂度
 
     # Supervisor 的路由决策

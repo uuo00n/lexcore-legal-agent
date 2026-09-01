@@ -229,6 +229,9 @@ def _build_state_input(
         "verifier_retry_count": 0,
         "intent": "",
         "intent_confidence": 0.0,
+        "intent_routed": False,
+        "original_query": req.message,
+        "rewritten_query": "",
         "needs_follow_up": False,
         "supervisor_route": "",
         "supervisor_reason": "",
@@ -418,7 +421,7 @@ async def _run_event_stream(
                         ))
                 elif node_name in {"collect_case_evidence", "collect_statute_evidence", "collect_consult_evidence"}:
                     retrieved_laws = node_output.get("retrieved_laws", []) or retrieved_laws
-                elif node_name in {"agent", "fact_check", "fact_agent", "case_analysis_agent", "statute_retrieval_agent", "contract_agent", "legal_consult_agent", "request_router", "supervisor_agent", "verifier", "answer_generator"}:
+                elif node_name in {"agent", "fact_check", "fact_agent", "case_analysis_agent", "statute_retrieval_agent", "contract_agent", "legal_consult_agent", "request_router", "supervisor_agent", "verifier", "intent_router", "supervisor", "result_verifier", "answer_generator"}:
                     msgs = node_output.get("messages", [])
                     for m in msgs:
                         if isinstance(m, AIMessage):
@@ -452,7 +455,7 @@ async def _run_event_stream(
                                     {"content": _build_process_message(tc_names)},
                                     ensure_ascii=False,
                                 ))
-                            elif m.content and node_name in {"request_router", "supervisor_agent", "verifier", "answer_generator"}:
+                            elif m.content and node_name in {"request_router", "supervisor_agent", "verifier", "intent_router", "supervisor", "result_verifier", "answer_generator"}:
                                 # 纯文字、无工具调用 → 最终回答
                                 final_content = m.content
 

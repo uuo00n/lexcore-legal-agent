@@ -275,15 +275,13 @@ async def _llm_supervisor_direct_response(state: AgentState, reason: str) -> str
         return fallback
 
 
-async def supervisor_agent_node(state: AgentState) -> dict[str, Any]:
-    """Route the initial request, then execute the Planner's steps one at a time."""
-    if state.get("plan"):
-        return _executor_update(state)
-
+async def intent_router_node(state: AgentState) -> dict[str, Any]:
+    """Classify and route one new request before planning begins."""
     if state.get("tool_loop_failure"):
         failure = state["tool_loop_failure"] or {}
         reason = str(failure.get("message") or "Specialist 工具调用达到上限")
         return {
+            "intent_routed": True,
             "supervisor_route": "end",
             "supervisor_reason": reason,
             "supervisor_finalized": True,
@@ -337,6 +335,7 @@ async def supervisor_agent_node(state: AgentState) -> dict[str, Any]:
             },
         )
         return {
+            "intent_routed": True,
             "intent": "non_legal",
             "intent_confidence": 0.0,
             "task_complexity": decision.complexity,
@@ -348,6 +347,7 @@ async def supervisor_agent_node(state: AgentState) -> dict[str, Any]:
 
     detected_intent = classify_legal_intent(latest_query)
     return {
+        "intent_routed": True,
         "intent": str(detected_intent["category"]),
         "intent_confidence": float(detected_intent["confidence"]),
         "task_complexity": decision.complexity,
@@ -355,3 +355,16 @@ async def supervisor_agent_node(state: AgentState) -> dict[str, Any]:
         "supervisor_reason": decision.reason,
         "supervisor_finalized": False,
     }
+
+
+async def supervisor_agent_node(state: AgentState) -> dict[str, Any]:
+    """Execute the Planner's steps one at a time."""
+    if state.get("plan"):
+        return _executor_update(state)
+    if state.get("intent_routed"):
+        return {
+            "supervisor_route": state.get("supervisor_route") or "end",
+            "supervisor_finalized": bool(state.get("supervisor_finalized")),
+        }
+    # Preserve the public node's legacy direct-call behavior.
+    return await intent_router_node(state)

@@ -32,6 +32,7 @@ from agent.nodes.context import (
     latest_human_message as _latest_human_message,
     record_trace_event as _record_trace_event,
 )
+from agent.nodes.query import query_rewrite_node
 from agent.nodes.document import DOC_PREFIX, inject_doc_node
 from agent.nodes.memory import memory_node
 from agent.nodes.planner import planner_node
@@ -46,7 +47,7 @@ from agent.nodes.routing import (
     should_continue,
     should_execute_next,
 )
-from agent.nodes.supervisor import supervisor_agent_node
+from agent.nodes.supervisor import intent_router_node, supervisor_agent_node
 from agent.nodes.answer import answer_generator_node
 from agent.nodes.verifier import (
     result_verifier_node,
@@ -66,10 +67,12 @@ __all__ = [
     "fact_agent_node",
     "fact_check_node",
     "inject_doc_node",
+    "intent_router_node",
     "legal_consult_agent_node",
     "statute_retrieval_agent_node",
     "memory_node",
     "planner_node",
+    "query_rewrite_node",
     "should_after_fact_check",
     "should_after_planner",
     "should_after_supervisor",
