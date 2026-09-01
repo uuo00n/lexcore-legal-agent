@@ -3,9 +3,9 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
-from services.rag.interfaces import LawChunk
+from services.rag.interfaces import DocumentResult, LawChunk
 
-ScoredResults = Sequence[tuple[LawChunk, float]]
+ScoredResults = Sequence[DocumentResult]
 
 
 def reciprocal_rank_fusion(
@@ -28,12 +28,12 @@ def reciprocal_rank_fusion(
 
 
 def append_unique_results(
-    target: list[tuple[LawChunk, float]],
+    target: list[DocumentResult],
     additions: ScoredResults,
 ) -> None:
     """按 chunk_id 合并结果，并保留先命中结果的排序优势。"""
     seen = {document.chunk_id for document, _ in target}
     for document, score in additions:
         if document.chunk_id not in seen:
-            target.append((document, score))
+            target.append(DocumentResult(document, score))
             seen.add(document.chunk_id)

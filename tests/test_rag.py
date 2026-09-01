@@ -196,6 +196,24 @@ class TestChunker:
         assert "八小时" in article_36[0].content or "不超过" in article_36[0].content, \
             "第 36 条（工时上限）内容应包含 '八小时' 或 '不超过'"
 
+    def test_chunk_contains_qdrant_legal_payload_metadata(self, labor_law_path):
+        from services.indexer.chunker import chunk_law_file
+        from services.rag.interfaces import LEGAL_PAYLOAD_FIELDS, document_payload
+
+        chunk = chunk_law_file(labor_law_path)[0]
+        payload = document_payload(chunk)
+
+        assert set(LEGAL_PAYLOAD_FIELDS).issubset(payload)
+        assert payload["document_id"] == chunk.chunk_id
+        assert payload["law_name"] == "劳动法"
+        assert payload["law_type"] == "法律"
+        assert payload["status"]
+        assert payload["publish_date"]
+        assert payload["effective_date"]
+        assert payload["source"]
+        assert payload["source_path"].endswith("07_劳动法.txt")
+        assert len(payload["content_hash"]) == 64
+
     def test_chunk_fallback_items_for_amendment_text(self, tmp_path):
         """
         函数作用：

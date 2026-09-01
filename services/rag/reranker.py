@@ -5,7 +5,7 @@ import os
 from pathlib import Path
 from typing import Optional
 
-from services.rag.interfaces import LawChunk
+from services.rag.interfaces import DocumentResult, LawChunk
 
 _reranker_model = None
 
@@ -35,7 +35,7 @@ class Reranker:
         query: str,
         chunks: list[LawChunk],
         top_n: Optional[int] = None,
-    ) -> list[tuple[LawChunk, float]]:
+    ) -> list[DocumentResult]:
         if not chunks:
             return []
         scores = _get_reranker().predict(
@@ -48,6 +48,6 @@ class Reranker:
         )
         limit = top_n or self._top_n
         return [
-            (chunk, float(score))
+            DocumentResult(chunk, float(score))
             for chunk, score in ranked[:limit]
         ]

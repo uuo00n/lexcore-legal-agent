@@ -5,7 +5,14 @@ import json
 import os
 from typing import Any, Sequence
 
-from services.rag.interfaces import LawChunk
+from services.rag.interfaces import (
+    LEGAL_PAYLOAD_FIELDS,
+    DocumentResult,
+    LawChunk,
+    MetadataFilter,
+    document_from_payload,
+    document_payload,
+)
 
 DEFAULT_COLLECTION = "law_chunks"
 
@@ -62,34 +69,64 @@ class ChromaVectorStore:
             )
 
     @staticmethod
-    def _metadata(document: LawChunk) -> dict[str, str]:
-        return {
-            "law_name": document.law_name,
+    def _metadata(document: LawChunk) -> dict[str, str | int | float | bool]:
+        payload = document_payload(document)
+        metadata = {
+            key: ChromaVectorStore._chroma_value(payload[key])
+            for key in LEGAL_PAYLOAD_FIELDS
+        }
+        metadata.update({
             "hierarchy": document.hierarchy,
             "article_no": document.article_no,
             "metadata_json": json.dumps(
-                document.metadata,
+                payload["metadata"],
                 ensure_ascii=False,
                 default=str,
             ),
-        }
+        })
+        return metadata
+
+    @staticmethod
+    def _chroma_value(value: Any) -> str | int | float | bool:
+        if isinstance(value, (str, int, float, bool)):
+            return value
+        return json.dumps(value, ensure_ascii=False, default=str)
+
+    @staticmethod
+    def _where(metadata_filter: MetadataFilter | None) -> dict | None:
+        if not metadata_filter:
+            return None
+        conditions: list[dict] = []
+        for key, value in metadata_filter.items():
+            if isinstance(value, (list, tuple, set)):
+                conditions.append({key: {"$in": list(value)}})
+            elif isinstance(value, dict):
+                conditions.append({key: dict(value)})
+            else:
+                conditions.append({key: value})
+        return conditions[0] if len(conditions) == 1 else {"$and": conditions}
 
     def search(
         self,
         query_embedding: list[float],
         top_k: int = 20,
-    ) -> list[tuple[LawChunk, float]]:
+        metadata_filter: MetadataFilter | None = None,
+    ) -> list[DocumentResult]:
         if top_k <= 0 or self.count() == 0:
             return []
-        results = self._collection.query(
+        query_kwargs = dict(
             query_embeddings=[query_embedding],
             n_results=min(top_k, self.count()),
             include=["documents", "metadatas", "distances"],
         )
+        where = self._where(metadata_filter)
+        if where is not None:
+            query_kwargs["where"] = where
+        results = self._collection.query(**query_kwargs)
         if not results.get("ids") or not results["ids"][0]:
             return []
 
-        matches: list[tuple[LawChunk, float]] = []
+        matches: list[DocumentResult] = []
         for index, chunk_id in enumerate(results["ids"][0]):
             metadata = results["metadatas"][0][index] or {}
             raw_metadata = metadata.get("metadata_json", "{}")
@@ -97,16 +134,15 @@ class ChromaVectorStore:
                 extra_metadata = json.loads(raw_metadata)
             except (TypeError, json.JSONDecodeError):
                 extra_metadata = {}
-            document = LawChunk(
-                law_name=metadata.get("law_name", ""),
-                hierarchy=metadata.get("hierarchy", ""),
-                article_no=metadata.get("article_no", ""),
-                content=results["documents"][0][index] or "",
-                chunk_id=chunk_id,
-                metadata=extra_metadata,
-            )
+            payload = {
+                **metadata,
+                "document_id": metadata.get("document_id") or chunk_id,
+                "content": results["documents"][0][index] or "",
+                "metadata": extra_metadata,
+            }
+            document = document_from_payload(payload)
             distance = float(results["distances"][0][index])
-            matches.append((document, 1.0 - distance))
+            matches.append(DocumentResult(document, 1.0 - distance))
         return matches
 
     def delete(self, document_ids: Sequence[str] | None = None) -> None:

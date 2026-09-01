@@ -10,7 +10,7 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from services.rag.interfaces import LawChunk
+from services.rag.interfaces import LawChunk, compute_content_hash
 
 
 # 匹配条款号：第一条、第二百三十四条、第二百八十七条之一 等
@@ -25,6 +25,14 @@ _HIERARCHY_PATTERN = re.compile(
 
 # 匹配修正案、修改决定等没有“第X条”结构的分项：一、二、三、
 _ITEM_PATTERN = re.compile(r"^([一二三四五六七八九十百千万]+)、\s*(.+)")
+
+_HEADER_FIELD_MAP = {
+    "来源": "source",
+    "效力标记": "status",
+    "公布日期": "publish_date",
+    "施行日期": "effective_date",
+    "法规类别": "law_type",
+}
 
 
 def _extract_law_name(file_path: Path) -> str:
@@ -55,6 +63,55 @@ def _build_hierarchy_path(hierarchy_stack: list[str]) -> str:
     return " > ".join(hierarchy_stack) if hierarchy_stack else ""
 
 
+def _extract_source_metadata(file_path: Path, lines: list[str]) -> dict[str, str]:
+    """从法律文件头部提取可检索的法规元数据。"""
+    metadata = {
+        "law_type": "",
+        "status": "",
+        "publish_date": "",
+        "effective_date": "",
+        "source": "",
+        "source_path": file_path.as_posix(),
+    }
+    for line in lines[:20]:
+        if ":" not in line:
+            continue
+        label, value = (part.strip() for part in line.split(":", 1))
+        target = _HEADER_FIELD_MAP.get(label)
+        if target:
+            metadata[target] = value
+    return metadata
+
+
+def _build_chunk_metadata(
+    base_metadata: dict[str, str],
+    hierarchy_stack: list[str],
+    article_no: str,
+    content: str,
+    *,
+    item: str = "",
+) -> dict[str, str]:
+    """构造向量库所需的统一法律 chunk metadata。"""
+    chapter = next(
+        (level for level in reversed(hierarchy_stack) if re.match(r"^第.+章", level)),
+        "",
+    )
+    section = next(
+        (level for level in reversed(hierarchy_stack) if re.match(r"^第.+节", level)),
+        "",
+    )
+    return {
+        **base_metadata,
+        "document_id": "",
+        "chapter": chapter,
+        "section": section,
+        "article": article_no,
+        "paragraph": "",
+        "item": item,
+        "content_hash": compute_content_hash(content),
+    }
+
+
 def chunk_law_file(file_path: Path) -> list[LawChunk]:
     """
     函数作用：
@@ -69,6 +126,7 @@ def chunk_law_file(file_path: Path) -> list[LawChunk]:
 
     # 跳过文件头部元信息
     lines = text.split("\n")
+    base_metadata = _extract_source_metadata(file_path, lines)
     content_start = 0
     if lines and lines[0].startswith("# "):
         for i, line in enumerate(lines[1:], start=1):
@@ -107,12 +165,21 @@ def chunk_law_file(file_path: Path) -> list[LawChunk]:
             content_text = "\n".join(current_content).strip()
             if content_text:
                 chunk_id = f"{law_name}_{current_article}"
+                content = f"{current_article} {content_text}"
+                metadata = _build_chunk_metadata(
+                    base_metadata,
+                    hierarchy_stack,
+                    current_article,
+                    content,
+                )
+                metadata["document_id"] = chunk_id
                 chunks.append(LawChunk(
                     law_name=law_name,
                     hierarchy=_build_hierarchy_path(hierarchy_stack),
                     article_no=current_article,
-                    content=f"{current_article} {content_text}",
+                    content=content,
                     chunk_id=chunk_id,
+                    metadata=metadata,
                 ))
         current_article = None
         current_content = []
@@ -165,12 +232,20 @@ def chunk_law_file(file_path: Path) -> list[LawChunk]:
     _flush_current()
 
     if not chunks:
-        chunks.extend(_chunk_fallback_paragraphs(law_name, fallback_lines))
+        chunks.extend(_chunk_fallback_paragraphs(
+            law_name,
+            fallback_lines,
+            base_metadata,
+        ))
 
     return chunks
 
 
-def _chunk_fallback_paragraphs(law_name: str, lines: list[str]) -> list[LawChunk]:
+def _chunk_fallback_paragraphs(
+    law_name: str,
+    lines: list[str],
+    base_metadata: dict[str, str],
+) -> list[LawChunk]:
     """
     函数作用：
         为修正案、修改决定等非“第X条”结构文本生成可检索分块。
@@ -190,12 +265,23 @@ def _chunk_fallback_paragraphs(law_name: str, lines: list[str]) -> list[LawChunk
         if current_no and current_content:
             article_no = f"第{current_no}项"
             content_text = "\n".join(current_content).strip()
+            content = f"{article_no} {content_text}"
+            chunk_id = f"{law_name}_{article_no}"
+            metadata = _build_chunk_metadata(
+                base_metadata,
+                [],
+                article_no,
+                content,
+                item=article_no,
+            )
+            metadata["document_id"] = chunk_id
             chunks.append(LawChunk(
                 law_name=law_name,
                 hierarchy="",
                 article_no=article_no,
-                content=f"{article_no} {content_text}",
-                chunk_id=f"{law_name}_{article_no}",
+                content=content,
+                chunk_id=chunk_id,
+                metadata=metadata,
             ))
         current_no = None
         current_content = []
@@ -215,12 +301,22 @@ def _chunk_fallback_paragraphs(law_name: str, lines: list[str]) -> list[LawChunk
 
     preface_text = "\n".join(preface).strip()
     if preface_text:
+        content = f"前言 {preface_text}"
+        chunk_id = f"{law_name}_前言"
+        metadata = _build_chunk_metadata(
+            base_metadata,
+            [],
+            "前言",
+            content,
+        )
+        metadata["document_id"] = chunk_id
         chunks.insert(0, LawChunk(
             law_name=law_name,
             hierarchy="",
             article_no="前言",
-            content=f"前言 {preface_text}",
-            chunk_id=f"{law_name}_前言",
+            content=content,
+            chunk_id=chunk_id,
+            metadata=metadata,
         ))
 
     return chunks

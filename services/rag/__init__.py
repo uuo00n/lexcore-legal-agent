@@ -4,11 +4,19 @@ from __future__ import annotations
 import os
 from typing import Optional
 
-from services.rag.interfaces import LawChunk, LawRetriever, VectorStore
+from services.rag.interfaces import (
+    DocumentResult,
+    LawChunk,
+    LawRetriever,
+    MetadataFilter,
+    VectorStore,
+)
 
 __all__ = [
     "LawChunk",
     "LawRetriever",
+    "DocumentResult",
+    "MetadataFilter",
     "VectorStore",
     "get_vector_store",
     "get_vectorstore",

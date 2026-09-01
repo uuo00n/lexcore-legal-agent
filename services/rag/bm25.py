@@ -6,7 +6,7 @@ from typing import Optional
 
 from rank_bm25 import BM25Okapi
 
-from services.rag.interfaces import LawChunk
+from services.rag.interfaces import DocumentResult, LawChunk
 
 
 def _tokenize(text: str) -> list[str]:
@@ -42,7 +42,7 @@ class BM25Retriever:
         self,
         query: str,
         top_k: int = 20,
-    ) -> list[tuple[LawChunk, float]]:
+    ) -> list[DocumentResult]:
         if self._bm25 is None or not self._chunks or top_k <= 0:
             return []
         scores = self._bm25.get_scores(_tokenize(query))
@@ -52,7 +52,7 @@ class BM25Retriever:
             reverse=True,
         )[:top_k]
         return [
-            (self._chunks[index], float(score))
+            DocumentResult(self._chunks[index], float(score))
             for index, score in ranked
             if score > 0
         ]

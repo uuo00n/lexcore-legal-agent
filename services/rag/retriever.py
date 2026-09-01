@@ -10,7 +10,12 @@ from typing import Optional
 from services.rag import get_vector_store
 from services.rag.bm25 import BM25Retriever
 from services.rag.fusion import append_unique_results, reciprocal_rank_fusion
-from services.rag.interfaces import LawChunk, VectorStore
+from services.rag.interfaces import (
+    DocumentResult,
+    LawChunk,
+    MetadataFilter,
+    VectorStore,
+)
 from services.rag.reranker import Reranker
 
 log = logging.getLogger("legal.retriever")
@@ -53,13 +58,18 @@ class SemanticRetriever:
         self,
         query: str,
         top_k: int = 20,
-    ) -> list[tuple[LawChunk, float]]:
+        metadata_filter: MetadataFilter | None = None,
+    ) -> list[DocumentResult]:
         query_text = f"为这个句子生成表示以用于检索相关段落：{query}"
         embedding = _get_model().encode(
             query_text,
             normalize_embeddings=True,
         ).tolist()
-        return self._store.search(embedding, top_k=top_k)
+        return self._store.search(
+            embedding,
+            top_k=top_k,
+            metadata_filter=metadata_filter,
+        )
 
 
 def _arabic_to_chinese_article(match: re.Match) -> str:
@@ -147,10 +157,19 @@ class HybridRetriever:
     def set_keyword_retriever(self, keyword: BM25Retriever) -> None:
         self._keyword = keyword
 
+    @staticmethod
+    def _normalize_results(results) -> list[DocumentResult]:
+        return [
+            result
+            if isinstance(result, DocumentResult)
+            else DocumentResult(result[0], float(result[1]))
+            for result in results
+        ]
+
     def _rrf_fuse(
         self,
-        semantic_results: list[tuple[LawChunk, float]],
-        keyword_results: list[tuple[LawChunk, float]],
+        semantic_results: list[DocumentResult],
+        keyword_results: list[DocumentResult],
     ) -> list[LawChunk]:
         return reciprocal_rank_fusion(
             [semantic_results, keyword_results],
@@ -163,7 +182,7 @@ class HybridRetriever:
         self,
         query: str,
         top_k: int = 5,
-    ) -> list[tuple[LawChunk, float]]:
+    ) -> list[DocumentResult]:
         from services.legal_analysis import is_legal_information_query
         from services.retriever.hyde import (
             generate_hypothetical_doc,
@@ -183,33 +202,42 @@ class HybridRetriever:
             rewritten_query = query
             hyde_document = query
 
-        semantic_results = self._semantic.retrieve(
-            hyde_document,
-            top_k=self._top_k,
+        semantic_results = self._normalize_results(
+            self._semantic.retrieve(hyde_document, top_k=self._top_k)
         )
         if hyde_document != query:
             append_unique_results(
                 semantic_results,
-                self._semantic.retrieve(query, top_k=self._top_k),
+                self._normalize_results(
+                    self._semantic.retrieve(query, top_k=self._top_k)
+                ),
             )
         if rewritten_query not in {query, hyde_document}:
             append_unique_results(
                 semantic_results,
-                self._semantic.retrieve(rewritten_query, top_k=self._top_k),
+                self._normalize_results(
+                    self._semantic.retrieve(rewritten_query, top_k=self._top_k)
+                ),
             )
 
-        keyword_results: list[tuple[LawChunk, float]] = []
+        keyword_results: list[DocumentResult] = []
         if self._keyword:
-            keyword_results = self._keyword.retrieve(query, top_k=self._top_k)
+            keyword_results = self._normalize_results(
+                self._keyword.retrieve(query, top_k=self._top_k)
+            )
             if rewritten_query != query:
                 append_unique_results(
                     keyword_results,
-                    self._keyword.retrieve(rewritten_query, top_k=self._top_k),
+                    self._normalize_results(
+                        self._keyword.retrieve(rewritten_query, top_k=self._top_k)
+                    ),
                 )
             if hyde_document not in {query, rewritten_query}:
                 append_unique_results(
                     keyword_results,
-                    self._keyword.retrieve(hyde_document, top_k=self._top_k),
+                    self._normalize_results(
+                        self._keyword.retrieve(hyde_document, top_k=self._top_k)
+                    ),
                 )
 
         fused = (
@@ -220,17 +248,19 @@ class HybridRetriever:
             if keyword_results
             else [document for document, _ in semantic_results]
         )
-        return self._reranker.rerank(
-            query,
-            fused[: self._top_k],
-            top_n=top_k,
+        return self._normalize_results(
+            self._reranker.rerank(
+                query,
+                fused[: self._top_k],
+                top_n=top_k,
+            )
         )
 
     def retrieve_with_scores(
         self,
         query: str,
         top_k: int = 5,
-    ) -> list[tuple[LawChunk, float]]:
+    ) -> list[DocumentResult]:
         return self._retrieve_scored(query, top_k=top_k)
 
     def retrieve(self, query: str, top_k: int = 5) -> list[LawChunk]:
