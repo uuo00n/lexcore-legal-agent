@@ -1,6 +1,7 @@
 """本地 DOC 法律 RAG 的稳定适配层。"""
 from __future__ import annotations
 
+import inspect
 from typing import Any
 
 from services.rag.retriever import get_retriever
@@ -24,10 +25,25 @@ class LocalLegalRetriever:
     ) -> list[tuple[Any, float | None]]:
         if hasattr(self._retriever, "retrieve_with_scores"):
             kwargs = {"top_k": top_k}
-            if trace_id is not None:
+            if trace_id is not None and self._accepts_trace_id(
+                self._retriever.retrieve_with_scores
+            ):
                 kwargs["trace_id"] = trace_id
             return list(self._retriever.retrieve_with_scores(query, **kwargs))
         kwargs = {"top_k": top_k}
-        if trace_id is not None:
+        if trace_id is not None and self._accepts_trace_id(self._retriever.retrieve):
             kwargs["trace_id"] = trace_id
         return [(item, None) for item in self._retriever.retrieve(query, **kwargs)]
+
+    @staticmethod
+    def _accepts_trace_id(function: Any) -> bool:
+        """兼容未升级 trace_id 参数的检索器适配实现。"""
+        try:
+            parameters = inspect.signature(function).parameters.values()
+        except (TypeError, ValueError):
+            return False
+        return any(
+            parameter.name == "trace_id"
+            or parameter.kind is inspect.Parameter.VAR_KEYWORD
+            for parameter in parameters
+        )

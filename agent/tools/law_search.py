@@ -3,22 +3,12 @@ from __future__ import annotations
 
 from typing import Annotated
 
-from langchain_core.tools import tool
+from langchain_core.tools import ToolException, tool
 from langgraph.prebuilt import InjectedState
 
-from agent.tools._runtime import (
-    bound_results,
-    finish_tool_trace,
-    raise_tool_error,
-    resolve_trace_id,
-    serialize_tool_exception,
-    start_tool_trace,
-)
-from agent.tools.schemas import LawSearchToolInput, RetrievalToolOutput
-from services.delilegal.client import DelilegalClient
-from services.delilegal.exceptions import DelilegalError
-from services.delilegal.processors import extract_relevant_articles
-from services.delilegal.schemas import LawSearchInput
+from agent.tools._runtime import resolve_trace_id, serialize_tool_exception
+from agent.tools.schemas import LawSearchToolInput
+from services.search import LawSearchParams, search_law_service
 
 
 @tool(
@@ -39,75 +29,21 @@ async def search_law_tool(
     sort_order: str = "desc",
     trace_id: Annotated[str | None, InjectedState("trace_id")] = None,
 ) -> str:
-    trace_id = resolve_trace_id(trace_id)
-    started = start_tool_trace(trace_id, "search_law_tool", "delilegal_law")
-    try:
-        async with DelilegalClient(trace_id=trace_id) as client:
-            response = await client.search_laws(
-                LawSearchInput(
-                    query=query,
-                    page_no=page_no,
-                    page_size=top_k,
-                    sort_field=sort_field,
-                    sort_order=sort_order,
-                )
-            )
-        values = [
-            extract_relevant_articles(item, query, max_articles=3, max_chars=1_600)
-            for item in response.items[:top_k]
-        ]
-        results, truncated = bound_results(values, top_k=top_k)
-        latency_ms = finish_tool_trace(
-            trace_id,
-            "search_law_tool",
-            "delilegal_law",
-            started,
-            success=True,
-            result_count=len(results),
-        )
-        return RetrievalToolOutput(
-            status="found" if results else "no_relevant_result",
-            source_type="delilegal_law",
-            trace_id=trace_id,
-            latency_ms=latency_ms,
-            success=True,
-            evidence_insufficient=not results,
-            result_count=len(results),
-            total_count=response.total_count,
-            query_id=response.query_id,
-            truncated=truncated or response.total_count > len(results),
-            results=results,
-        ).model_dump_json(exclude_none=True)
-    except DelilegalError as exc:
-        latency_ms = finish_tool_trace(
-            trace_id,
-            "search_law_tool",
-            "delilegal_law",
-            started,
-            success=False,
-            error_type=type(exc).__name__,
-        )
-        raise_tool_error(
-            source_type="delilegal_law",
-            trace_id=trace_id,
-            latency_ms=latency_ms,
-            exc=exc,
-        )
-    except Exception as exc:
-        latency_ms = finish_tool_trace(
-            trace_id,
-            "search_law_tool",
-            "delilegal_law",
-            started,
-            success=False,
-            error_type=type(exc).__name__,
-        )
-        raise_tool_error(
-            source_type="delilegal_law",
-            trace_id=trace_id,
-            latency_ms=latency_ms,
-            exc=exc,
-        )
+    """通过共享 Service 检索法规，不经过 MCP。"""
+    result = await search_law_service(
+        LawSearchParams(
+            query=query,
+            top_k=top_k,
+            page_no=page_no,
+            sort_field=sort_field,
+            sort_order=sort_order,
+        ),
+        trace_id=resolve_trace_id(trace_id),
+    )
+    payload = result.model_dump_json(exclude_none=True)
+    if not result.success:
+        raise ToolException(payload)
+    return payload
 
 
 search_law_tool.handle_tool_error = serialize_tool_exception

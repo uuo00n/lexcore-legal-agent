@@ -1,96 +1,134 @@
-"""法律检索 MCP 工具 —— 语义 + BM25 混合检索法条。"""
+"""FastMCP 检索暴露层；所有实现委托给共享 Service Layer。"""
 from __future__ import annotations
 
-import json
-from datetime import datetime, timezone
+from typing import Literal
 
 from mcp_server.server import mcp
-from services.rag.retriever import get_retriever
-from services.local_legal_retriever import LocalLegalRetriever
-from services.delilegal.enums import SourceType
+from services.delilegal.enums import CourtLevel, JudgementType
 from services.observability import trace_context
-from services.rag.interfaces import LawChunk
-
-
-def _result_item(chunk: LawChunk, score: float | None = None) -> dict:
-    item = {
-        "law_name": chunk.law_name,
-        "article_no": chunk.article_no,
-        "hierarchy": chunk.hierarchy,
-        "content": chunk.content,
-        "source_type": SourceType.LOCAL_RAG.value,
-        "source_id": chunk.chunk_id,
-        "title": chunk.law_name,
-        "retrieved_at": datetime.now(timezone.utc).isoformat(),
-    }
-    if score is not None:
-        item["rerank_score"] = round(float(score), 4)
-        item["score"] = round(float(score), 4)
-    return item
+from services.search import (
+    CaseSearchParams,
+    LawSearchParams,
+    LocalLawSearchParams,
+    search_case_service,
+    search_law_service,
+    search_local_law_service,
+)
 
 
 @mcp.tool()
-def legal_search(
+async def search_law(
+    query: str,
+    top_k: int = 5,
+    page_no: int = 1,
+    sort_field: Literal["correlation", "time"] = "correlation",
+    sort_order: Literal["asc", "desc"] = "desc",
+    trace_id: str | None = None,
+    thread_id: str | None = None,
+    agent_name: str | None = None,
+) -> str:
+    """检索正式法规、行政法规、地方性法规和司法解释。"""
+    with trace_context(
+        trace_id=trace_id or "",
+        thread_id=thread_id or "",
+        node_name="mcp.search_law",
+        agent_name=agent_name or "",
+        tool_name="search_law",
+    ):
+        result = await search_law_service(
+            LawSearchParams(
+                query=query,
+                top_k=top_k,
+                page_no=page_no,
+                sort_field=sort_field,
+                sort_order=sort_order,
+            ),
+            trace_id=trace_id,
+        )
+    return result.model_dump_json(exclude_none=True)
+
+
+@mcp.tool()
+async def search_case(
+    keywords: list[str] | None = None,
+    long_text: str | None = None,
+    top_k: int = 5,
+    page_no: int = 1,
+    sort_field: Literal["correlation", "time"] = "correlation",
+    sort_order: Literal["asc", "desc"] = "desc",
+    case_year_start: str | None = None,
+    case_year_end: str | None = None,
+    court_levels: list[CourtLevel] | None = None,
+    judgement_types: list[JudgementType] | None = None,
+    trace_id: str | None = None,
+    thread_id: str | None = None,
+    agent_name: str | None = None,
+) -> str:
+    """检索真实裁判类案，并返回压缩后的事实、争点、裁判理由和结果。"""
+    with trace_context(
+        trace_id=trace_id or "",
+        thread_id=thread_id or "",
+        node_name="mcp.search_case",
+        agent_name=agent_name or "",
+        tool_name="search_case",
+    ):
+        result = await search_case_service(
+            CaseSearchParams(
+                keywords=keywords,
+                long_text=long_text,
+                top_k=top_k,
+                page_no=page_no,
+                sort_field=sort_field,
+                sort_order=sort_order,
+                case_year_start=case_year_start,
+                case_year_end=case_year_end,
+                court_levels=court_levels,
+                judgement_types=judgement_types,
+            ),
+            trace_id=trace_id,
+        )
+    return result.model_dump_json(exclude_none=True)
+
+
+@mcp.tool()
+async def search_local_law(
     query: str,
     top_k: int = 5,
     trace_id: str | None = None,
     thread_id: str | None = None,
     agent_name: str | None = None,
 ) -> str:
-    """
-    函数作用：
-        根据用户问题检索相关中国法律条款。
-    输入参数：
-        - query: str
-        - top_k: int，默认值 5
-    输出参数：
-        - str
-    """
+    """检索本地已索引中国法律语料。"""
     with trace_context(
         trace_id=trace_id or "",
         thread_id=thread_id or "",
-        node_name="rag.hybrid_retrieval",
+        node_name="mcp.search_local_law",
         agent_name=agent_name or "",
-        tool_name="retrieve_local_law_tool",
+        tool_name="search_local_law",
     ):
-        retriever = LocalLegalRetriever(get_retriever())
-        score_threshold = retriever.score_threshold
-        scored_chunks = retriever.search(query, top_k=top_k, trace_id=trace_id)
-
-    if not scored_chunks:
-        return json.dumps(
-            {
-                "status": "no_relevant_result",
-                "query": query,
-                "score_threshold": score_threshold,
-                "top_rerank_score": None,
-                "results": [],
-                "evidence_insufficient": True,
-                "hint": "本地法库未命中。可尝试 Delilegal 法规或类案检索；"
-                        "若可信数据源仍无结果，必须报告证据不足，不得编造法律依据。",
-            },
-            ensure_ascii=False,
+        result = await search_local_law_service(
+            LocalLawSearchParams(query=query, top_k=top_k),
+            trace_id=trace_id,
         )
+    return result.model_dump_json(exclude_none=True)
 
-    top_score = scored_chunks[0][1]
-    is_low_quality = top_score is not None and float(top_score) < score_threshold
-    results = [_result_item(chunk, score) for chunk, score in scored_chunks]
-    status = "low_quality" if is_low_quality else "found"
-    hint = ""
-    if is_low_quality:
-        hint = (
-            f"本地法库最高 rerank_score={float(top_score):.4f}，低于阈值 {score_threshold:g}。"
-            "可尝试 Delilegal 法规或类案检索；若仍无结果，必须报告证据不足。"
-        )
-    return json.dumps(
-        {
-            "status": status,
-            "query": query,
-            "score_threshold": score_threshold,
-            "top_rerank_score": round(float(top_score), 4) if top_score is not None else None,
-            "results": results,
-            "evidence_insufficient": is_low_quality,
-            "hint": hint,
-        },
-        ensure_ascii=False,
+
+@mcp.tool()
+async def legal_search(
+    query: str,
+    top_k: int = 5,
+    trace_id: str | None = None,
+    thread_id: str | None = None,
+    agent_name: str | None = None,
+) -> str:
+    """兼容旧 MCP 客户端的本地法库检索别名。"""
+    return await search_local_law(
+        query=query,
+        top_k=top_k,
+        trace_id=trace_id,
+        thread_id=thread_id,
+        agent_name=agent_name,
     )
+
+
+__all__ = ["legal_search", "search_case", "search_law", "search_local_law"]

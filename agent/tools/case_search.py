@@ -3,23 +3,13 @@ from __future__ import annotations
 
 from typing import Annotated
 
-from langchain_core.tools import tool
+from langchain_core.tools import ToolException, tool
 from langgraph.prebuilt import InjectedState
 
-from agent.tools._runtime import (
-    bound_results,
-    finish_tool_trace,
-    raise_tool_error,
-    resolve_trace_id,
-    serialize_tool_exception,
-    start_tool_trace,
-)
-from agent.tools.schemas import CaseSearchToolInput, RetrievalToolOutput
-from services.delilegal.client import DelilegalClient
+from agent.tools._runtime import resolve_trace_id, serialize_tool_exception
+from agent.tools.schemas import CaseSearchToolInput
 from services.delilegal.enums import CourtLevel, JudgementType
-from services.delilegal.exceptions import DelilegalError
-from services.delilegal.processors import compress_case_content
-from services.delilegal.schemas import CaseSearchInput
+from services.search import CaseSearchParams, search_case_service
 
 
 @tool(
@@ -45,80 +35,26 @@ async def search_case_tool(
     judgement_types: list[JudgementType] | None = None,
     trace_id: Annotated[str | None, InjectedState("trace_id")] = None,
 ) -> str:
-    trace_id = resolve_trace_id(trace_id)
-    started = start_tool_trace(trace_id, "search_case_tool", "delilegal_case")
-    try:
-        request = CaseSearchInput(
+    """通过共享 Service 检索类案，不经过 MCP。"""
+    result = await search_case_service(
+        CaseSearchParams(
             keywords=keywords,
             long_text=long_text,
+            top_k=top_k,
             page_no=page_no,
-            page_size=top_k,
             sort_field=sort_field,
             sort_order=sort_order,
             case_year_start=case_year_start,
             case_year_end=case_year_end,
             court_levels=court_levels,
             judgement_types=judgement_types,
-        )
-        async with DelilegalClient(trace_id=trace_id) as client:
-            response = await client.search_cases(request)
-        query = long_text or " ".join(keywords or [])
-        values = [
-            compress_case_content(item, query, max_section_chars=350)
-            for item in response.items[:top_k]
-        ]
-        results, truncated = bound_results(values, top_k=top_k)
-        latency_ms = finish_tool_trace(
-            trace_id,
-            "search_case_tool",
-            "delilegal_case",
-            started,
-            success=True,
-            result_count=len(results),
-        )
-        return RetrievalToolOutput(
-            status="found" if results else "no_relevant_result",
-            source_type="delilegal_case",
-            trace_id=trace_id,
-            latency_ms=latency_ms,
-            success=True,
-            evidence_insufficient=not results,
-            result_count=len(results),
-            total_count=response.total_count,
-            query_id=response.query_id,
-            truncated=truncated or response.total_count > len(results),
-            results=results,
-        ).model_dump_json(exclude_none=True)
-    except DelilegalError as exc:
-        latency_ms = finish_tool_trace(
-            trace_id,
-            "search_case_tool",
-            "delilegal_case",
-            started,
-            success=False,
-            error_type=type(exc).__name__,
-        )
-        raise_tool_error(
-            source_type="delilegal_case",
-            trace_id=trace_id,
-            latency_ms=latency_ms,
-            exc=exc,
-        )
-    except Exception as exc:
-        latency_ms = finish_tool_trace(
-            trace_id,
-            "search_case_tool",
-            "delilegal_case",
-            started,
-            success=False,
-            error_type=type(exc).__name__,
-        )
-        raise_tool_error(
-            source_type="delilegal_case",
-            trace_id=trace_id,
-            latency_ms=latency_ms,
-            exc=exc,
-        )
+        ),
+        trace_id=resolve_trace_id(trace_id),
+    )
+    payload = result.model_dump_json(exclude_none=True)
+    if not result.success:
+        raise ToolException(payload)
+    return payload
 
 
 search_case_tool.handle_tool_error = serialize_tool_exception

@@ -102,11 +102,11 @@ async def test_law_tool_uses_service_client_injects_trace_and_bounds_results(mon
                 ],
             )
 
-    monkeypatch.setattr("agent.tools.law_search.DelilegalClient", FakeClient)
+    monkeypatch.setattr("services.search.DelilegalClient", FakeClient)
     monkeypatch.setattr(
-        "agent.tools._runtime.record_trace_event",
-        lambda trace_id, event_type, *, name="", payload=None: events.append(
-            (trace_id, event_type, payload or {})
+        "services.search._record_tool_event",
+        lambda trace_id, event_type, _tool_name, payload: events.append(
+            (trace_id, event_type, payload)
         ),
     )
 
@@ -161,8 +161,8 @@ async def test_case_tool_calls_service_with_top_k_and_compresses_documents(monke
                 ],
             )
 
-    monkeypatch.setattr("agent.tools.case_search.DelilegalClient", FakeClient)
-    monkeypatch.setattr("agent.tools._runtime.record_trace_event", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr("services.search.DelilegalClient", FakeClient)
+    monkeypatch.setattr("services.search._record_tool_event", lambda *_args, **_kwargs: None)
 
     result = await _invoke_tool(
         search_case_tool,
@@ -193,10 +193,10 @@ async def test_delilegal_error_becomes_safe_agent_tool_error(monkeypatch):
         async def search_laws(self, _request):
             raise DelilegalAuthenticationError("bad appid=my-app secret=my-secret")
 
-    monkeypatch.setattr("agent.tools.law_search.DelilegalClient", FailingClient)
+    monkeypatch.setattr("services.search.DelilegalClient", FailingClient)
     monkeypatch.setattr(
-        "agent.tools._runtime.record_trace_event",
-        lambda _trace_id, _event_type, *, name="", payload=None: events.append(payload or {}),
+        "services.search._record_tool_event",
+        lambda _trace_id, _event_type, _tool_name, payload: events.append(payload),
     )
 
     result = await _invoke_tool(

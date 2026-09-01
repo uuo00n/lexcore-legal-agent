@@ -15,7 +15,8 @@ langchain-openai>=0.2
 langchain-text-splitters>=0.3
 
 # MCP 工具协议
-mcp>=1.9
+# FastMCP v1 暴露层；MCP Python SDK v2 已移除该类。
+mcp>=1.9,<2
 
 pypdf>=5.0
 python-docx>=1.1

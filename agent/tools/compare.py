@@ -1,21 +1,14 @@
-"""法条对比工具 —— 通过 MCP Client 调用 MCP Server 的对比能力。"""
+"""法条对比 LangChain Tool；直接调用共享 Service。"""
 from __future__ import annotations
+
+import asyncio
 
 from langchain_core.tools import tool
 
-from services.mcp_client import call_tool
+from services.legal_tools import law_compare_service
 
 
 @tool
 async def law_compare_tool(law_a: str, law_b: str, topic: str) -> str:
-    """
-    函数作用：
-        对比两部法律在某个主题上的条款异同。
-    输入参数：
-        - law_a: str
-        - law_b: str
-        - topic: str
-    输出参数：
-        - str
-    """
-    return await call_tool("law_compare", {"law_a": law_a, "law_b": law_b, "topic": topic})
+    """对比两部法律在某个主题上的条款异同。"""
+    return await asyncio.to_thread(law_compare_service, law_a, law_b, topic)

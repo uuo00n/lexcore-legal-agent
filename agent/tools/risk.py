@@ -1,19 +1,14 @@
-"""法律风险评估工具 —— 通过 MCP Client 调用 MCP Server 的风险评估能力。"""
+"""法律风险评估 LangChain Tool；直接调用共享 Service。"""
 from __future__ import annotations
+
+import asyncio
 
 from langchain_core.tools import tool
 
-from services.mcp_client import call_tool
+from services.legal_tools import risk_assess_service
 
 
 @tool
 async def risk_assess_tool(facts: str) -> str:
-    """
-    函数作用：
-        根据用户描述的事实情况，检索相关法条并评估法律风险。
-    输入参数：
-        - facts: str
-    输出参数：
-        - str
-    """
-    return await call_tool("risk_assess", {"situation": facts})
+    """根据事实描述检索法条并生成风险分析上下文。"""
+    return await asyncio.to_thread(risk_assess_service, facts)

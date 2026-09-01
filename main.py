@@ -115,9 +115,9 @@ async def lifespan(app: FastAPI):
     from services.memory_store import init_memory_store
     init_memory_store()
 
-    # 启动 MCP Client（连接 MCP Server 子进程）
-    from services.mcp_client import start_mcp_client, stop_mcp_client
-    await start_mcp_client()
+    # RAG 与 LangGraph 在同一进程内通过 Service Layer 连接；FastMCP 仅是独立暴露层。
+    from services.rag.startup import initialize_rag
+    initialize_rag()
     try:
         # Checkpointer 连接必须覆盖 compiled graph 的完整生命周期。
         async with checkpoint_scope() as checkpointer:
@@ -130,7 +130,6 @@ async def lifespan(app: FastAPI):
 
             yield
     finally:
-        await stop_mcp_client()
         await dispose_redis()
         await dispose_database()
 

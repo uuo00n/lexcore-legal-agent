@@ -1,12 +1,7 @@
 """RAG 系统初始化 —— MCP Server 启动时调用，复用现有检索基础设施。"""
 from __future__ import annotations
 
-import logging
-import os
-
-from dotenv import load_dotenv
-
-log = logging.getLogger("legal.mcp")
+from services.rag.startup import initialize_rag as initialize_rag_service
 
 
 def initialize_rag() -> None:
@@ -18,15 +13,4 @@ def initialize_rag() -> None:
     输出参数：
         - 无
     """
-    load_dotenv()
-
-    from services.indexer.builder import load_or_build_index
-    from services.indexer.chunker import chunk_all_laws
-    from services.rag.retriever import init_retriever
-
-    laws_dir = os.getenv("LAWS_DIR", "data/laws")
-    load_or_build_index(laws_dir)
-
-    chunks = chunk_all_laws(laws_dir)
-    init_retriever(chunks=chunks)
-    log.info("MCP: RAG 系统初始化完成，共 %d 个法条分块", len(chunks))
+    initialize_rag_service()
