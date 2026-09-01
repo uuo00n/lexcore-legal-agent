@@ -1,7 +1,8 @@
-"""Sqlite checkpoint 单例 + 自维护的 threads/docs 元数据表。
+"""LangGraph 内存 checkpoint + SQLite 上传文档元数据。
 
 注意：使用 MemorySaver 替代 SqliteSaver 以兼容异步 astream_events。
 LangGraph 的 MemorySaver 同时支持同步和异步操作。
+会话元数据已迁移至 PostgreSQL ``conversations`` 表。
 """
 from __future__ import annotations
 
@@ -63,7 +64,7 @@ def get_checkpointer() -> MemorySaver:
 def init_meta_db(db_path: str | None = None) -> sqlite3.Connection:
     """
     函数作用：
-        初始化元数据库（threads + docs）。
+        初始化辅助元数据库（仅上传文档及其他未迁移模块）。
     输入参数：
         - db_path: str | None，默认值 None
     输出参数：
@@ -73,16 +74,6 @@ def init_meta_db(db_path: str | None = None) -> sqlite3.Connection:
     db_path = db_path or os.getenv("DOCS_DB", "data/docs.sqlite")
     _ensure_parent(db_path)
     conn = sqlite3.connect(db_path, check_same_thread=False)
-    conn.execute(
-        """
-        CREATE TABLE IF NOT EXISTS threads (
-            thread_id  TEXT PRIMARY KEY,
-            title      TEXT NOT NULL DEFAULT '',
-            created_at INTEGER NOT NULL,
-            updated_at INTEGER NOT NULL
-        )
-        """
-    )
     conn.execute(
         """
         CREATE TABLE IF NOT EXISTS docs (
@@ -112,78 +103,6 @@ def get_meta_conn() -> sqlite3.Connection:
     if _meta_conn is None:
         raise RuntimeError("meta db not initialized; call init_meta_db() first")
     return _meta_conn
-
-
-def upsert_thread(thread_id: str, title_seed: str | None = None) -> None:
-    """
-    函数作用：
-        待补充。
-    输入参数：
-        - thread_id: str
-        - title_seed: str | None，默认值 None
-    输出参数：
-        - 无
-    """
-    conn = get_meta_conn()
-    now = int(time.time())
-    cur = conn.execute("SELECT title FROM threads WHERE thread_id = ?", (thread_id,))
-    row = cur.fetchone()
-    if row is None:
-        title = (title_seed or "新对话")[:30]
-        conn.execute(
-            "INSERT INTO threads (thread_id, title, created_at, updated_at) VALUES (?, ?, ?, ?)",
-            (thread_id, title, now, now),
-        )
-    else:
-        if not row[0] and title_seed:
-            conn.execute(
-                "UPDATE threads SET title = ?, updated_at = ? WHERE thread_id = ?",
-                (title_seed[:30], now, thread_id),
-            )
-        else:
-            conn.execute(
-                "UPDATE threads SET updated_at = ? WHERE thread_id = ?",
-                (now, thread_id),
-            )
-    conn.commit()
-
-
-def list_threads() -> list[dict]:
-    """
-    函数作用：
-        待补充。
-    输入参数：
-        - 无
-    输出参数：
-        - list[dict]
-    """
-    conn = get_meta_conn()
-    cur = conn.execute(
-        "SELECT thread_id, title, created_at, updated_at FROM threads ORDER BY updated_at DESC"
-    )
-    return [
-        {
-            "thread_id": tid,
-            "title": title,
-            "created_at": ca,
-            "updated_at": ua,
-        }
-        for tid, title, ca, ua in cur.fetchall()
-    ]
-
-
-def delete_thread(thread_id: str) -> None:
-    """
-    函数作用：
-        待补充。
-    输入参数：
-        - thread_id: str
-    输出参数：
-        - 无
-    """
-    conn = get_meta_conn()
-    conn.execute("DELETE FROM threads WHERE thread_id = ?", (thread_id,))
-    conn.commit()
 
 
 def save_doc(doc_id: str, filename: str, text: str, truncated: bool) -> None:

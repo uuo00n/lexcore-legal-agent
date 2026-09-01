@@ -1,12 +1,11 @@
-"""记忆存储层 —— 基于 SQLite 的持久化存储，支撑四层记忆架构。
+"""记忆辅助存储层 —— SQLite 摘要与用户画像。
 
 存储职责：
-- messages_archive: 长期记忆的原始消息归档（完整保留所有对话消息）
 - summaries: 短期记忆的历史摘要（滑动窗口溢出部分的压缩）
 - user_profiles: 实体记忆（用户画像）
 
-注意：长期记忆的向量化存储由 memory_store.py（ChromaDB）负责，
-本模块只负责 SQLite 侧的结构化存储。
+原始消息归档已经迁移至 PostgreSQL ``messages`` 表，由 ``services.persistence``
+异步读写；长期记忆向量由 memory_store.py（ChromaDB）负责。
 """
 from __future__ import annotations
 
@@ -49,18 +48,6 @@ def init_memory_tables() -> None:
     """
     conn = get_meta_conn()
     conn.executescript("""
-        -- 长期记忆：完整消息归档
-        CREATE TABLE IF NOT EXISTS messages_archive (
-            id          INTEGER PRIMARY KEY AUTOINCREMENT,
-            thread_id   TEXT NOT NULL,
-            role        TEXT NOT NULL,
-            content     TEXT NOT NULL,
-            msg_index   INTEGER NOT NULL,
-            created_at  INTEGER NOT NULL
-        );
-        CREATE INDEX IF NOT EXISTS idx_messages_thread
-            ON messages_archive(thread_id, msg_index);
-
         -- 短期记忆：历史摘要（每个 thread 一条，累积更新）
         CREATE TABLE IF NOT EXISTS summaries (
             thread_id   TEXT PRIMARY KEY,
@@ -78,68 +65,6 @@ def init_memory_tables() -> None:
     """)
     conn.commit()
     log.info("记忆系统数据表初始化完成")
-
-
-# ─── 消息归档（长期记忆原始存储） ──────────────────────────────────────────
-def save_messages(thread_id: str, messages: list[dict]) -> None:
-    """
-    函数作用：
-        将消息列表完整归档到 SQLite。
-    输入参数：
-        - thread_id: str
-        - messages: list[dict]
-    输出参数：
-        - 无
-    """
-    conn = get_meta_conn()
-    now = int(time.time())
-    # 获取当前最大 msg_index
-    cur = conn.execute(
-        "SELECT COALESCE(MAX(msg_index), -1) FROM messages_archive WHERE thread_id = ?",
-        (thread_id,),
-    )
-    max_idx = cur.fetchone()[0]
-
-    for i, msg in enumerate(messages):
-        conn.execute(
-            "INSERT INTO messages_archive (thread_id, role, content, msg_index, created_at) VALUES (?, ?, ?, ?, ?)",
-            (thread_id, msg["role"], msg["content"], max_idx + 1 + i, now),
-        )
-    conn.commit()
-
-
-def load_all_messages(thread_id: str) -> list[dict]:
-    """
-    函数作用：
-        加载指定对话的完整消息列表（按顺序）。
-    输入参数：
-        - thread_id: str
-    输出参数：
-        - list[dict]
-    """
-    conn = get_meta_conn()
-    cur = conn.execute(
-        "SELECT role, content FROM messages_archive WHERE thread_id = ? ORDER BY msg_index ASC",
-        (thread_id,),
-    )
-    return [{"role": row[0], "content": row[1]} for row in cur.fetchall()]
-
-
-def get_archived_message_count(thread_id: str) -> int:
-    """
-    函数作用：
-        获取已归档的消息总数。
-    输入参数：
-        - thread_id: str
-    输出参数：
-        - int
-    """
-    conn = get_meta_conn()
-    cur = conn.execute(
-        "SELECT COUNT(*) FROM messages_archive WHERE thread_id = ?",
-        (thread_id,),
-    )
-    return cur.fetchone()[0]
 
 
 # ─── 历史摘要（短期记忆的压缩部分） ──────────────────────────────────────────

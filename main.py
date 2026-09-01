@@ -13,6 +13,7 @@ from fastapi.staticfiles import StaticFiles
 
 from agent.graph import build_graph
 from api import admin, chat, evidence, reports, threads, upload
+from infrastructure.database import dispose_database, init_database, ping as ping_database
 from services.checkpoint import init_checkpointer, init_meta_db
 from services.llm import current_provider
 
@@ -58,6 +59,20 @@ async def lifespan(app: FastAPI):
     输出参数：
         - 未标注
     """
+    init_database()
+    database_ok = await ping_database()
+    if not database_ok:
+        required = os.getenv("POSTGRES_REQUIRED", "true").strip().lower() in {
+            "1", "true", "yes", "on",
+        }
+        if required:
+            await dispose_database()
+            raise RuntimeError(
+                "PostgreSQL unavailable; configure DATABASE_URL and run 'alembic upgrade head'"
+            )
+        log.warning("PostgreSQL 不可用，核心持久化已禁用（POSTGRES_REQUIRED=false）")
+        await dispose_database()
+
     init_meta_db()
     cp = init_checkpointer()
 
@@ -92,6 +107,7 @@ async def lifespan(app: FastAPI):
 
     # 关闭 MCP Client
     await stop_mcp_client()
+    await dispose_database()
 
 
 app = FastAPI(title="Legal Agent", lifespan=lifespan)
@@ -140,7 +156,12 @@ async def health():
     输出参数：
         - 未标注
     """
-    return {"status": "ok", "provider": current_provider()}
+    database_ok = await ping_database()
+    return {
+        "status": "ok" if database_ok else "degraded",
+        "provider": current_provider(),
+        "database": "ok" if database_ok else "unavailable",
+    }
 
 
 @app.get("/metrics")

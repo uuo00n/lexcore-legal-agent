@@ -31,3 +31,8 @@ transformers>=4.40
 
 # 关键词检索
 rank-bm25>=0.2.2
+
+# PostgreSQL 持久化（infrastructure/）
+sqlalchemy[asyncio]>=2.0.36
+alembic>=1.14
+asyncpg>=0.30

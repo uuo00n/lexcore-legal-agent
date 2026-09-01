@@ -12,9 +12,8 @@ from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from pydantic import BaseModel
 from sse_starlette.sse import EventSourceResponse
 
-from services.checkpoint import load_doc, upsert_thread
+from services.checkpoint import load_doc
 from services.evidence_video import evidence_prompt_summary
-from services.memory import load_all_messages
 from services.legal_analysis import analyze_legal_message
 from services.cache import get_cached_answer, set_cached_answer
 from services.metrics import inc_counter, observe
@@ -25,6 +24,14 @@ from services.observability import (
     record_event,
 )
 from services.quota import consume_request
+from services.persistence import (
+    ensure_conversation,
+    finish_agent_run,
+    load_messages as load_persisted_messages,
+    record_tool_call,
+    start_agent_run,
+    update_agent_run,
+)
 
 
 log = logging.getLogger(__name__)
@@ -77,6 +84,29 @@ def _build_process_message(tool_names: list[str]) -> str:
     return f"正在调用工具处理：{', '.join(tool_names)}..."
 
 
+def _summarize_tool_output(value) -> dict:
+    """生成可观测性摘要，不保存正文、完整检索结果或裁判文书。"""
+    if isinstance(value, dict):
+        summary: dict[str, object] = {
+            "type": "object",
+            "keys": sorted(str(key) for key in value.keys())[:20],
+        }
+        for key in ("status", "result_count", "count", "total", "top_score"):
+            item = value.get(key)
+            if isinstance(item, (str, int, float, bool)) or item is None:
+                summary[key] = item
+        for key in ("results", "items", "laws", "cases", "sources"):
+            item = value.get(key)
+            if isinstance(item, (list, tuple)):
+                summary[f"{key}_count"] = len(item)
+        return summary
+    if isinstance(value, (list, tuple)):
+        return {"type": "list", "result_count": len(value)}
+    if isinstance(value, str):
+        return {"type": "text", "char_count": len(value)}
+    return {"type": type(value).__name__}
+
+
 def _checkpoint_has_messages(graph, thread_id: str) -> bool:
     """
     函数作用：
@@ -116,27 +146,6 @@ def _archive_item_to_message(item: dict) -> HumanMessage | AIMessage | SystemMes
     return None
 
 
-def _load_archived_context_messages(thread_id: str) -> list[HumanMessage | AIMessage | SystemMessage]:
-    """
-    函数作用：
-        从持久归档加载可作为模型上下文的历史消息。
-    输入参数：
-        - thread_id: str
-    输出参数：
-        - list[HumanMessage | AIMessage | SystemMessage]
-    """
-    messages = []
-    try:
-        archived = load_all_messages(thread_id)
-    except Exception:
-        return messages
-    for item in archived:
-        message = _archive_item_to_message(item)
-        if message is not None:
-            messages.append(message)
-    return messages
-
-
 def _build_state_input(
     graph,
     req: ChatRequest,
@@ -144,6 +153,7 @@ def _build_state_input(
     doc_text: Optional[str],
     doc_name: Optional[str],
     trace_id: str,
+    archived_items: list[dict] | None = None,
 ) -> dict:
     """
     函数作用：
@@ -159,7 +169,10 @@ def _build_state_input(
     """
     messages: list[HumanMessage | AIMessage | SystemMessage] = []
     if not _checkpoint_has_messages(graph, req.thread_id):
-        messages.extend(_load_archived_context_messages(req.thread_id))
+        for item in archived_items or []:
+            message = _archive_item_to_message(item)
+            if message is not None:
+                messages.append(message)
     messages.append(HumanMessage(content=req.message))
     evidence_text: Optional[str] = None
     if req.evidence_id:
@@ -212,6 +225,7 @@ async def _event_stream(graph, req: ChatRequest) -> AsyncIterator[dict]:
     trace_id = new_trace_id()
     trace_started = time.perf_counter()
     trace_completed = False
+    run_completed = False
     emit_done = True
     create_trace(trace_id, req.thread_id, req.message)
     record_event(trace_id, "chat_start", name="chat", payload={"doc_id": req.doc_id, "evidence_id": req.evidence_id})
@@ -223,18 +237,25 @@ async def _event_stream(graph, req: ChatRequest) -> AsyncIterator[dict]:
         doc = load_doc(req.doc_id)
         if doc is None:
             yield _sse("error", json.dumps({"message": f"doc_id {req.doc_id} not found"}))
+            complete_trace(trace_id, status="error", error="document not found")
             yield _sse("done", "")
             return
         doc_text = doc["text"]
         doc_name = doc["filename"]
 
+    archived_items = None
+    if not _checkpoint_has_messages(graph, req.thread_id):
+        archived_items = await load_persisted_messages(req.thread_id)
     state_input = _build_state_input(
         graph,
         req,
         doc_text=doc_text,
         doc_name=doc_name,
         trace_id=trace_id,
+        archived_items=archived_items,
     )
+    await start_agent_run(trace_id, req.thread_id)
+    pending_tool_calls: dict[str, dict] = {}
 
     try:
         yield _sse("thought", json.dumps(
@@ -259,6 +280,8 @@ async def _event_stream(graph, req: ChatRequest) -> AsyncIterator[dict]:
                 status="success",
                 legal_analysis=analysis,
             )
+            await finish_agent_run(trace_id, status="success")
+            run_completed = True
             trace_completed = True
             return
         inc_counter("legal_response_cache_misses_total")
@@ -271,6 +294,14 @@ async def _event_stream(graph, req: ChatRequest) -> AsyncIterator[dict]:
                     name=node_name,
                     payload={"keys": list(node_output.keys()) if isinstance(node_output, dict) else []},
                 )
+                if isinstance(node_output, dict) and (
+                    node_output.get("plan") is not None or node_output.get("intent")
+                ):
+                    await update_agent_run(
+                        trace_id,
+                        intent=node_output.get("intent"),
+                        plan=node_output.get("plan"),
+                    )
                 if isinstance(node_output, dict) and node_output.get("context_status"):
                     yield _sse("context_status", json.dumps(
                         node_output["context_status"],
@@ -298,6 +329,23 @@ async def _event_stream(graph, req: ChatRequest) -> AsyncIterator[dict]:
                                 name=m.name or "",
                                 payload={"output_preview": parsed if isinstance(parsed, dict) else str(parsed)[:1000]},
                             )
+                            call_id = str(getattr(m, "tool_call_id", "") or "")
+                            pending = pending_tool_calls.pop(call_id, {})
+                            error = ""
+                            if isinstance(parsed, dict) and parsed.get("error"):
+                                error = str(parsed.get("error"))
+                            success = getattr(m, "status", None) != "error" and not error
+                            started = float(pending.get("started", time.perf_counter()))
+                            await record_tool_call(
+                                trace_id,
+                                agent_name=str(pending.get("agent_name") or node_name),
+                                tool_name=str(pending.get("tool_name") or m.name or "unknown"),
+                                input_payload=pending.get("input_payload") or {},
+                                output_summary=_summarize_tool_output(parsed),
+                                latency_ms=max(0, int((time.perf_counter() - started) * 1000)),
+                                success=success,
+                                error=error,
+                            )
                             yield _sse("tool_end", json.dumps(
                                 {"name": m.name or "", "output": parsed},
                                 ensure_ascii=False,
@@ -317,6 +365,14 @@ async def _event_stream(graph, req: ChatRequest) -> AsyncIterator[dict]:
                             if m.tool_calls:
                                 # 工具调用阶段只展示“处理过程”，不展示模型内部推理或自由文本。
                                 tc_names = [tc.get("name", "") for tc in m.tool_calls]
+                                for tc in m.tool_calls:
+                                    call_id = str(tc.get("id") or f"{node_name}:{len(pending_tool_calls)}")
+                                    pending_tool_calls[call_id] = {
+                                        "agent_name": node_name,
+                                        "tool_name": tc.get("name", ""),
+                                        "input_payload": tc.get("args") or {},
+                                        "started": time.perf_counter(),
+                                    }
                                 yield _sse("thought", json.dumps(
                                     {"content": _build_process_message(tc_names)},
                                     ensure_ascii=False,
@@ -339,6 +395,8 @@ async def _event_stream(graph, req: ChatRequest) -> AsyncIterator[dict]:
             status="success",
             legal_analysis=analysis,
         )
+        await finish_agent_run(trace_id, status="success")
+        run_completed = True
         trace_completed = True
 
     except (asyncio.CancelledError, GeneratorExit):
@@ -347,6 +405,8 @@ async def _event_stream(graph, req: ChatRequest) -> AsyncIterator[dict]:
     except Exception as exc:
         log.exception("chat stream failed")
         complete_trace(trace_id, status="error", error=str(exc))
+        await finish_agent_run(trace_id, status="error", error=str(exc))
+        run_completed = True
         trace_completed = True
         yield _sse("error", json.dumps({"message": str(exc)}))
     finally:
@@ -355,6 +415,8 @@ async def _event_stream(graph, req: ChatRequest) -> AsyncIterator[dict]:
         inc_counter("legal_chat_requests_total")
         if not trace_completed:
             complete_trace(trace_id, status="cancelled")
+        if not run_completed:
+            await finish_agent_run(trace_id, status="cancelled")
         record_event(
             trace_id,
             "chat_done",
@@ -412,7 +474,7 @@ async def chat(req: ChatRequest, request: Request, background_tasks: BackgroundT
             },
         )
 
-    upsert_thread(req.thread_id, title_seed=req.message.strip())
+    await ensure_conversation(req.thread_id, title_seed=req.message.strip())
     graph = request.app.state.graph
 
     async def _wrapped_stream():

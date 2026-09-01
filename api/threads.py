@@ -7,13 +7,15 @@ from fastapi import APIRouter, HTTPException, Request
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
 
 from services.checkpoint import (
-    delete_thread,
     get_checkpointer,
-    list_threads,
 )
 from services.answer_format import strip_answer_markdown
-from services.memory import load_all_messages
 from services.context_compaction import build_context_status, compact_state_context
+from services.persistence import (
+    delete_conversation,
+    list_conversations,
+    load_messages as load_persisted_messages,
+)
 
 
 router = APIRouter()
@@ -91,28 +93,12 @@ def _archive_item_to_message(item: dict) -> HumanMessage | AIMessage | SystemMes
     return None
 
 
-def _archived_history_messages(thread_id: str) -> list[dict]:
-    """
-    函数作用：
-        从持久归档加载前端可见的会话历史。
-    输入参数：
-        - thread_id: str
-    输出参数：
-        - list[dict]
-    """
-    messages = []
-    try:
-        archived = load_all_messages(thread_id)
-    except Exception:
-        return []
-    for item in archived:
-        message = _archive_item_to_message(item)
-        if message is not None:
-            messages.append(message)
-    return _visible_history_messages(messages)
-
-
-def _history_messages_for_thread(graph, thread_id: str) -> list[dict]:
+def _history_messages_for_thread(
+    graph,
+    thread_id: str,
+    *,
+    archived_items: list[dict] | None = None,
+) -> list[dict]:
     """
     函数作用：
         优先从内存 checkpoint 读取历史；缺失时回退到持久归档。
@@ -131,7 +117,31 @@ def _history_messages_for_thread(graph, thread_id: str) -> list[dict]:
                 return visible
     except Exception:
         pass
-    return _archived_history_messages(thread_id)
+    messages = []
+    for item in archived_items or []:
+        message = _archive_item_to_message(item)
+        if message is not None:
+            messages.append(message)
+    return _visible_history_messages(messages)
+
+
+async def _persistent_history_messages_for_thread(graph, thread_id: str) -> list[dict]:
+    """生产历史读取：优先内存 checkpoint，缺失时回退 PostgreSQL 消息归档。"""
+    config = {"configurable": {"thread_id": thread_id}}
+    try:
+        snapshot = graph.get_state(config)
+        if snapshot is not None and snapshot.values:
+            visible = _visible_history_messages(snapshot.values.get("messages", []))
+            if visible:
+                return visible
+    except Exception:
+        pass
+    archived = await load_persisted_messages(thread_id)
+    return _history_messages_for_thread(
+        graph,
+        thread_id,
+        archived_items=archived,
+    )
 
 
 def _context_status_for_thread(graph, thread_id: str) -> dict:
@@ -194,7 +204,7 @@ async def list_all_threads():
     输出参数：
         - 未标注
     """
-    return {"threads": list_threads()}
+    return {"threads": await list_conversations()}
 
 
 @router.get("/threads/{thread_id}/history")
@@ -209,7 +219,10 @@ async def get_history(thread_id: str, request: Request):
         - 未标注
     """
     graph = request.app.state.graph
-    return {"thread_id": thread_id, "messages": _history_messages_for_thread(graph, thread_id)}
+    return {
+        "thread_id": thread_id,
+        "messages": await _persistent_history_messages_for_thread(graph, thread_id),
+    }
 
 
 @router.get("/threads/{thread_id}/context")
@@ -257,5 +270,5 @@ async def remove_thread(thread_id: str):
         cp.delete_thread(thread_id)
     except AttributeError:
         pass
-    delete_thread(thread_id)
+    await delete_conversation(thread_id)
     return {"deleted": thread_id}

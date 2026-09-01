@@ -1,8 +1,8 @@
 """Agent 可观测性存储层。
 
-本模块把 LLM 调用、Agent 运行轨迹、工具事件和评测结果统一写入
-现有的元数据库。它只负责结构化记录和查询，不依赖 FastAPI 或 LangGraph，
-方便在 API、Agent 节点和评测脚本中复用。
+本模块保留后台页面依赖的 SQLite 可观测性镜像、LLM 日志和评测结果。
+Agent 运行状态与工具调用的权威记录已经迁移至 PostgreSQL；这里的 trace/event
+仅用于兼容现有时间线，所有写入同样必须先脱敏。
 """
 from __future__ import annotations
 
@@ -12,6 +12,7 @@ import uuid
 from typing import Any, Optional
 
 from services.checkpoint import get_meta_conn
+from infrastructure.sanitize import redact, redact_text
 
 
 def _json_dumps(value: Any) -> str:
@@ -23,7 +24,7 @@ def _json_dumps(value: Any) -> str:
     输出参数：
         - str
     """
-    return json.dumps(value, ensure_ascii=False, default=str)
+    return json.dumps(redact(value), ensure_ascii=False, default=str)
 
 
 def _json_loads(value: str | None, default: Any) -> Any:
@@ -170,7 +171,7 @@ def create_trace(trace_id: str, thread_id: str, user_message: str) -> None:
         """INSERT OR REPLACE INTO agent_traces
            (trace_id, thread_id, user_message, status, started_at)
            VALUES (?, ?, ?, 'running', ?)""",
-        (trace_id, thread_id, user_message, now),
+        (trace_id, thread_id, redact_text(user_message), now),
     )
     conn.commit()
 
@@ -206,12 +207,12 @@ def complete_trace(
                latency_ms = ?, error = ?
            WHERE trace_id = ?""",
         (
-            final_answer,
+            redact_text(final_answer),
             status,
             _json_dumps(legal_analysis or {}),
             now,
             max(0, now - started_at),
-            error,
+            redact_text(error),
             trace_id,
         ),
     )
@@ -288,12 +289,12 @@ def record_llm_call(
         (
             trace_id,
             thread_id,
-            provider,
-            model,
-            base_url,
+            redact_text(provider),
+            redact_text(model),
+            redact_text(base_url),
             status,
             latency_ms,
-            error,
+            redact_text(error),
             fallback_from,
             model_route,
             usage.get("prompt_tokens") or usage.get("input_tokens"),

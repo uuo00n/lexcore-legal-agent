@@ -134,13 +134,13 @@ class _GraphWithContextStatus:
         }
 
 
-def test_build_state_input_restores_archived_history_when_checkpoint_missing(monkeypatch):
+def test_build_state_input_restores_archived_history_when_checkpoint_missing():
     from api import chat as chat_api
 
-    monkeypatch.setattr(chat_api, "load_all_messages", lambda thread_id: [
+    archived_items = [
         {"role": "human", "content": "我之前说我是学生"},
         {"role": "ai", "content": "我记住了，你是在校学生。"},
-    ])
+    ]
 
     req = ChatRequest(thread_id="thread-with-archive", message="那我现在被同学威胁怎么办？")
     state_input = chat_api._build_state_input(
@@ -149,6 +149,7 @@ def test_build_state_input_restores_archived_history_when_checkpoint_missing(mon
         doc_text=None,
         doc_name=None,
         trace_id="trace-1",
+        archived_items=archived_items,
     )
 
     assert [m.content for m in state_input["messages"]] == [
@@ -158,12 +159,8 @@ def test_build_state_input_restores_archived_history_when_checkpoint_missing(mon
     ]
 
 
-def test_build_state_input_uses_checkpoint_when_available(monkeypatch):
+def test_build_state_input_uses_checkpoint_when_available():
     from api import chat as chat_api
-
-    monkeypatch.setattr(chat_api, "load_all_messages", lambda thread_id: [
-        {"role": "human", "content": "归档里的旧消息不应重复塞入"},
-    ])
 
     req = ChatRequest(thread_id="thread-with-checkpoint", message="继续刚才的问题")
     state_input = chat_api._build_state_input(
@@ -172,6 +169,9 @@ def test_build_state_input_uses_checkpoint_when_available(monkeypatch):
         doc_text=None,
         doc_name=None,
         trace_id="trace-2",
+        archived_items=[
+            {"role": "human", "content": "归档里的旧消息不应重复塞入"},
+        ],
     )
 
     assert [m.content for m in state_input["messages"]] == ["继续刚才的问题"]

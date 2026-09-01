@@ -47,7 +47,7 @@ def test_visible_history_hides_tool_call_ai_drafts():
     assert "**" not in visible[-1]["content"]
 
 
-def test_history_falls_back_to_archived_messages_when_checkpoint_missing(monkeypatch):
+def test_history_falls_back_to_archived_messages_when_checkpoint_missing():
     """
     函数作用：
         内存 checkpoint 不存在时，会话历史应从持久归档中加载。
@@ -58,12 +58,16 @@ def test_history_falls_back_to_archived_messages_when_checkpoint_missing(monkeyp
     """
     from api import threads as threads_api
 
-    monkeypatch.setattr(threads_api, "load_all_messages", lambda thread_id: [
+    archived_items = [
         {"role": "human", "content": "我之前说我是学生"},
         {"role": "ai", "content": "**我记住了，你是在校学生。**"},
-    ])
+    ]
 
-    visible = threads_api._history_messages_for_thread(_GraphWithState({}), "thread-with-archive")
+    visible = threads_api._history_messages_for_thread(
+        _GraphWithState({}),
+        "thread-with-archive",
+        archived_items=archived_items,
+    )
 
     assert visible == [
         {"role": "user", "content": "我之前说我是学生", "name": None},

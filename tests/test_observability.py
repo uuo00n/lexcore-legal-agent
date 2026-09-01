@@ -59,3 +59,26 @@ def test_observability_records_trace_llm_and_eval(tmp_path, monkeypatch):
     assert list_traces()[0]["trace_id"] == "trace-1"
     assert list_llm_calls()[0]["total_tokens"] == 88
     assert list_eval_runs()[0]["metrics"]["mrr"] == 1.0
+
+
+def test_legacy_observability_mirror_redacts_credentials(tmp_path, monkeypatch):
+    monkeypatch.setenv("DOCS_DB", str(tmp_path / "meta.sqlite"))
+    init_meta_db()
+    init_observability_tables()
+
+    create_trace("trace-secret", "thread-1", "api_key=abcdef123456")
+    record_event(
+        "trace-secret",
+        "tool_start",
+        payload={"headers": {"Authorization": "Bearer abcdef1234567890"}},
+    )
+    complete_trace(
+        "trace-secret",
+        error="postgresql://legal:s3cret@db:5432/legal failed",
+    )
+
+    trace = get_trace("trace-secret")
+    serialized = repr(trace)
+    assert "abcdef123456" not in serialized
+    assert "s3cret" not in serialized
+    assert "***REDACTED***" in serialized

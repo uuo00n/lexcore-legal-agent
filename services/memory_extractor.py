@@ -13,6 +13,7 @@
 from __future__ import annotations
 
 import json
+import inspect
 import logging
 import os
 from typing import Optional
@@ -26,13 +27,13 @@ from services.memory import (
     estimate_tokens,
     get_summary,
     get_summary_msg_count,
-    load_all_messages,
-    save_messages,
     save_summary,
     save_user_profile,
     get_user_profile,
 )
 from services.memory_store import get_memory_store
+from services.persistence import append_messages as save_messages
+from services.persistence import load_messages as load_all_messages
 
 log = logging.getLogger(__name__)
 DEFAULT_MEMORY_LLM_MODEL = "deepseek-v4-flash"
@@ -170,7 +171,17 @@ def _get_memory_llm():
     )
 
 
-def _new_messages_for_archive(thread_id: str, msg_dicts: list[dict]) -> list[dict]:
+async def _maybe_await(value):
+    """兼容生产异步存储函数与测试中注入的同步替身。"""
+    return await value if inspect.isawaitable(value) else value
+
+
+def _new_messages_for_archive(
+    thread_id: str,
+    msg_dicts: list[dict],
+    *,
+    archived: list[dict] | None = None,
+) -> list[dict]:
     """
     函数作用：
         计算本轮相对持久归档新增的消息，避免重复保存已恢复的历史。
@@ -180,7 +191,11 @@ def _new_messages_for_archive(thread_id: str, msg_dicts: list[dict]) -> list[dic
     输出参数：
         - list[dict]
     """
-    archived = load_all_messages(thread_id)
+    if archived is None:
+        # 保留同步测试辅助入口；生产路径会显式传入异步加载后的归档。
+        archived = load_all_messages(thread_id)
+        if inspect.isawaitable(archived):
+            raise RuntimeError("archived messages must be awaited before comparison")
     if not archived:
         return msg_dicts
 
@@ -215,9 +230,14 @@ async def extract_and_save_memory(
 
     # 1. 消息归档
     try:
-        new_msg_dicts = _new_messages_for_archive(thread_id, msg_dicts)
+        archived = await _maybe_await(load_all_messages(thread_id))
+        new_msg_dicts = _new_messages_for_archive(
+            thread_id,
+            msg_dicts,
+            archived=archived,
+        )
         if new_msg_dicts:
-            save_messages(thread_id, new_msg_dicts)
+            await _maybe_await(save_messages(thread_id, new_msg_dicts))
         log.info("消息已归档: thread=%s, count=%d", thread_id, len(new_msg_dicts))
     except Exception as e:
         new_msg_dicts = msg_dicts
@@ -232,7 +252,7 @@ async def extract_and_save_memory(
 
     # 2. 摘要更新（条数超过窗口 或 窗口内 token 超上限时触发）
     try:
-        all_msgs = load_all_messages(thread_id)
+        all_msgs = await _maybe_await(load_all_messages(thread_id))
         total_count = len(all_msgs)
 
         # 判断是否需要触发摘要
