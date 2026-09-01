@@ -64,6 +64,13 @@ export default withMermaid({
         {
           text: '架构专题',
           items: [
+            { text: '最终架构总览', link: '/architecture/overview' },
+            { text: 'Agent 工作流', link: '/architecture/agent-workflow' },
+            { text: 'RAG 架构', link: '/architecture/rag' },
+            { text: 'Memory 架构', link: '/architecture/memory' },
+            { text: 'Tools 架构', link: '/architecture/tools' },
+            { text: 'Persistence 架构', link: '/architecture/persistence' },
+            { text: 'Observability 架构', link: '/architecture/observability' },
             { text: 'Context Engineering 与 Memory', link: '/architecture/context-engineering-memory' },
             { text: 'PostgreSQL 持久化', link: '/architecture/postgresql-persistence' },
             { text: 'Redis 缓存', link: '/architecture/redis-cache' },
