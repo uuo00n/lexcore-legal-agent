@@ -4,7 +4,6 @@ from __future__ import annotations
 from typing import Literal
 
 from mcp_server.server import mcp
-from services.delilegal.enums import CourtLevel, JudgementType
 from services.observability import trace_context
 from services.search import (
     CaseSearchParams,
@@ -21,7 +20,7 @@ async def search_law(
     query: str,
     top_k: int = 5,
     page_no: int = 1,
-    sort_field: Literal["correlation", "time"] = "correlation",
+    sort_field: Literal["correlation", "time", "activeDate"] = "correlation",
     sort_order: Literal["asc", "desc"] = "desc",
     trace_id: str | None = None,
     thread_id: str | None = None,
@@ -56,10 +55,6 @@ async def search_case(
     page_no: int = 1,
     sort_field: Literal["correlation", "time"] = "correlation",
     sort_order: Literal["asc", "desc"] = "desc",
-    case_year_start: str | None = None,
-    case_year_end: str | None = None,
-    court_levels: list[CourtLevel] | None = None,
-    judgement_types: list[JudgementType] | None = None,
     trace_id: str | None = None,
     thread_id: str | None = None,
     agent_name: str | None = None,
@@ -80,10 +75,6 @@ async def search_case(
                 page_no=page_no,
                 sort_field=sort_field,
                 sort_order=sort_order,
-                case_year_start=case_year_start,
-                case_year_end=case_year_end,
-                court_levels=court_levels,
-                judgement_types=judgement_types,
             ),
             trace_id=trace_id,
         )

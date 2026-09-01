@@ -5,9 +5,6 @@ from typing import Literal
 
 from pydantic import BaseModel, Field, model_validator
 
-from services.delilegal.enums import CourtLevel, JudgementType
-
-
 class SourceMetadata(BaseModel):
     source_type: Literal["local_rag", "delilegal_law", "delilegal_case"]
     source_id: str
@@ -20,7 +17,7 @@ class LawSearchInput(BaseModel):
     query: str = Field(min_length=1)
     page_no: int = Field(default=1, ge=1)
     page_size: int = Field(default=5, ge=1, le=20)
-    sort_field: Literal["correlation", "time"] = "correlation"
+    sort_field: Literal["correlation", "time", "activeDate"] = "correlation"
     sort_order: Literal["asc", "desc"] = "desc"
 
 
@@ -58,12 +55,8 @@ class CaseSearchInput(BaseModel):
     page_size: int = Field(default=5, ge=1, le=20)
     sort_field: Literal["correlation", "time"] = "correlation"
     sort_order: Literal["asc", "desc"] = "desc"
-    case_year_start: str | None = None
-    case_year_end: str | None = None
-    court_levels: list[CourtLevel] | None = None
     keywords: list[str] | None = None
     long_text: str | None = None
-    judgement_types: list[JudgementType] | None = None
 
     @model_validator(mode="after")
     def normalize_search_mode(self) -> "CaseSearchInput":
@@ -72,9 +65,6 @@ class CaseSearchInput(BaseModel):
             self.keywords = None
         elif self.keywords:
             self.keywords = [item.strip() for item in self.keywords if item.strip()] or None
-        if self.case_year_start and self.case_year_end:
-            if self.case_year_start > self.case_year_end:
-                raise ValueError("case_year_start must not be later than case_year_end")
         return self
 
 

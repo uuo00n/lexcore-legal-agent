@@ -1,9 +1,12 @@
 {
-  "data": {
+  "success": true,
+  "code": 0,
+  "msg": "",
+  "body": {
     "queryId": "case-query-001",
     "totalCount": 1,
     "totalPage": 1,
-    "list": [
+    "data": [
       {
         "id": "case-001",
         "title": "张某与某公司劳动争议案",

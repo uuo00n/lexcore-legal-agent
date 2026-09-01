@@ -13,7 +13,7 @@ from typing import Any, Literal
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 from services.delilegal.client import DelilegalClient
-from services.delilegal.enums import CourtLevel, JudgementType, SourceType
+from services.delilegal.enums import SourceType
 from services.delilegal.exceptions import (
     DelilegalAuthenticationError,
     DelilegalConfigurationError,
@@ -41,7 +41,7 @@ class LawSearchParams(BaseModel):
     query: str = Field(min_length=2, max_length=1_000)
     top_k: int = Field(default=5, ge=1, le=MAX_SEARCH_TOP_K)
     page_no: int = Field(default=1, ge=1, le=100)
-    sort_field: Literal["correlation", "time"] = "correlation"
+    sort_field: Literal["correlation", "time", "activeDate"] = "correlation"
     sort_order: Literal["asc", "desc"] = "desc"
 
     @field_validator("query")
@@ -62,10 +62,6 @@ class CaseSearchParams(BaseModel):
     page_no: int = Field(default=1, ge=1, le=100)
     sort_field: Literal["correlation", "time"] = "correlation"
     sort_order: Literal["asc", "desc"] = "desc"
-    case_year_start: str | None = Field(default=None, pattern=r"^\d{4}$")
-    case_year_end: str | None = Field(default=None, pattern=r"^\d{4}$")
-    court_levels: list[CourtLevel] | None = Field(default=None, max_length=4)
-    judgement_types: list[JudgementType] | None = Field(default=None, max_length=6)
 
     @model_validator(mode="after")
     def validate_search_mode(self) -> "CaseSearchParams":
@@ -77,9 +73,6 @@ class CaseSearchParams(BaseModel):
             self.keywords = cleaned or None
         if not self.long_text and not self.keywords:
             raise ValueError("long_text or keywords is required")
-        if self.case_year_start and self.case_year_end:
-            if self.case_year_start > self.case_year_end:
-                raise ValueError("case_year_start must not be later than case_year_end")
         return self
 
 
@@ -337,10 +330,6 @@ async def search_case_service(
             page_size=params.top_k,
             sort_field=params.sort_field,
             sort_order=params.sort_order,
-            case_year_start=params.case_year_start,
-            case_year_end=params.case_year_end,
-            court_levels=params.court_levels,
-            judgement_types=params.judgement_types,
         )
         async with DelilegalClient(trace_id=resolved_trace_id) as client:
             response = await client.search_cases(request)

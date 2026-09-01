@@ -8,7 +8,6 @@ from langgraph.prebuilt import InjectedState
 
 from agent.tools._runtime import resolve_trace_id, serialize_tool_exception
 from agent.tools.schemas import CaseSearchToolInput
-from services.delilegal.enums import CourtLevel, JudgementType
 from services.search import CaseSearchParams, search_case_service
 
 
@@ -29,10 +28,6 @@ async def search_case_tool(
     page_no: int = 1,
     sort_field: str = "correlation",
     sort_order: str = "desc",
-    case_year_start: str | None = None,
-    case_year_end: str | None = None,
-    court_levels: list[CourtLevel] | None = None,
-    judgement_types: list[JudgementType] | None = None,
     trace_id: Annotated[str | None, InjectedState("trace_id")] = None,
 ) -> str:
     """通过共享 Service 检索类案，不经过 MCP。"""
@@ -44,10 +39,6 @@ async def search_case_tool(
             page_no=page_no,
             sort_field=sort_field,
             sort_order=sort_order,
-            case_year_start=case_year_start,
-            case_year_end=case_year_end,
-            court_levels=court_levels,
-            judgement_types=judgement_types,
         ),
         trace_id=resolve_trace_id(trace_id),
     )

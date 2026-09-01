@@ -1,9 +1,12 @@
 {
-  "data": {
+  "success": true,
+  "code": 0,
+  "msg": "",
+  "body": {
     "queryId": "law-query-001",
     "totalCount": 1,
     "totalPage": 1,
-    "list": [
+    "data": [
       {
         "id": "law-001",
         "title": "中华人民共和国示例法",

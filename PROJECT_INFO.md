@@ -422,11 +422,10 @@ LEGAL_DAILY_REQUEST_LIMIT=200
 LEGAL_DAILY_TOKEN_LIMIT=200000
 
 ADMIN_API_KEY=
-DELILEGAL_BASE_URL=https://openapi.delilegal.com
-DELILEGAL_APP_ID=
-DELILEGAL_SECRET=
-DELILEGAL_LAW_SEARCH_PATH=/api/qa/v3/search/queryListLaw
-DELILEGAL_CASE_SEARCH_PATH=/api/qa/v3/search/queryListCase
+DELILEGAL_BASE_URL=https://platform.delilegal.com
+DELILEGAL_API_KEY=
+DELILEGAL_LAW_SEARCH_PATH=/api/v1/generice/law/list
+DELILEGAL_CASE_SEARCH_PATH=/api/v1/generice/case/list
 ```
 
 ## 当前数据状态

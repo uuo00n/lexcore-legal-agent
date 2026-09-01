@@ -17,7 +17,7 @@ REDACTED = "***REDACTED***"
 # 递归深度上限，避免异常嵌套结构导致栈溢出。
 MAX_DEPTH = 12
 
-# 键名命中即整体替换。app_id 在本项目属于得理开放平台凭据，同样禁止落库。
+# 键名命中即整体替换；兼容旧字段 app_id，防止历史载荷中的得理凭据落库。
 _SENSITIVE_KEY_RE = re.compile(
     r"api[_-]?key|apikey|secret|token|password|passwd|credential"
     r"|authorization|auth[_-]?header|bearer|cookie"

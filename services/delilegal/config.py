@@ -9,39 +9,37 @@ from services.delilegal.exceptions import DelilegalConfigurationError
 
 @dataclass(frozen=True, slots=True)
 class DelilegalSettings:
-    """得理连接配置；实例本身不会输出或记录 secret。"""
+    """得理连接配置；实例本身不会输出或记录 API Key。"""
 
     base_url: str = ""
-    app_id: str = ""
-    secret: str = ""
-    law_search_path: str | None = "/api/qa/v3/search/queryListLaw"
-    case_search_path: str = "/api/qa/v3/search/queryListCase"
+    api_key: str = ""
+    law_search_path: str | None = "/api/v1/generice/law/list"
+    case_search_path: str = "/api/v1/generice/case/list"
     connect_timeout: float = 5.0
     read_timeout: float = 30.0
 
     @classmethod
     def from_env(cls) -> "DelilegalSettings":
-        default_search_path = "/api/qa/v3/search/queryListLaw"
+        default_search_path = "/api/v1/generice/law/list"
         law_path = (
             os.getenv("DELILEGAL_LAW_SEARCH_PATH", default_search_path).strip()
             or default_search_path
         )
         return cls(
             base_url=os.getenv("DELILEGAL_BASE_URL", "").strip(),
-            app_id=os.getenv("DELILEGAL_APP_ID", "").strip(),
-            secret=os.getenv("DELILEGAL_SECRET", "").strip(),
+            api_key=os.getenv("DELILEGAL_API_KEY", "").strip(),
             law_search_path=law_path,
             case_search_path=os.getenv(
-                "DELILEGAL_CASE_SEARCH_PATH", "/api/qa/v3/search/queryListCase"
+                "DELILEGAL_CASE_SEARCH_PATH", "/api/v1/generice/case/list"
             ).strip(),
             connect_timeout=float(os.getenv("DELILEGAL_CONNECT_TIMEOUT", "5")),
             read_timeout=float(os.getenv("DELILEGAL_READ_TIMEOUT", "30")),
         )
 
     def validate_credentials(self) -> None:
-        if not self.app_id or not self.secret:
+        if not self.api_key:
             raise DelilegalConfigurationError(
-                "Delilegal credentials are not configured; set DELILEGAL_APP_ID and DELILEGAL_SECRET."
+                "Delilegal credentials are not configured; set DELILEGAL_API_KEY."
             )
 
     def validate_base_url(self) -> None:

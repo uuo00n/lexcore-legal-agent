@@ -339,16 +339,18 @@ async def test_delilegal_client_second_call_hits_cache(store):
 
     def handler(request: httpx.Request) -> httpx.Response:
         requests.append(request.url.path)
-        return httpx.Response(200, json={"data": {"totalCount": 0, "list": []}})
+        return httpx.Response(
+            200,
+            json={"success": True, "code": 0, "msg": "", "body": {"data": []}},
+        )
 
     settings = DelilegalSettings(
-        base_url="https://openapi.delilegal.test",
-        app_id="test-app",
-        secret="test-secret",
+        base_url="https://platform.delilegal.test",
+        api_key="sk-test-api-key",
         law_search_path="/law-search",
     )
     http_client = httpx.AsyncClient(
-        base_url="https://openapi.delilegal.test", transport=httpx.MockTransport(handler)
+        base_url="https://platform.delilegal.test", transport=httpx.MockTransport(handler)
     )
     client = DelilegalClient(settings, http_client=http_client, trace_id="trace-1")
     await client.search_laws(LawSearchInput(query="劳动合同解除"))

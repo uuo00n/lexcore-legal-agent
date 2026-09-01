@@ -68,11 +68,10 @@ class DelilegalClient:
 
     def _headers(self) -> dict[str, str]:
         self.settings.validate_credentials()
-        # 得理凭据名称集中在这里；不得记录或返回这些 header。
+        # 得理凭据集中在这里；不得记录或返回 Authorization header。
         return {
+            "Authorization": f"Bearer {self.settings.api_key}",
             "Content-Type": "application/json",
-            "appId": self.settings.app_id,
-            "secret": self.settings.secret,
         }
 
     async def _send_once(self, path: str, payload: dict[str, Any]) -> Any:
@@ -99,11 +98,28 @@ class DelilegalClient:
                 status_code=response.status_code,
             )
         try:
-            return response.json()
+            data = response.json()
         except ValueError as exc:
             raise DelilegalInvalidResponseError(
                 "Delilegal returned a non-JSON response."
             ) from exc
+        if isinstance(data, dict) and data.get("success") is False:
+            code = data.get("code")
+            try:
+                status_code = int(code)
+            except (TypeError, ValueError):
+                status_code = None
+            if status_code in {401, 403}:
+                raise DelilegalAuthenticationError(
+                    "Delilegal authentication failed.",
+                    status_code=status_code,
+                )
+            raise DelilegalUpstreamError(
+                "Delilegal upstream rejected the request.",
+                retryable=bool(status_code and status_code >= 500),
+                status_code=status_code,
+            )
+        return data
 
     async def _post(self, endpoint_type: str, payload: dict[str, Any]) -> Any:
         # 得理是外部计费接口，先查响应缓存；Redis 不可用时 get 返回 None，照常请求上游。
@@ -126,9 +142,13 @@ class DelilegalClient:
                 operation_name=f"delilegal.{endpoint_type}",
             )
             success = True
-            body = data.get("data", data) if isinstance(data, dict) else data
+            body = (
+                data.get("body", data.get("data", data))
+                if isinstance(data, dict)
+                else data
+            )
             if isinstance(body, dict):
-                for key in ("items", "list", "records", "rows", "dataList"):
+                for key in ("data", "items", "list", "records", "rows", "dataList"):
                     if isinstance(body.get(key), list):
                         result_count = len(body[key])
                         break

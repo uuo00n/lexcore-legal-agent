@@ -15,33 +15,24 @@ from services.delilegal.schemas import (
 
 
 def build_case_request(value: CaseSearchInput) -> dict[str, Any]:
-    condition: dict[str, Any] = {}
-    optional = {
-        "caseYearStart": value.case_year_start,
-        "caseYearEnd": value.case_year_end,
-        "courtLevelArr": [item.value for item in value.court_levels] if value.court_levels else None,
-        "judgementTypeArr": [item.value for item in value.judgement_types] if value.judgement_types else None,
-        "longText": value.long_text,
-        "keywordArr": value.keywords if not value.long_text else None,
-    }
-    condition.update({key: item for key, item in optional.items() if item is not None})
+    query = value.long_text or " ".join(value.keywords or [])
     return {
+        "query": query,
         "pageNo": value.page_no,
         "pageSize": value.page_size,
         "sortField": value.sort_field,
         "sortOrder": value.sort_order,
-        "condition": condition,
     }
 
 
 def build_law_request(value: LawSearchInput) -> dict[str, Any]:
     """构造法规关键词检索请求。"""
     return {
+        "query": value.query,
         "pageNo": value.page_no,
         "pageSize": value.page_size,
         "sortField": value.sort_field,
         "sortOrder": value.sort_order,
-        "condition": {"keywordArr": [value.query]},
     }
 
 
@@ -51,7 +42,11 @@ def _body(payload: Any) -> dict[str, Any]:
     current = payload
     while True:
         nested = next(
-            (current.get(key) for key in ("data", "result", "page") if isinstance(current.get(key), dict)),
+            (
+                current.get(key)
+                for key in ("body", "data", "result", "page")
+                if isinstance(current.get(key), dict)
+            ),
             None,
         )
         if nested is None or nested is current:
@@ -61,7 +56,7 @@ def _body(payload: Any) -> dict[str, Any]:
 
 
 def _items(body: dict[str, Any]) -> list[dict[str, Any]]:
-    for key in ("items", "list", "records", "rows", "dataList"):
+    for key in ("data", "items", "list", "records", "rows", "dataList"):
         value = body.get(key)
         if isinstance(value, list):
             return [item for item in value if isinstance(item, dict)]

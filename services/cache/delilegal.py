@@ -5,7 +5,7 @@
 
 安全约束：
 - key 只有 endpoint_type 与 `fingerprint(payload)`，检索词不进 key（要求 2）。
-- 只缓存响应体；appId / secret 等凭据在 header 中，永不进入缓存值。
+- 只缓存响应体；Authorization Bearer API Key 在 header 中，永不进入缓存值。
 - 一律带 TTL（DELILEGAL_CACHE_TTL_SECONDS，默认 3600s，要求 3）。
 - Redis 不可用时读写都降级为 no-op，直接打真实接口（要求 1）。
 - 只缓存成功响应；失败与异常不写缓存，避免把一次抖动固化一小时。
