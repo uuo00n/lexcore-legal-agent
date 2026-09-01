@@ -5,10 +5,10 @@ import json
 from datetime import datetime, timezone
 
 from mcp_server.server import mcp
-from services.retriever import get_retriever
+from services.rag.retriever import get_retriever
 from services.local_legal_retriever import LocalLegalRetriever
 from services.delilegal.enums import SourceType
-from services.vectorstore.base import LawChunk
+from services.rag.interfaces import LawChunk
 
 
 def _result_item(chunk: LawChunk, score: float | None = None) -> dict:

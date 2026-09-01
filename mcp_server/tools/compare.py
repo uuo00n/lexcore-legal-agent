@@ -4,7 +4,7 @@ from __future__ import annotations
 import json
 
 from mcp_server.server import mcp
-from services.retriever import get_retriever
+from services.rag.retriever import get_retriever
 
 
 @mcp.tool()

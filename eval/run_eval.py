@@ -59,7 +59,7 @@ def run_retrieval_eval(dataset: list[dict], top_k: int = 5) -> dict:
         - dict
     """
     from services.indexer.chunker import chunk_all_laws
-    from services.retriever import init_retriever, get_retriever, reset_retriever
+    from services.rag.retriever import init_retriever, get_retriever, reset_retriever
     from eval.metrics import compute_retrieval_metrics, aggregate_metrics, RetrievalMetrics
 
     log.info("初始化检索器...")
@@ -163,7 +163,7 @@ def run_context_ab_eval_with_retriever(
         - dict
     """
     from services.indexer.chunker import chunk_all_laws
-    from services.retriever import init_retriever, get_retriever, reset_retriever
+    from services.rag.retriever import init_retriever, get_retriever, reset_retriever
     from contextlib import nullcontext
 
     from eval.context_ab import disabled_query_enhancement, run_context_ab_eval
@@ -226,7 +226,7 @@ def run_openviking_ab_eval_with_retriever(
     from eval.context_ab import disabled_query_enhancement
     from services.indexer.chunker import chunk_all_laws
     from services.openviking_client import OpenVikingHTTPClient, OpenVikingSettings
-    from services.retriever import init_retriever, get_retriever, reset_retriever
+    from services.rag.retriever import init_retriever, get_retriever, reset_retriever
 
     from eval.openviking_ab import run_openviking_ab_eval
 

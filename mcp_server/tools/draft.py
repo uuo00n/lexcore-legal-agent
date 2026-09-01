@@ -6,7 +6,7 @@ from datetime import date
 from pathlib import Path
 
 from mcp_server.server import mcp
-from services.retriever import get_retriever
+from services.rag.retriever import get_retriever
 
 TEMPLATES_DIR = Path(__file__).parent.parent / "knowledge" / "templates"
 

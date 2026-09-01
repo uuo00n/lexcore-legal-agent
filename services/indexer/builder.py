@@ -14,7 +14,7 @@ from pathlib import Path
 from dotenv import load_dotenv
 
 from services.indexer.chunker import chunk_all_laws
-from services.vectorstore import get_vectorstore
+from services.rag import get_vector_store
 
 load_dotenv()
 
@@ -53,7 +53,7 @@ def build_index(
     输出参数：
         - int
     """
-    store = get_vectorstore()
+    store = get_vector_store()
 
     # 检查是否需要构建
     if not rebuild and store.count() > 0:
@@ -62,7 +62,7 @@ def build_index(
 
     if rebuild:
         log.info("清空已有索引，准备重建...")
-        store.clear()
+        store.delete()
 
     # Step 1: 分块
     log.info("开始分块: %s", laws_dir)
@@ -93,7 +93,7 @@ def build_index(
     # Step 3: 写入向量库
     log.info("写入向量库...")
     start = time.time()
-    store.add_chunks(chunks, embeddings)
+    store.add_documents(chunks, embeddings)
     log.info("写入完成，耗时 %.1fs。索引总量: %d", time.time() - start, store.count())
 
     return store.count()

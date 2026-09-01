@@ -10,7 +10,7 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from services.vectorstore.base import LawChunk
+from services.rag.interfaces import LawChunk
 
 
 # 匹配条款号：第一条、第二百三十四条、第二百八十七条之一 等

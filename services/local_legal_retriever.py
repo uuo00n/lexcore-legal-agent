@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from services.retriever import get_retriever
+from services.rag.retriever import get_retriever
 
 
 class LocalLegalRetriever:

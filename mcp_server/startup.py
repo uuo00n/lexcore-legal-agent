@@ -22,7 +22,7 @@ def initialize_rag() -> None:
 
     from services.indexer.builder import load_or_build_index
     from services.indexer.chunker import chunk_all_laws
-    from services.retriever import init_retriever
+    from services.rag.retriever import init_retriever
 
     laws_dir = os.getenv("LAWS_DIR", "data/laws")
     load_or_build_index(laws_dir)
