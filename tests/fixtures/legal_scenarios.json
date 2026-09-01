@@ -1,0 +1,29 @@
+{
+  "consultation": {
+    "query": "公司无故解除劳动合同，我可以要求什么补偿？",
+    "route": "legal_consult_agent",
+    "complexity": "medium"
+  },
+  "statute_retrieval": {
+    "query": "请检索劳动合同法第四十六条",
+    "route": "statute_retrieval_agent",
+    "complexity": "low"
+  },
+  "case_analysis": {
+    "query": "我工作五年后被口头辞退，工资一万元，有解除通知和工资流水，请分析案件。",
+    "route": "case_analysis_agent",
+    "complexity": "high"
+  },
+  "non_legal": {
+    "query": "帮我写一首关于秋天的诗",
+    "route": "final",
+    "complexity": "low"
+  },
+  "law": {
+    "law_name": "中华人民共和国劳动合同法",
+    "article_no": "第四十六条",
+    "content": "有本法规定情形之一的，用人单位应当向劳动者支付经济补偿。",
+    "source_type": "local_rag",
+    "source_id": "labor-contract-law-46"
+  }
+}
