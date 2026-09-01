@@ -543,6 +543,10 @@ def get_trace_timeline(trace_id: str) -> Optional[dict[str, Any]]:
         "tool_start": "工具调用开始",
         "tool_end": "工具调用完成",
         "retrieval_collect": "法条检索收集",
+        "vector_hits": "向量检索命中",
+        "bm25_hits": "BM25 检索命中",
+        "fused_hits": "RRF 融合命中",
+        "reranker_hits": "Reranker 精排命中",
         "citation_guard": "法条引用校验",
         "llm_error": "LLM 调用失败",
         "llm_fallback": "LLM Fallback",
@@ -590,6 +594,8 @@ def _summarize_event(event_type: str, payload: dict[str, Any]) -> str:
         return f"{payload.get('status', '')} · 检索法条 {payload.get('retrieved_law_count', 0)} 条"
     if event_type == "retrieval_collect":
         return f"收集到 {payload.get('law_count', 0)} 条法条"
+    if event_type in {"vector_hits", "bm25_hits", "fused_hits", "reranker_hits"}:
+        return f"命中 {len(payload.get('hits', []))} 条"
     if event_type == "citation_guard":
         return "回答引用已调整" if payload.get("changed") else "回答引用通过"
     if event_type == "final_answer":

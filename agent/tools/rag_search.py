@@ -60,7 +60,10 @@ async def retrieve_local_law_tool(
             ).model_dump_json(exclude_none=True)
         )
     try:
-        raw = await call_tool("legal_search", {"query": query, "top_k": top_k})
+        raw = await call_tool(
+            "legal_search",
+            {"query": query, "top_k": top_k, "trace_id": trace_id},
+        )
         payload: dict[str, Any] = json.loads(raw) if isinstance(raw, str) else dict(raw)
         raw_results = payload.get("results") if isinstance(payload.get("results"), list) else []
         results, truncated = bound_results(raw_results, top_k=top_k)

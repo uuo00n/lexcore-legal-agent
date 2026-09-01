@@ -15,8 +15,10 @@ from __future__ import annotations
 import logging
 import os
 from functools import lru_cache
+from typing import TYPE_CHECKING
 
-from langchain_openai import ChatOpenAI
+if TYPE_CHECKING:
+    from langchain_openai import ChatOpenAI
 
 log = logging.getLogger("legal.query_enhance")
 
@@ -47,7 +49,7 @@ _HYDE_PROMPT = (
 )
 
 
-def _get_enhance_llm() -> ChatOpenAI:
+def _get_enhance_llm() -> "ChatOpenAI":
     """
     函数作用：
         获取查询增强专用的轻量 LLM 实例。
@@ -59,6 +61,7 @@ def _get_enhance_llm() -> ChatOpenAI:
     model = os.getenv("HYDE_MODEL", DEFAULT_HYDE_MODEL)
     base_url = os.getenv("HYDE_LLM_BASE_URL", DEFAULT_HYDE_LLM_BASE_URL)
     api_key = _get_hyde_api_key(base_url)
+    from langchain_openai import ChatOpenAI
 
     return ChatOpenAI(
         base_url=base_url,

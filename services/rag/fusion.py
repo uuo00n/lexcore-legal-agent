@@ -12,7 +12,18 @@ def reciprocal_rank_fusion(
     result_sets: Sequence[ScoredResults],
     k: int = 60,
 ) -> list[LawChunk]:
-    """用 RRF 融合任意数量的有序召回结果。"""
+    """兼容入口：用 RRF 融合结果并仅返回排序后的文档。"""
+    return [
+        document
+        for document, _score in reciprocal_rank_fusion_scored(result_sets, k=k)
+    ]
+
+
+def reciprocal_rank_fusion_scored(
+    result_sets: Sequence[ScoredResults],
+    k: int = 60,
+) -> list[DocumentResult]:
+    """用 RRF 融合任意数量的有序召回结果并保留融合分数。"""
     if k < 0:
         raise ValueError("RRF 的 k 不能小于 0")
     scores: dict[str, float] = {}
@@ -24,7 +35,10 @@ def reciprocal_rank_fusion(
             )
             documents[document.chunk_id] = document
     ordered_ids = sorted(scores, key=scores.get, reverse=True)
-    return [documents[document_id] for document_id in ordered_ids]
+    return [
+        DocumentResult(documents[document_id], scores[document_id])
+        for document_id in ordered_ids
+    ]
 
 
 def append_unique_results(

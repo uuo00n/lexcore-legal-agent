@@ -59,7 +59,9 @@ cp .env.example .env
 | `HYDE_ENABLED` | `true` | 是否启用查询增强 |
 | `HYDE_MODEL` | `qwen2.5:1.5b` | HyDE 用的 Ollama 模型 |
 | `HYDE_LLM_BASE_URL` | `http://localhost:11434/v1` | HyDE 用 Ollama OpenAI 兼容地址 |
-| `RETRIEVER_TOP_K` | `20` | 每路检索候选数量 |
+| `RETRIEVAL_VECTOR_TOP_K` | `10` | 向量召回候选数量 |
+| `RETRIEVAL_BM25_TOP_K` | `10` | BM25 召回候选数量 |
+| `RETRIEVAL_FINAL_TOP_K` | `5` | Reranker 最终返回数量 |
 | `RERANKER_SCORE_THRESHOLD` | `0.3` | Reranker 分数阈值 |
 | `RRF_K` | `60` | RRF 融合常数 |
 | `MAX_TOOL_CALLS` | `5` | 每个 Specialist 任务的最大工具调用次数 |

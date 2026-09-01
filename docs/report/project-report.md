@@ -476,7 +476,9 @@ flowchart TB
 | 环境变量 | 默认值 | 作用 |
 | --- | --- | --- |
 | `RRF_K` | `60` | RRF 排名平滑参数 |
-| `RETRIEVER_TOP_K` | `20` | 粗排候选数量 |
+| `RETRIEVAL_VECTOR_TOP_K` | `10` | 向量召回候选数量 |
+| `RETRIEVAL_BM25_TOP_K` | `10` | BM25 召回候选数量 |
+| `RETRIEVAL_FINAL_TOP_K` | `5` | 精排最终返回数量 |
 | `RERANKER_SCORE_THRESHOLD` | `0.3` | 精排后过滤阈值 |
 
 ### 7.5 Reranker 精排
@@ -841,7 +843,9 @@ eval/
 | `HYDE_MODEL` | HyDE/重写模型 |
 | `HYDE_LLM_BASE_URL` | Ollama OpenAI-compatible 地址 |
 | `HYDE_BACKEND` | HyDE 后端，可选 openai 或 hf_lora |
-| `RETRIEVER_TOP_K` | 检索粗排候选数量 |
+| `RETRIEVAL_VECTOR_TOP_K` | 向量召回候选数量 |
+| `RETRIEVAL_BM25_TOP_K` | BM25 召回候选数量 |
+| `RETRIEVAL_FINAL_TOP_K` | 精排最终返回数量 |
 | `RERANKER_SCORE_THRESHOLD` | 精排阈值 |
 | `RRF_K` | RRF 参数 |
 | `MAX_TOOL_CALLS` | ReAct 最大工具循环次数 |

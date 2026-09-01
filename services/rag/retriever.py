@@ -5,11 +5,15 @@ import logging
 import os
 import re
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
 from services.rag import get_vector_store
 from services.rag.bm25 import BM25Retriever
-from services.rag.fusion import append_unique_results, reciprocal_rank_fusion
+from services.rag.fusion import (
+    append_unique_results,
+    reciprocal_rank_fusion,
+    reciprocal_rank_fusion_scored,
+)
 from services.rag.interfaces import (
     DocumentResult,
     LawChunk,
@@ -21,6 +25,7 @@ from services.rag.reranker import Reranker
 log = logging.getLogger("legal.retriever")
 _embedding_model = None
 _retriever: Optional["HybridRetriever"] = None
+_DEFAULT_RERANKER = object()
 
 _DIGIT_MAP = {
     "0": "零", "1": "一", "2": "二", "3": "三", "4": "四",
@@ -127,6 +132,54 @@ def _is_precise_legal_information_query(query: str) -> bool:
     return bool(_PRECISE_LEGAL_INFO_RE.search(re.sub(r"\s+", "", query)))
 
 
+def _positive_int_env(name: str, default: int) -> int:
+    raw_value = os.getenv(name)
+    if raw_value is None and name in {
+        "RETRIEVAL_VECTOR_TOP_K",
+        "RETRIEVAL_BM25_TOP_K",
+    }:
+        raw_value = os.getenv("RETRIEVER_TOP_K")
+    value = int(raw_value if raw_value is not None else default)
+    if value <= 0:
+        raise ValueError(f"{name} 必须大于 0")
+    return value
+
+
+def _serialize_hits(results: list[DocumentResult]) -> list[dict[str, Any]]:
+    return [
+        {
+            "rank": rank,
+            "chunk_id": document.chunk_id,
+            "law_name": document.law_name,
+            "article_no": document.article_no,
+            "score": float(score),
+        }
+        for rank, (document, score) in enumerate(results, start=1)
+    ]
+
+
+def _record_retrieval_event(
+    trace_id: str | None,
+    event_type: str,
+    results: list[DocumentResult],
+    **details: Any,
+) -> None:
+    """记录检索阶段命中；可观测性故障不得影响检索主链路。"""
+    if not trace_id:
+        return
+    try:
+        from services.observability import record_event
+
+        record_event(
+            trace_id,
+            event_type,
+            name="hybrid_retrieval",
+            payload={"hits": _serialize_hits(results), **details},
+        )
+    except Exception as exc:
+        log.debug("retrieval trace event skipped: %s", exc)
+
+
 class HybridRetriever:
     """语义召回与 BM25 召回经 RRF 融合后再精排。"""
 
@@ -134,16 +187,48 @@ class HybridRetriever:
         self,
         semantic: Optional[SemanticRetriever] = None,
         keyword: Optional[BM25Retriever] = None,
-        reranker: Optional[Reranker] = None,
+        reranker: Reranker | None | object = _DEFAULT_RERANKER,
         rrf_k: Optional[int] = None,
+        vector_top_k: Optional[int] = None,
+        bm25_top_k: Optional[int] = None,
+        final_top_k: Optional[int] = None,
+        # 兼容旧构造参数；设置后同时覆盖两路召回 TopK。
         top_k: Optional[int] = None,
         score_threshold: Optional[float] = None,
     ) -> None:
-        self._semantic = semantic or SemanticRetriever()
+        # init_retriever 会注入正式向量检索器；延迟创建便于独立测试 RRF。
+        self._semantic = semantic
         self._keyword = keyword
-        self._reranker = reranker or Reranker()
+        self._reranker = Reranker() if reranker is _DEFAULT_RERANKER else reranker
         self._rrf_k = rrf_k if rrf_k is not None else int(os.getenv("RRF_K", "60"))
-        self._top_k = top_k if top_k is not None else int(os.getenv("RETRIEVER_TOP_K", "20"))
+        legacy_top_k = top_k
+        self._vector_top_k = (
+            vector_top_k
+            if vector_top_k is not None
+            else legacy_top_k
+            if legacy_top_k is not None
+            else _positive_int_env("RETRIEVAL_VECTOR_TOP_K", 10)
+        )
+        self._bm25_top_k = (
+            bm25_top_k
+            if bm25_top_k is not None
+            else legacy_top_k
+            if legacy_top_k is not None
+            else _positive_int_env("RETRIEVAL_BM25_TOP_K", 10)
+        )
+        self._final_top_k = (
+            final_top_k
+            if final_top_k is not None
+            else _positive_int_env("RETRIEVAL_FINAL_TOP_K", 5)
+        )
+        for name, value in (
+            ("vector_top_k", self._vector_top_k),
+            ("bm25_top_k", self._bm25_top_k),
+            ("final_top_k", self._final_top_k),
+        ):
+            if value <= 0:
+                raise ValueError(f"{name} 必须大于 0")
+        self._top_k = max(self._vector_top_k, self._bm25_top_k)
         self._score_threshold = (
             score_threshold
             if score_threshold is not None
@@ -171,6 +256,7 @@ class HybridRetriever:
         semantic_results: list[DocumentResult],
         keyword_results: list[DocumentResult],
     ) -> list[LawChunk]:
+        """兼容旧测试与调用方，只返回 RRF 排序后的文档。"""
         return reciprocal_rank_fusion(
             [semantic_results, keyword_results],
             k=self._rrf_k,
@@ -178,11 +264,53 @@ class HybridRetriever:
 
     _append_unique_results = staticmethod(append_unique_results)
 
-    def _retrieve_scored(
+    @staticmethod
+    def _safe_retrieve(
+        retriever: Any,
+        query: str,
+        *,
+        top_k: int,
+        source: str,
+    ) -> tuple[list[DocumentResult], str | None]:
+        try:
+            results = HybridRetriever._normalize_results(
+                retriever.retrieve(query, top_k=top_k)
+            )
+            return results, None
+        except Exception as exc:
+            log.warning("%s retrieval failed, degrading to available source: %s", source, exc)
+            return [], type(exc).__name__
+
+    def _retrieve_source_variants(
+        self,
+        retriever: Any,
+        queries: list[str],
+        *,
+        top_k: int,
+        source: str,
+    ) -> tuple[list[DocumentResult], str | None]:
+        combined: list[DocumentResult] = []
+        error_type: str | None = None
+        for candidate_query in queries:
+            results, error = self._safe_retrieve(
+                retriever,
+                candidate_query,
+                top_k=top_k,
+                source=source,
+            )
+            if error:
+                error_type = error
+                break
+            append_unique_results(combined, results)
+        return combined[:top_k], error_type
+
+    def _run_pipeline(
         self,
         query: str,
-        top_k: int = 5,
-    ) -> list[DocumentResult]:
+        *,
+        top_k: int | None = None,
+        trace_id: str | None = None,
+    ) -> tuple[list[DocumentResult], bool]:
         from services.legal_analysis import is_legal_information_query
         from services.retriever.hyde import (
             generate_hypothetical_doc,
@@ -202,72 +330,153 @@ class HybridRetriever:
             rewritten_query = query
             hyde_document = query
 
-        semantic_results = self._normalize_results(
-            self._semantic.retrieve(hyde_document, top_k=self._top_k)
-        )
+        semantic_queries = [hyde_document]
         if hyde_document != query:
-            append_unique_results(
-                semantic_results,
-                self._normalize_results(
-                    self._semantic.retrieve(query, top_k=self._top_k)
-                ),
+            semantic_queries.append(query)
+        if rewritten_query not in semantic_queries:
+            semantic_queries.append(rewritten_query)
+        try:
+            semantic_retriever = self._semantic or SemanticRetriever()
+            semantic_results, vector_error = self._retrieve_source_variants(
+                semantic_retriever,
+                semantic_queries,
+                top_k=self._vector_top_k,
+                source="vector",
             )
-        if rewritten_query not in {query, hyde_document}:
-            append_unique_results(
-                semantic_results,
-                self._normalize_results(
-                    self._semantic.retrieve(rewritten_query, top_k=self._top_k)
-                ),
-            )
+        except Exception as exc:
+            log.warning("vector retrieval unavailable, degrading to BM25: %s", exc)
+            semantic_results = []
+            vector_error = type(exc).__name__
+        _record_retrieval_event(
+            trace_id,
+            "vector_hits",
+            semantic_results,
+            top_k=self._vector_top_k,
+            score_type="vector",
+            error_type=vector_error,
+        )
 
         keyword_results: list[DocumentResult] = []
+        bm25_error: str | None = None
         if self._keyword:
-            keyword_results = self._normalize_results(
-                self._keyword.retrieve(query, top_k=self._top_k)
+            keyword_queries = [query]
+            if rewritten_query not in keyword_queries:
+                keyword_queries.append(rewritten_query)
+            if hyde_document not in keyword_queries:
+                keyword_queries.append(hyde_document)
+            keyword_results, bm25_error = self._retrieve_source_variants(
+                self._keyword,
+                keyword_queries,
+                top_k=self._bm25_top_k,
+                source="bm25",
             )
-            if rewritten_query != query:
-                append_unique_results(
-                    keyword_results,
-                    self._normalize_results(
-                        self._keyword.retrieve(rewritten_query, top_k=self._top_k)
-                    ),
-                )
-            if hyde_document not in {query, rewritten_query}:
-                append_unique_results(
-                    keyword_results,
-                    self._normalize_results(
-                        self._keyword.retrieve(hyde_document, top_k=self._top_k)
-                    ),
-                )
+        _record_retrieval_event(
+            trace_id,
+            "bm25_hits",
+            keyword_results,
+            top_k=self._bm25_top_k,
+            score_type="bm25",
+            available=self._keyword is not None,
+            error_type=bm25_error,
+        )
 
-        fused = (
-            reciprocal_rank_fusion(
+        if semantic_results and keyword_results:
+            fused_results = reciprocal_rank_fusion_scored(
                 [semantic_results, keyword_results],
                 k=self._rrf_k,
             )
-            if keyword_results
-            else [document for document, _ in semantic_results]
+            fusion_mode = "rrf"
+        elif semantic_results:
+            fused_results = list(semantic_results)
+            fusion_mode = "vector_fallback"
+        else:
+            fused_results = list(keyword_results)
+            fusion_mode = "bm25_fallback" if keyword_results else "empty"
+        _record_retrieval_event(
+            trace_id,
+            "fused_hits",
+            fused_results,
+            mode=fusion_mode,
+            score_type="rrf" if fusion_mode == "rrf" else fusion_mode,
+            vector_error=vector_error,
+            bm25_error=bm25_error,
         )
-        return self._normalize_results(
-            self._reranker.rerank(
-                query,
-                fused[: self._top_k],
-                top_n=top_k,
+
+        final_limit = top_k if top_k is not None else self._final_top_k
+        if final_limit <= 0:
+            return [], False
+        rerank_candidates = fused_results[
+            : self._vector_top_k + self._bm25_top_k
+        ]
+        if self._reranker is None:
+            final_results = rerank_candidates[:final_limit]
+            _record_retrieval_event(
+                trace_id,
+                "reranker_hits",
+                final_results,
+                available=False,
+                degraded=True,
+                score_type=fusion_mode,
             )
-        )
+            return final_results, False
+
+        try:
+            final_results = self._normalize_results(self._reranker.rerank(
+                query,
+                [document for document, _score in rerank_candidates],
+                top_n=final_limit,
+            ))
+            _record_retrieval_event(
+                trace_id,
+                "reranker_hits",
+                final_results,
+                available=True,
+                degraded=False,
+                score_type="reranker",
+            )
+            return final_results, True
+        except Exception as exc:
+            log.warning("reranker failed, returning fused results: %s", exc)
+            final_results = rerank_candidates[:final_limit]
+            _record_retrieval_event(
+                trace_id,
+                "reranker_hits",
+                final_results,
+                available=False,
+                degraded=True,
+                score_type=fusion_mode,
+                error_type=type(exc).__name__,
+            )
+            return final_results, False
 
     def retrieve_with_scores(
         self,
         query: str,
-        top_k: int = 5,
+        top_k: int | None = None,
+        trace_id: str | None = None,
     ) -> list[DocumentResult]:
-        return self._retrieve_scored(query, top_k=top_k)
+        results, _reranked = self._run_pipeline(
+            query,
+            top_k=top_k,
+            trace_id=trace_id,
+        )
+        return results
 
-    def retrieve(self, query: str, top_k: int = 5) -> list[LawChunk]:
+    def retrieve(
+        self,
+        query: str,
+        top_k: int | None = None,
+        trace_id: str | None = None,
+    ) -> list[LawChunk]:
+        results, reranked = self._run_pipeline(
+            query,
+            top_k=top_k,
+            trace_id=trace_id,
+        )
         return [
             document
-            for document, score in self._retrieve_scored(query, top_k=top_k)
-            if score >= self._score_threshold
+            for document, score in results
+            if not reranked or score >= self._score_threshold
         ]
 
 

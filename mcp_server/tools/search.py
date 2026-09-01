@@ -29,7 +29,11 @@ def _result_item(chunk: LawChunk, score: float | None = None) -> dict:
 
 
 @mcp.tool()
-def legal_search(query: str, top_k: int = 5) -> str:
+def legal_search(
+    query: str,
+    top_k: int = 5,
+    trace_id: str | None = None,
+) -> str:
     """
     函数作用：
         根据用户问题检索相关中国法律条款。
@@ -41,7 +45,7 @@ def legal_search(query: str, top_k: int = 5) -> str:
     """
     retriever = LocalLegalRetriever(get_retriever())
     score_threshold = retriever.score_threshold
-    scored_chunks = retriever.search(query, top_k=top_k)
+    scored_chunks = retriever.search(query, top_k=top_k, trace_id=trace_id)
 
     if not scored_chunks:
         return json.dumps(
