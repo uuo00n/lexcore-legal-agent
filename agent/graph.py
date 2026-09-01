@@ -32,6 +32,7 @@ from agent.nodes import (
 from agent.state import AgentState
 from agent.tools import CASE_ANALYSIS_TOOLS, LEGAL_CONSULT_TOOLS, STATUTE_RETRIEVAL_TOOLS
 from agent.tool_loop import tool_error_observation
+from agent.replan import replan_retry_count
 from services.observability import record_event, trace_context
 
 
@@ -63,7 +64,7 @@ def _observed_node(
             resolved_agent = str(failure.get("agent_name") or "")
         retry_count = max(
             int(state.get("retry_count", 0) or 0),
-            int(state.get("verifier_retry_count", 0) or 0),
+            replan_retry_count(state),
         )
         started = time.perf_counter()
         with trace_context(
@@ -230,7 +231,7 @@ def build_graph(checkpointer: BaseCheckpointSaver | None = None) -> Any:
         "verifier",
         should_after_verifier,
         {
-            "retry": "supervisor_agent",
+            "replan": "planner",
             "answer_generator": "answer_generator",
         },
     )

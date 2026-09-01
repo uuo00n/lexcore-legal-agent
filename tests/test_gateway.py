@@ -4,6 +4,8 @@ import pytest
 
 from services.checkpoint import init_meta_db, reset_for_tests
 from services.gateway import GatewayChatModel, LLMClientConfig
+from services.errors import LLMError
+from services.retry import RetryPolicy, retry_async
 from services.observability import (
     create_trace,
     get_trace,
@@ -34,6 +36,31 @@ class FakeClient:
 
 class FakeResponse:
     response_metadata = {"token_usage": {"total_tokens": 12}}
+
+
+class SequentialClient(FakeClient):
+    def __init__(self, outcomes):
+        super().__init__()
+        self.outcomes = list(outcomes)
+        self.calls = 0
+
+    async def ainvoke(self, input, **kwargs):
+        outcome = self.outcomes[self.calls]
+        self.calls += 1
+        if isinstance(outcome, Exception):
+            raise outcome
+        return outcome
+
+
+def _disable_retry_wait(monkeypatch):
+    async def fast_retry(operation, *, operation_name):
+        return await retry_async(
+            operation,
+            operation_name=operation_name,
+            policy=RetryPolicy(max_attempts=3, multiplier=0, min_wait=0, max_wait=0),
+        )
+
+    monkeypatch.setattr("services.gateway.retry_async", fast_retry)
 
 
 def setup_function():
@@ -95,3 +122,28 @@ def test_structured_output_keeps_gateway_wrapper():
     structured = gateway.with_structured_output(dict)
 
     assert isinstance(structured, GatewayChatModel)
+
+
+@pytest.mark.asyncio
+async def test_gateway_retries_timeout_but_not_permanent_error(monkeypatch, tmp_path):
+    _disable_retry_wait(monkeypatch)
+    monkeypatch.setenv("DOCS_DB", str(tmp_path / "meta.sqlite"))
+    init_meta_db()
+    init_observability_tables()
+    transient = SequentialClient([TimeoutError("slow"), TimeoutError("slow"), FakeResponse()])
+    gateway = GatewayChatModel([
+        LLMClientConfig("primary", "model-a", "http://primary", "planner", transient)
+    ])
+
+    assert isinstance(await gateway.ainvoke("hello"), FakeResponse)
+    assert transient.calls == 3
+
+    permanent = SequentialClient([ValueError("schema invalid"), FakeResponse()])
+    gateway = GatewayChatModel([
+        LLMClientConfig("primary", "model-a", "http://primary", "planner", permanent)
+    ])
+
+    with pytest.raises(LLMError) as error:
+        await gateway.ainvoke("hello")
+    assert error.value.retryable is False
+    assert permanent.calls == 1

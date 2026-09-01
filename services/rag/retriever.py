@@ -9,6 +9,8 @@ from pathlib import Path
 from typing import Any, Optional
 
 from services.cache.retrieval import get_cached_results, set_cached_results
+from services.errors import RetrievalError
+from services.retry import is_retryable_exception, retry_sync
 from services.rag import get_vector_store
 from services.rag.bm25 import BM25Retriever
 from services.rag.fusion import (
@@ -292,13 +294,26 @@ class HybridRetriever:
         source: str,
     ) -> tuple[list[DocumentResult], str | None]:
         try:
+            def retrieve_once() -> Any:
+                try:
+                    return retriever.retrieve(query, top_k=top_k)
+                except Exception as exc:
+                    raise RetrievalError(
+                        f"{source} retrieval failed.",
+                        retryable=is_retryable_exception(exc),
+                    ) from exc
+
             results = HybridRetriever._normalize_results(
-                retriever.retrieve(query, top_k=top_k)
+                retry_sync(
+                    retrieve_once,
+                    operation_name=f"retrieval.{source}",
+                )
             )
             return results, None
         except Exception as exc:
             log.warning("%s retrieval failed, degrading to available source: %s", source, exc)
-            return [], type(exc).__name__
+            original = exc.__cause__ or exc
+            return [], type(original).__name__
 
     def _retrieve_source_variants(
         self,

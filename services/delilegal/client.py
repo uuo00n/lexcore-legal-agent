@@ -27,6 +27,7 @@ from services.delilegal.schemas import (
     LawSearchInput,
     LawSearchResponse,
 )
+from services.retry import is_retryable_exception, retry_async
 
 log = logging.getLogger("legal.delilegal")
 
@@ -74,6 +75,36 @@ class DelilegalClient:
             "secret": self.settings.secret,
         }
 
+    async def _send_once(self, path: str, payload: dict[str, Any]) -> Any:
+        """发送一次物理请求并在重试判定前完成异常映射。"""
+        try:
+            response = await self._client.post(path, json=payload, headers=self._headers())
+        except httpx.TimeoutException as exc:
+            raise DelilegalTimeoutError("Delilegal request timed out.") from exc
+        except httpx.HTTPError as exc:
+            raise DelilegalUpstreamError(
+                "Delilegal transport request failed.",
+                retryable=is_retryable_exception(exc),
+            ) from exc
+
+        if response.status_code in {401, 403}:
+            raise DelilegalAuthenticationError(
+                "Delilegal authentication failed.",
+                status_code=response.status_code,
+            )
+        if response.status_code >= 400:
+            raise DelilegalUpstreamError(
+                f"Delilegal upstream returned HTTP {response.status_code}.",
+                retryable=response.status_code >= 500,
+                status_code=response.status_code,
+            )
+        try:
+            return response.json()
+        except ValueError as exc:
+            raise DelilegalInvalidResponseError(
+                "Delilegal returned a non-JSON response."
+            ) from exc
+
     async def _post(self, endpoint_type: str, payload: dict[str, Any]) -> Any:
         # 得理是外部计费接口，先查响应缓存；Redis 不可用时 get 返回 None，照常请求上游。
         cached = await get_cached_response(endpoint_type, payload, trace_id=self.trace_id)
@@ -90,19 +121,10 @@ class DelilegalClient:
         result_count = 0
         error_type: str | None = None
         try:
-            response = await self._client.post(path, json=payload, headers=self._headers())
-            if response.status_code in {401, 403}:
-                raise DelilegalAuthenticationError("Delilegal authentication failed.")
-            if response.status_code >= 400:
-                raise DelilegalUpstreamError(
-                    f"Delilegal upstream returned HTTP {response.status_code}."
-                )
-            try:
-                data = response.json()
-            except ValueError as exc:
-                raise DelilegalInvalidResponseError(
-                    "Delilegal returned a non-JSON response."
-                ) from exc
+            data = await retry_async(
+                lambda: self._send_once(path, payload),
+                operation_name=f"delilegal.{endpoint_type}",
+            )
             success = True
             body = data.get("data", data) if isinstance(data, dict) else data
             if isinstance(body, dict):
@@ -113,12 +135,6 @@ class DelilegalClient:
             # 只缓存成功响应；失败与异常不写缓存，避免把一次抖动固化整个 TTL。
             await set_cached_response(endpoint_type, payload, data)
             return data
-        except httpx.TimeoutException as exc:
-            error_type = "timeout"
-            raise DelilegalTimeoutError("Delilegal request timed out.") from exc
-        except httpx.HTTPError as exc:
-            error_type = "transport"
-            raise DelilegalUpstreamError("Delilegal transport request failed.") from exc
         except Exception as exc:
             error_type = type(exc).__name__
             raise

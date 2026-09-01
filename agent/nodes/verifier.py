@@ -15,10 +15,12 @@ from agent.node_utils import compatibility_dependency, latest_human_message, rec
 from agent.prompts import RESULT_VERIFIER_PROMPT
 from agent.reports import report_agent_name
 from agent.state import AgentState, PlanStep, VerificationResult
+from agent.replan import MAX_AGENT_REPLAN_RETRIES, replan_retry_count
 from services.llm import get_llm
 
 
-MAX_VERIFIER_RETRIES = 1
+# 兼容旧导入名；该预算只控制 Agent Replan，不控制任何 HTTP/LLM retry。
+MAX_VERIFIER_RETRIES = MAX_AGENT_REPLAN_RETRIES
 _LAW_CITATION_RE = re.compile(
     r"《([^》]+)》\s*"
     r"(第[一二三四五六七八九十百千万亿零〇两\d]+条(?:之[一二三四五六七八九十百千万亿零〇两\d]+)?)"
@@ -341,11 +343,11 @@ def _deterministic_audit(state: AgentState) -> _VerificationAudit:
     return audit
 
 
-def _verification_result(audit: _VerificationAudit, *, verifier_retry_count: int) -> VerificationResult:
+def _verification_result(audit: _VerificationAudit, *, replan_count: int) -> VerificationResult:
     dimensions = 8
     score = round((dimensions - len(audit.failed_dimensions)) / dimensions, 4)
     passed = not audit.issues
-    needs_retry = not passed and verifier_retry_count < MAX_VERIFIER_RETRIES
+    needs_retry = not passed and replan_count < MAX_AGENT_REPLAN_RETRIES
     retry_reason = "；".join(audit.issues[:3]) if needs_retry else None
     return {
         "passed": passed,
@@ -363,7 +365,7 @@ def verify_plan_results(state: AgentState) -> VerificationResult:
     audit = _deterministic_audit(state)
     return _verification_result(
         audit,
-        verifier_retry_count=int(state.get("verifier_retry_count", 0) or 0),
+        replan_count=replan_retry_count(state),
     )
 
 
@@ -460,7 +462,7 @@ def _retry_updates(state: AgentState) -> dict[str, Any]:
         "retry_count": 0,
         "tool_call_count": 0,
         "tool_loop_failure": None,
-        "supervisor_route": "retry",
+        "supervisor_route": "replan",
         "supervisor_finalized": False,
     }
 
@@ -470,7 +472,7 @@ async def result_verifier_node(state: AgentState) -> dict[str, Any]:
     audit = _deterministic_audit(state)
     initial = _verification_result(
         audit,
-        verifier_retry_count=int(state.get("verifier_retry_count", 0) or 0),
+        replan_count=replan_retry_count(state),
     )
     supplement = await _llm_verification_supplement(state, initial)
     source_text = json.dumps(
@@ -484,8 +486,8 @@ async def result_verifier_node(state: AgentState) -> dict[str, Any]:
         default=str,
     )
     _merge_llm_supplement(audit, supplement, source_text=source_text)
-    retry_count = int(state.get("verifier_retry_count", 0) or 0)
-    verification = _verification_result(audit, verifier_retry_count=retry_count)
+    retry_count = replan_retry_count(state)
+    verification = _verification_result(audit, replan_count=retry_count)
     record_trace_event(
         state.get("trace_id"),
         "verification_complete",
@@ -494,13 +496,16 @@ async def result_verifier_node(state: AgentState) -> dict[str, Any]:
     )
     result: dict[str, Any] = {
         "verification_result": verification,
-        "supervisor_route": "retry" if verification["needs_retry"] else "answer_generator",
+        "supervisor_route": "replan" if verification["needs_retry"] else "answer_generator",
         "supervisor_reason": verification["retry_reason"] or "结果核验完成",
         "supervisor_finalized": False,
     }
     if verification["needs_retry"]:
         result.update(_retry_updates(state))
         result["verification_result"] = verification
+        result["supervisor_route"] = "replan"
+        result["replan_retry_count"] = retry_count + 1
+        # 仅用于读取旧 checkpoint/旧监控字段，新逻辑不得用它控制传输重试。
         result["verifier_retry_count"] = retry_count + 1
     return result
 

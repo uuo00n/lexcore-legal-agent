@@ -225,6 +225,7 @@ def _build_state_input(
         "completed_steps": [],
         "current_step": None,
         "retry_count": 0,
+        "replan_retry_count": 0,
         "verifier_retry_count": 0,
         "intent": "",
         "intent_confidence": 0.0,

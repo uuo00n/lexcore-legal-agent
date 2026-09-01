@@ -11,11 +11,13 @@ from services.delilegal.exceptions import (
     DelilegalUpstreamError,
 )
 from services.delilegal.schemas import CaseSearchResult, LawSearchResult
+from services.errors import DelilegalAPIError
 
 __all__ = [
     "CourtLevel",
     "CaseSearchResult",
     "DelilegalAuthenticationError",
+    "DelilegalAPIError",
     "DelilegalClient",
     "DelilegalConfigurationError",
     "DelilegalError",

@@ -161,12 +161,13 @@ async def test_result_verifier_first_failure_resets_execution_without_answer(mon
     result = await result_verifier_node(state)
 
     assert result["verification_result"]["needs_retry"] is True
+    assert result["replan_retry_count"] == 1
     assert result["verifier_retry_count"] == 1
-    assert result["supervisor_route"] == "retry"
+    assert result["supervisor_route"] == "replan"
     assert all(step["status"] == "pending" for step in result["plan"])
     assert result["agent_reports"] == []
     assert "messages" not in result
-    assert should_after_verifier(result) == "retry"
+    assert should_after_verifier(result) == "replan"
 
 
 async def test_result_verifier_second_failure_cannot_loop(monkeypatch):

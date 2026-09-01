@@ -18,6 +18,7 @@ from dataclasses import dataclass
 from urllib.parse import quote_plus
 
 from sqlalchemy import text
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
     AsyncSession,
@@ -28,6 +29,8 @@ from sqlalchemy.pool import StaticPool
 
 from infrastructure.models.base import Base
 from infrastructure.sanitize import mask_dsn
+from services.errors import DatabaseError
+from services.retry import is_retryable_exception
 
 log = logging.getLogger(__name__)
 
@@ -333,6 +336,15 @@ async def session_scope() -> AsyncIterator[AsyncSession]:
     try:
         yield session
         await session.commit()
+    except SQLAlchemyError as exc:
+        try:
+            await session.rollback()
+        except SQLAlchemyError:
+            log.exception("数据库事务回滚失败")
+        raise DatabaseError(
+            "Database transaction failed.",
+            retryable=is_retryable_exception(exc),
+        ) from exc
     except Exception:
         await session.rollback()
         raise

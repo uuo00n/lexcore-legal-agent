@@ -190,6 +190,9 @@ async def planner_node(state: AgentState) -> dict[str, Any]:
         "complexity": state.get("task_complexity") or "low",
         "supervisor_route": state.get("supervisor_route") or "",
         "has_uploaded_document": bool(state.get("uploaded_doc_text")),
+        "previous_plan": state.get("plan", []) or [],
+        "verification_result": state.get("verification_result"),
+        "replan_retry_count": int(state.get("replan_retry_count", 0) or 0),
     }
 
     try:

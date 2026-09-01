@@ -23,6 +23,8 @@ from dataclasses import dataclass
 from typing import Any, TypeVar
 
 from infrastructure.sanitize import mask_dsn
+from services.errors import CacheError
+from services.retry import is_retryable_exception
 
 log = logging.getLogger(__name__)
 
@@ -332,6 +334,14 @@ def _open_breaker(op: str, exc: BaseException) -> None:
     )
 
 
+def _normalize_cache_error(op: str, exc: BaseException) -> CacheError:
+    """为日志和观测统一缓存错误，同时保留 fail-open 返回语义。"""
+    return CacheError(
+        f"Cache operation {op!r} failed.",
+        retryable=is_retryable_exception(exc),
+    )
+
+
 def _close_breaker() -> None:
     """
     函数作用：
@@ -422,11 +432,15 @@ async def execute(
     try:
         result = await action(client)
     except _redis_error_types() as exc:
+        normalized = _normalize_cache_error(op, exc)
         _open_breaker(op, exc)
+        log.debug("缓存操作已降级: error_type=%s retryable=%s", type(normalized).__name__, normalized.retryable)
         _record_degraded(op)
         return default
     except Exception as exc:  # noqa: BLE001 - 缓存不得成为故障源
+        normalized = _normalize_cache_error(op, exc)
         _open_breaker(op, exc)
+        log.debug("缓存操作已降级: error_type=%s retryable=%s", type(normalized).__name__, normalized.retryable)
         _record_degraded(op)
         return default
     _close_breaker()
@@ -456,11 +470,15 @@ def execute_sync(
     try:
         result = action(client)
     except _redis_error_types() as exc:
+        normalized = _normalize_cache_error(op, exc)
         _open_breaker(op, exc)
+        log.debug("缓存操作已降级: error_type=%s retryable=%s", type(normalized).__name__, normalized.retryable)
         _record_degraded(op)
         return default
     except Exception as exc:  # noqa: BLE001
+        normalized = _normalize_cache_error(op, exc)
         _open_breaker(op, exc)
+        log.debug("缓存操作已降级: error_type=%s retryable=%s", type(normalized).__name__, normalized.retryable)
         _record_degraded(op)
         return default
     _close_breaker()

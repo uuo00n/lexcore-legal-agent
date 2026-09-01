@@ -12,8 +12,10 @@ import time
 from dataclasses import dataclass
 from typing import Any, Sequence
 
+from services.errors import LLMError
 from services.observability import record_event, record_llm_call
 from services.metrics import inc_counter, observe
+from services.retry import is_retryable_exception, retry_async
 
 
 @dataclass(frozen=True)
@@ -118,14 +120,62 @@ class GatewayChatModel:
         输出参数：
             - Any
         """
-        first_error: Exception | None = None
+        first_error: LLMError | None = None
         primary_provider = self._clients[0].provider
 
         for index, item in enumerate(self._clients):
-            started = time.perf_counter()
             fallback_from = "" if index == 0 else primary_provider
-            try:
-                response = await item.client.ainvoke(input, **kwargs)
+            attempt_number = 0
+
+            async def invoke_once() -> Any:
+                nonlocal attempt_number
+                attempt_number += 1
+                started = time.perf_counter()
+                try:
+                    response = await item.client.ainvoke(input, **kwargs)
+                except Exception as exc:
+                    latency_ms = int((time.perf_counter() - started) * 1000)
+                    error = exc if isinstance(exc, LLMError) else LLMError(
+                        "LLM provider request failed.",
+                        retryable=is_retryable_exception(exc),
+                        status_code=getattr(exc, "status_code", None),
+                    )
+                    record_llm_call(
+                        provider=item.provider,
+                        model=item.model,
+                        base_url=item.base_url,
+                        status="error",
+                        latency_ms=latency_ms,
+                        trace_id=self._trace_id,
+                        thread_id=self._thread_id,
+                        error=str(error),
+                        fallback_from=fallback_from,
+                        model_route=item.model_route,
+                    )
+                    observe("legal_llm_latency_ms", latency_ms, {"provider": item.provider, "status": "error"})
+                    inc_counter("legal_llm_calls_total", {"provider": item.provider, "status": "error", "route": item.model_route or ""})
+                    record_event(
+                        self._trace_id or "",
+                        "llm_error",
+                        name=item.provider,
+                        payload={
+                            "thread_id": self._thread_id,
+                            "model": item.model,
+                            "model_route": item.model_route,
+                            "latency_ms": latency_ms,
+                            "token_usage": {},
+                            "success": False,
+                            "retry_count": attempt_number - 1,
+                            "retryable": error.retryable,
+                            "error": str(error),
+                            "error_type": type(error).__name__,
+                            "fallback_from": fallback_from,
+                        },
+                    )
+                    if error is exc:
+                        raise
+                    raise error from exc
+
                 latency_ms = int((time.perf_counter() - started) * 1000)
                 usage = _extract_usage(response)
                 record_llm_call(
@@ -151,7 +201,7 @@ class GatewayChatModel:
                         "latency_ms": latency_ms,
                         "token_usage": usage,
                         "success": True,
-                        "retry_count": index,
+                        "retry_count": attempt_number - 1,
                         "fallback_from": fallback_from,
                     },
                 )
@@ -162,6 +212,13 @@ class GatewayChatModel:
                     add_token_usage(self._thread_id, usage.get("total_tokens"))
                 except Exception:
                     pass
+                return response
+
+            try:
+                response = await retry_async(
+                    invoke_once,
+                    operation_name=f"llm.{item.provider}.{item.model}",
+                )
                 if fallback_from:
                     record_event(
                         self._trace_id or "",
@@ -170,42 +227,11 @@ class GatewayChatModel:
                         payload={"from": fallback_from, "to": item.provider, "model": item.model},
                     )
                 return response
-            except Exception as exc:
-                latency_ms = int((time.perf_counter() - started) * 1000)
+            except LLMError as exc:
                 if first_error is None:
                     first_error = exc
-                record_llm_call(
-                    provider=item.provider,
-                    model=item.model,
-                    base_url=item.base_url,
-                    status="error",
-                    latency_ms=latency_ms,
-                    trace_id=self._trace_id,
-                    thread_id=self._thread_id,
-                    error=str(exc),
-                    fallback_from=fallback_from,
-                    model_route=item.model_route,
-                )
-                observe("legal_llm_latency_ms", latency_ms, {"provider": item.provider, "status": "error"})
-                inc_counter("legal_llm_calls_total", {"provider": item.provider, "status": "error", "route": item.model_route or ""})
-                record_event(
-                    self._trace_id or "",
-                    "llm_error",
-                    name=item.provider,
-                    payload={
-                        "thread_id": self._thread_id,
-                        "model": item.model,
-                        "model_route": item.model_route,
-                        "latency_ms": latency_ms,
-                        "token_usage": {},
-                        "success": False,
-                        "error": str(exc),
-                        "retry_count": index,
-                        "fallback_from": fallback_from,
-                    },
-                )
 
-        raise first_error or RuntimeError("all LLM gateway attempts failed")
+        raise first_error or LLMError("all LLM gateway attempts failed")
 
     def __getattr__(self, name: str) -> Any:
         """

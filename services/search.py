@@ -25,6 +25,8 @@ from services.delilegal.processors import compress_case_content, extract_relevan
 from services.delilegal.schemas import CaseSearchInput, LawSearchInput
 from services.local_legal_retriever import LocalLegalRetriever
 from services.rag.retriever import get_retriever
+from services.errors import RetrievalError
+from services.retry import is_retryable_exception
 
 
 log = logging.getLogger("legal.search_service")
@@ -224,7 +226,13 @@ def _error_detail(exc: Exception) -> ToolErrorDetail:
         return ToolErrorDetail(
             code="upstream_error",
             message="得理服务暂时不可用，可稍后重试一次；不要据此编造检索结果。",
-            retryable=True,
+            retryable=exc.retryable,
+        )
+    if isinstance(exc, RetrievalError):
+        return ToolErrorDetail(
+            code=exc.code,
+            message="本地检索暂时不可用，请改用可信检索源或报告证据不足。",
+            retryable=exc.retryable,
         )
     return ToolErrorDetail(
         code="tool_internal_error",
@@ -463,7 +471,7 @@ async def search_local_law_service(
         result.error = ToolErrorDetail(
             code="invalid_input",
             message="检索词至少需要两个非空白字符，请提炼具体法律问题后重试。",
-            retryable=True,
+            retryable=False,
         )
         return result
     try:
@@ -478,19 +486,23 @@ async def search_local_law_service(
         )
         return result
     except Exception as exc:
+        normalized = exc if isinstance(exc, RetrievalError) else RetrievalError(
+            "Local legal retrieval failed.",
+            retryable=is_retryable_exception(exc),
+        )
         latency_ms = _finish(
             resolved_trace_id,
             "search_local_law",
             "local_rag",
             started,
             success=False,
-            error_type=type(exc).__name__,
+            error_type=type(normalized).__name__,
         )
         return _error_result(
             trace_id=resolved_trace_id,
             source_type="local_rag",
             latency_ms=latency_ms,
-            exc=exc,
+            exc=normalized,
         )
 
 

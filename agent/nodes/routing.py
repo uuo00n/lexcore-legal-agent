@@ -10,6 +10,7 @@ from langchain_core.messages import AIMessage, ToolMessage
 from agent.node_utils import record_trace_event
 from agent.state import AgentState
 from agent.tool_loop import MAX_TOOL_CALLS
+from agent.replan import MAX_AGENT_REPLAN_RETRIES, replan_retry_count
 
 log = logging.getLogger(__name__)
 def should_after_supervisor(state: AgentState) -> str:
@@ -82,11 +83,15 @@ def should_execute_next(state: AgentState) -> str:
 
 
 def should_after_verifier(state: AgentState) -> str:
-    """Bound the Verifier loop to one retry, then always generate an answer."""
+    """Replan at most once; this budget is independent from transport retries."""
     verification = state.get("verification_result") or {}
-    retry_count = int(state.get("verifier_retry_count", 0) or 0)
-    if verification.get("needs_retry") and retry_count <= 1:
-        return "retry"
+    retry_count = replan_retry_count(state)
+    if (
+        verification.get("needs_retry")
+        and state.get("supervisor_route") == "replan"
+        and 0 < retry_count <= MAX_AGENT_REPLAN_RETRIES
+    ):
+        return "replan"
     return "answer_generator"
 
 

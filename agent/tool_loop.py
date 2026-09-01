@@ -8,6 +8,8 @@ from typing import Any
 from langchain_core.messages import AIMessage, ToolMessage
 
 from agent.state import AgentState, ToolLoopFailure
+from services.errors import ToolError
+from services.retry import is_retryable_exception
 
 
 MAX_TOOL_CALLS = max(1, int(os.getenv("MAX_TOOL_CALLS", "5")))
@@ -103,14 +105,25 @@ def tool_limit_observation_node(state: AgentState) -> dict[str, Any]:
 
 def tool_error_observation(error: Exception) -> str:
     """Render execution failures as observations the Specialist can react to."""
+    normalized = error if isinstance(error, ToolError) else ToolError(
+        str(error),
+        retryable=is_retryable_exception(error),
+    )
+    instruction = (
+        "这是临时故障；可稍后重试该工具，或改用其他可信来源。"
+        if normalized.retryable
+        else "不要重复提交相同调用；请修正参数、改用其他可信来源，或报告证据不足。"
+    )
     return json.dumps(
         {
             "status": "error",
             "error": "tool_execution_error",
             "error_type": type(error).__name__,
-            "message": str(error),
-            "retryable": True,
-            "instruction": "可调整参数、改用该 Specialist 获准的其他工具，或基于现有证据结束任务。",
+            "normalized_error_type": type(normalized).__name__,
+            "error_code": normalized.code,
+            "message": str(normalized),
+            "retryable": normalized.retryable,
+            "instruction": instruction,
         },
         ensure_ascii=False,
     )

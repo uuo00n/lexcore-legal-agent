@@ -287,7 +287,8 @@ class AgentState(TypedDict, total=False):
 
     # 重试和工具调用保护计数；沿用绝对值写入，避免改变现有节点语义
     retry_count: int
-    verifier_retry_count: int
+    replan_retry_count: int  # Verifier 触发重新规划的次数，最多一次
+    verifier_retry_count: int  # 旧 checkpoint 兼容字段；新代码使用 replan_retry_count
     tool_call_count: int
     tool_loop_failure: Optional[ToolLoopFailure]
 

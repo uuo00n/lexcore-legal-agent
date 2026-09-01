@@ -9,8 +9,10 @@ from services.delilegal.exceptions import (
     DelilegalAuthenticationError,
     DelilegalConfigurationError,
     DelilegalTimeoutError,
+    DelilegalUpstreamError,
 )
 from services.delilegal.schemas import CaseSearchInput, LawSearchInput
+from services.retry import RetryPolicy, retry_async
 
 
 def _settings(**overrides):
@@ -23,6 +25,17 @@ def _settings(**overrides):
     }
     values.update(overrides)
     return DelilegalSettings(**values)
+
+
+def _disable_retry_wait(monkeypatch):
+    async def fast_retry(operation, *, operation_name):
+        return await retry_async(
+            operation,
+            operation_name=operation_name,
+            policy=RetryPolicy(max_attempts=3, multiplier=0, min_wait=0, max_wait=0),
+        )
+
+    monkeypatch.setattr("services.delilegal.client.retry_async", fast_retry)
 
 
 async def test_client_posts_case_request_and_normalizes_response():
@@ -102,6 +115,51 @@ async def test_client_maps_authentication_and_timeout_without_secret():
     with pytest.raises(DelilegalTimeoutError):
         await client.search_cases(CaseSearchInput(keywords=["案例"]))
     await timeout_client.aclose()
+
+
+async def test_client_retries_5xx_up_to_three_attempts(monkeypatch):
+    _disable_retry_wait(monkeypatch)
+    attempts = 0
+
+    def handler(_request: httpx.Request) -> httpx.Response:
+        nonlocal attempts
+        attempts += 1
+        if attempts < 3:
+            return httpx.Response(503)
+        return httpx.Response(200, json={"data": {"totalCount": 0, "list": []}})
+
+    http_client = httpx.AsyncClient(
+        base_url="https://openapi.delilegal.test", transport=httpx.MockTransport(handler)
+    )
+    client = DelilegalClient(_settings(), http_client=http_client)
+
+    response = await client.search_cases(CaseSearchInput(keywords=["案例"]))
+    await http_client.aclose()
+
+    assert response.items == []
+    assert attempts == 3
+
+
+async def test_client_does_not_retry_http_400(monkeypatch):
+    _disable_retry_wait(monkeypatch)
+    attempts = 0
+
+    def handler(_request: httpx.Request) -> httpx.Response:
+        nonlocal attempts
+        attempts += 1
+        return httpx.Response(400)
+
+    http_client = httpx.AsyncClient(
+        base_url="https://openapi.delilegal.test", transport=httpx.MockTransport(handler)
+    )
+    client = DelilegalClient(_settings(), http_client=http_client)
+
+    with pytest.raises(DelilegalUpstreamError) as error:
+        await client.search_cases(CaseSearchInput(keywords=["案例"]))
+    await http_client.aclose()
+
+    assert error.value.retryable is False
+    assert attempts == 1
 
 
 def test_settings_read_connection_values_from_environment(monkeypatch):
