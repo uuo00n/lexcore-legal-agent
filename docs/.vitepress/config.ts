@@ -5,15 +5,24 @@ export default withMermaid({
   description: '中国法律 AI 助手技术文档',
   lang: 'zh-CN',
   base: '/Legal/',
-  ignoreDeadLinks: [/localhost/, /^\/Users\/didi\/Desktop\/Legal\/scripts\//],
+  ignoreDeadLinks: [/localhost/],
 
   themeConfig: {
     nav: [
       { text: '指南', link: '/guide/overview' },
+      { text: '架构', link: '/architecture/overview' },
       { text: '项目报告', link: '/report/project-report' },
       { text: '验证报告', link: '/report/test-results' },
       { text: 'API', link: '/api/' },
       { text: '时序图', link: '/sequences/chat-flow' },
+      {
+        text: '专题',
+        items: [
+          { text: 'OpenViking Context Layer', link: '/openviking-context-layer' },
+          { text: 'Qwen 法律 SFT 微调', link: '/finetune-qwen-law-sft' },
+          { text: '重构与废弃记录', link: '/refactor/deprecated-code' },
+        ]
+      },
     ],
 
     sidebar: {
@@ -75,6 +84,18 @@ export default withMermaid({
             { text: 'PostgreSQL 持久化', link: '/architecture/postgresql-persistence' },
             { text: 'Redis 缓存', link: '/architecture/redis-cache' },
             { text: '法律数据源', link: '/architecture/data-sources' },
+          ]
+        }
+      ],
+      '/refactor/': [
+        {
+          text: '重构记录（历史）',
+          items: [
+            { text: '重构前基线快照', link: '/refactor/current-architecture' },
+            { text: '最终差距分析', link: '/refactor/final-gap-analysis' },
+            { text: '存储迁移计划', link: '/refactor/postgres-redis-qdrant-migration-plan' },
+            { text: 'WebSearch 移除分析', link: '/refactor/websearch-removal-analysis' },
+            { text: '废弃代码清单', link: '/refactor/deprecated-code' },
           ]
         }
       ],

@@ -1,5 +1,16 @@
 # WebSearch 移除分析
 
+::: tip 这份分析已执行完毕，保留作为移除前的影响评估
+WebSearch 现在已经完全不存在：`agent/tools/web_search.py`、`mcp_server/tools/web_search.py`、
+`services/mcp_client.py`、`tavily-python`、`duckduckgo-search` 依赖与 `TAVILY_API_KEY` 环境变量
+全部删除，全仓只剩本文与 [重构前基线快照](./current-architecture.md) 提到这个名字。
+
+需要注意文中两处已经过时的表述：Chroma 已被 Qdrant 取代（不再是"不需要替换"的对象），
+`services/mcp_client.py` 描述的 stdio 调用链也已不存在——Agent 工具现在直接进程内调用
+Service Layer，FastMCP 只是并行的对外暴露层。可信数据源的最终形态是得理开放平台 + 本地法律
+RAG，两者都无结果时返回 `evidence_insufficient=true`，没有联网兜底。
+:::
+
 ## 范围与结论
 
 本分析在修改业务代码前完成，覆盖 `agent/`、`mcp_server/`、`services/`、`main.py`、`api/`、`tests/`、依赖文件与 `.env.example`。当前 WebSearch 是本地法律 RAG 质量不足时的联网兜底，并非本地 RAG 的组成部分，可以在不替换 Chroma、BM25、RRF 或 Reranker 的前提下独立移除。
