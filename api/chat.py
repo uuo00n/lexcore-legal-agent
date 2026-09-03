@@ -528,7 +528,7 @@ async def chat(req: ChatRequest, request: Request, background_tasks: BackgroundT
     函数作用：
         受理一次对话请求：突发限流、每日配额、幂等校验后返回 SSE 流。
         限流与幂等都建立在 Redis 上，Redis 不可用时二者自动放行，
-        由 SQLite 每日配额继续兜底，主链不会因缓存层故障而不可用。
+        由 PostgreSQL 每日配额继续兜底，主链不会因缓存层故障而不可用。
     输入参数：
         - req: ChatRequest
         - request: Request，用于读取 Idempotency-Key 请求头

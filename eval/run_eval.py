@@ -103,7 +103,14 @@ def run_retrieval_eval(dataset: list[dict], top_k: int = 5) -> dict:
             log.info("[%d/%d] SKIP(out_of_corpus) | %s", i + 1, len(dataset), question[:30])
             continue
 
-        results = retriever.retrieve(question, top_k=top_k)
+        # 走 retrieve_with_scores：这是 Agent 的本地法库工具实际使用的路径
+        # （services/search.py 通过 LocalLegalRetriever 调用它，再用 low_quality
+        # 标记表达可信度）。retrieve() 会按阈值裁掉尾部，用它评测会把「阈值策略」
+        # 和「排序质量」混在一个数字里。
+        results = [
+            document
+            for document, _score in retriever.retrieve_with_scores(question, top_k=top_k)
+        ]
         retrieved_ids = [chunk.chunk_id for chunk in results]
 
         metrics = compute_retrieval_metrics(retrieved_ids, gt_contexts, acceptable_contexts)
@@ -137,6 +144,9 @@ def run_retrieval_eval(dataset: list[dict], top_k: int = 5) -> dict:
     return {
         "mode": "retrieval",
         "top_k": top_k,
+        # 记录被评测的检索路径与关键开关，避免与旧结果文件直接比较时口径错位。
+        "retrieval_path": "retrieve_with_scores",
+        "include_superseded": getattr(retriever, "include_superseded", None),
         "num_queries": len(in_corpus_dataset),
         "num_total_queries": len(dataset),
         "num_out_of_corpus": out_of_corpus_count,
@@ -418,16 +428,10 @@ def save_results(results: dict) -> Path:
 
     log.info("结果已保存: %s", path)
     try:
-        from services.checkpoint import get_meta_conn, init_meta_db
-        from services.observability import init_observability_tables, record_eval_run
+        from services.observability import record_eval_run
 
-        try:
-            get_meta_conn()
-        except RuntimeError:
-            init_meta_db()
-        init_observability_tables()
         record_eval_run(results, str(path))
-        log.info("评测历史已写入 SQLite")
+        log.info("评测历史已写入 PostgreSQL")
     except Exception as exc:
         log.warning("评测历史写入失败（JSON 结果已保存）: %s", exc)
     return path
@@ -477,10 +481,11 @@ async def main():
     )
     args = parser.parse_args()
 
-    from services.checkpoint import init_meta_db
-    from services.observability import init_observability_tables
-    init_meta_db()
-    init_observability_tables()
+    from infrastructure.database import init_database
+    from infrastructure.operational_store import init_operational_store
+
+    init_database()
+    init_operational_store()
 
     dataset = load_dataset()
 

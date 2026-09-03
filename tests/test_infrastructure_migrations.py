@@ -1,36 +1,29 @@
-"""Alembic 初始迁移可执行性测试。"""
+"""PostgreSQL Alembic 迁移链测试。"""
 from __future__ import annotations
 
-from alembic import command
+from pathlib import Path
+
 from alembic.config import Config
-from sqlalchemy import create_engine, inspect
+from alembic.script import ScriptDirectory
+
+from infrastructure.operational_store import REQUIRED_TABLES
 
 
-def test_initial_migration_upgrade_and_downgrade(tmp_path, monkeypatch):
-    db_path = tmp_path / "migration.sqlite"
-    monkeypatch.setenv("DATABASE_URL", f"sqlite+aiosqlite:///{db_path.as_posix()}")
-    config = Config("alembic.ini")
+def test_migration_chain_has_operational_storage_revision():
+    script = ScriptDirectory.from_config(Config("alembic.ini"))
+    revisions = list(script.walk_revisions(base="base", head="heads"))
 
-    command.upgrade(config, "head")
-    command.check(config)
-    engine = create_engine(f"sqlite:///{db_path.as_posix()}")
-    try:
-        tables = set(inspect(engine).get_table_names())
-        assert {
-            "alembic_version",
-            "users",
-            "conversations",
-            "messages",
-            "agent_runs",
-            "tool_calls",
-        } <= tables
-    finally:
-        engine.dispose()
+    assert [revision.revision for revision in revisions] == [
+        "0002_operational",
+        "0001_initial",
+    ]
+    assert revisions[0].down_revision == "0001_initial"
 
-    command.downgrade(config, "base")
-    engine = create_engine(f"sqlite:///{db_path.as_posix()}")
-    try:
-        tables = set(inspect(engine).get_table_names())
-        assert tables == {"alembic_version"}
-    finally:
-        engine.dispose()
+
+def test_operational_migration_defines_every_required_table():
+    migration = Path("infrastructure/migrations/versions/0002_operational_storage.py").read_text(
+        encoding="utf-8"
+    )
+
+    for table_name in REQUIRED_TABLES:
+        assert f'"{table_name}"' in migration

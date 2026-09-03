@@ -17,7 +17,7 @@ from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from urllib.parse import quote_plus
 
-from sqlalchemy import text
+from sqlalchemy import Engine, create_engine, text
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
@@ -25,7 +25,6 @@ from sqlalchemy.ext.asyncio import (
     async_sessionmaker,
     create_async_engine,
 )
-from sqlalchemy.pool import StaticPool
 
 from infrastructure.models.base import Base
 from infrastructure.sanitize import mask_dsn
@@ -197,6 +196,7 @@ class DatabaseSettings:
 
 
 _engine: AsyncEngine | None = None
+_sync_engine: Engine | None = None
 _session_factory: async_sessionmaker[AsyncSession] | None = None
 _settings: DatabaseSettings | None = None
 
@@ -209,31 +209,47 @@ def is_database_initialized() -> bool:
 def build_engine(settings: DatabaseSettings) -> AsyncEngine:
     """
     函数作用：
-        按配置创建 AsyncEngine。连接池与 asyncpg 专属参数只在 PostgreSQL 上传递，
-        以便测试可以直接换成 sqlite+aiosqlite。
+        按配置创建 PostgreSQL AsyncEngine。
     输入参数：
         - settings: DatabaseSettings
     输出参数：
         - AsyncEngine
     """
-    kwargs: dict[str, object] = {"echo": settings.echo}
-    if settings.is_postgres:
-        kwargs.update(
-            pool_size=settings.pool_size,
-            max_overflow=settings.max_overflow,
-            pool_timeout=settings.pool_timeout,
-            pool_recycle=settings.pool_recycle,
+    if not settings.is_postgres:
+        raise ValueError("DATABASE_URL must use PostgreSQL")
+    kwargs: dict[str, object] = {
+        "echo": settings.echo,
+        "pool_size": settings.pool_size,
+        "max_overflow": settings.max_overflow,
+        "pool_timeout": settings.pool_timeout,
+        "pool_recycle": settings.pool_recycle,
+        "pool_pre_ping": True,
+    }
+    if settings.statement_timeout_ms > 0:
+        kwargs["connect_args"] = {
+            "server_settings": {"statement_timeout": str(settings.statement_timeout_ms)}
+        }
+    return create_async_engine(settings.dsn, **kwargs)
+
+
+def get_sync_engine() -> Engine:
+    """返回供同步 Agent 节点使用的 PostgreSQL 连接池，按需创建。"""
+    global _sync_engine
+    if _settings is None:
+        raise RuntimeError("database not initialized; call init_database() first")
+    if not _settings.is_postgres:
+        raise RuntimeError("synchronous operational storage requires PostgreSQL")
+    if _sync_engine is None:
+        _sync_engine = create_engine(
+            to_sync_dsn(_settings.dsn),
+            echo=_settings.echo,
+            pool_size=_settings.pool_size,
+            max_overflow=_settings.max_overflow,
+            pool_timeout=_settings.pool_timeout,
+            pool_recycle=_settings.pool_recycle,
             pool_pre_ping=True,
         )
-        if settings.statement_timeout_ms > 0:
-            kwargs["connect_args"] = {
-                "server_settings": {"statement_timeout": str(settings.statement_timeout_ms)}
-            }
-    elif ":memory:" in settings.dsn:
-        # 内存 SQLite 必须共用同一条连接，否则每次 checkout 都是一个空库。
-        kwargs["poolclass"] = StaticPool
-        kwargs["connect_args"] = {"check_same_thread": False}
-    return create_async_engine(settings.dsn, **kwargs)
+    return _sync_engine
 
 
 def init_database(settings: DatabaseSettings | None = None) -> AsyncEngine:
@@ -245,7 +261,7 @@ def init_database(settings: DatabaseSettings | None = None) -> AsyncEngine:
     输出参数：
         - AsyncEngine
     """
-    global _engine, _session_factory, _settings
+    global _engine, _sync_engine, _session_factory, _settings
     if _engine is not None:
         return _engine
     resolved = settings or DatabaseSettings.from_env()
@@ -311,11 +327,14 @@ async def dispose_database() -> None:
     输出参数：
         - None
     """
-    global _engine, _session_factory, _settings
+    global _engine, _sync_engine, _session_factory, _settings
     if _engine is not None:
         await _engine.dispose()
         log.info("数据库引擎已释放")
+    if _sync_engine is not None:
+        _sync_engine.dispose()
     _engine = None
+    _sync_engine = None
     _session_factory = None
     _settings = None
 
@@ -425,6 +444,7 @@ __all__ = [
     "get_session",
     "get_session_factory",
     "get_settings",
+    "get_sync_engine",
     "init_database",
     "is_database_initialized",
     "normalize_dsn",

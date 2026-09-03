@@ -2,14 +2,14 @@ from __future__ import annotations
 
 import pytest
 
-from services.checkpoint import init_meta_db, reset_for_tests
+from infrastructure.operational_store import InMemoryOperationalStore, init_operational_store
+from services.checkpoint import reset_for_tests
 from services.gateway import GatewayChatModel, LLMClientConfig
 from services.errors import LLMError
 from services.retry import RetryPolicy, retry_async
 from services.observability import (
     create_trace,
     get_trace,
-    init_observability_tables,
     list_llm_calls,
 )
 
@@ -65,6 +65,7 @@ def _disable_retry_wait(monkeypatch):
 
 def setup_function():
     reset_for_tests()
+    init_operational_store(InMemoryOperationalStore())
 
 
 def teardown_function():
@@ -72,10 +73,7 @@ def teardown_function():
 
 
 @pytest.mark.asyncio
-async def test_gateway_logs_success(tmp_path, monkeypatch):
-    monkeypatch.setenv("DOCS_DB", str(tmp_path / "meta.sqlite"))
-    init_meta_db()
-    init_observability_tables()
+async def test_gateway_logs_success():
     create_trace("trace-1", "thread-1", "hello")
     gateway = GatewayChatModel([
         LLMClientConfig("primary", "model-a", "http://primary", "fast", FakeClient(response=FakeResponse()))
@@ -95,10 +93,7 @@ async def test_gateway_logs_success(tmp_path, monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_gateway_falls_back_after_error(tmp_path, monkeypatch):
-    monkeypatch.setenv("DOCS_DB", str(tmp_path / "meta.sqlite"))
-    init_meta_db()
-    init_observability_tables()
+async def test_gateway_falls_back_after_error():
     gateway = GatewayChatModel([
         LLMClientConfig("primary", "model-a", "http://primary", "strong", FakeClient(error=RuntimeError("boom"))),
         LLMClientConfig("backup", "model-b", "http://backup", "strong", FakeClient(response=FakeResponse())),
@@ -125,11 +120,8 @@ def test_structured_output_keeps_gateway_wrapper():
 
 
 @pytest.mark.asyncio
-async def test_gateway_retries_timeout_but_not_permanent_error(monkeypatch, tmp_path):
+async def test_gateway_retries_timeout_but_not_permanent_error(monkeypatch):
     _disable_retry_wait(monkeypatch)
-    monkeypatch.setenv("DOCS_DB", str(tmp_path / "meta.sqlite"))
-    init_meta_db()
-    init_observability_tables()
     transient = SequentialClient([TimeoutError("slow"), TimeoutError("slow"), FakeResponse()])
     gateway = GatewayChatModel([
         LLMClientConfig("primary", "model-a", "http://primary", "planner", transient)

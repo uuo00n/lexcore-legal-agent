@@ -1,4 +1,4 @@
-"""agent_runs 表仓储 —— 替代 SQLite `agent_traces` 的写入路径。
+"""agent_runs 表仓储 —— Agent 执行状态的权威写入路径。
 
 `plan` 是 Planner 产出的结构化计划，`error` 是异常摘要，两者都可能间接携带请求上下文，
 因此一律经 `BaseRepository._json` / `._text` 脱敏后入库。
@@ -24,7 +24,7 @@ from infrastructure.repositories.base import BaseRepository
 def _elapsed_ms(started_at: datetime, finished_at: datetime) -> int:
     """
     函数作用：
-        计算耗时毫秒。started_at 可能来自不带时区的库（SQLite），此时按 UTC 处理。
+        计算耗时毫秒。started_at 若来自不带时区的测试替身，则按 UTC 处理。
     输入参数：
         - started_at: datetime
         - finished_at: datetime

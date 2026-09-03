@@ -5,12 +5,14 @@ from starlette.responses import Response
 
 from agent.graph import _observed_node
 from main import bind_request_trace
-from services.checkpoint import init_meta_db, reset_for_tests
-from services.observability import create_trace, get_trace, init_observability_tables
+from infrastructure.operational_store import InMemoryOperationalStore, init_operational_store
+from services.checkpoint import reset_for_tests
+from services.observability import create_trace, get_trace
 
 
 def setup_function():
     reset_for_tests()
+    init_operational_store(InMemoryOperationalStore())
 
 
 def teardown_function():
@@ -46,12 +48,7 @@ async def test_fastapi_middleware_generates_one_trace_id_and_response_header():
 
 
 async def test_langgraph_node_records_context_latency_and_retrieval_count(
-    tmp_path,
-    monkeypatch,
 ):
-    monkeypatch.setenv("DOCS_DB", str(tmp_path / "meta.sqlite"))
-    init_meta_db()
-    init_observability_tables()
     create_trace("trace-node", "thread-node", "检索劳动合同法")
 
     async def node(_state):

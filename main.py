@@ -23,7 +23,7 @@ from infrastructure.redis import (
     redis_status,
 )
 from infrastructure.sanitize import RedactingFormatter
-from services.checkpoint import checkpoint_scope, init_meta_db
+from services.checkpoint import checkpoint_scope
 from services.llm import current_provider
 from services.observability import new_trace_id, trace_context
 
@@ -67,7 +67,8 @@ async def _probe_ollama() -> None:
 async def lifespan(app: FastAPI):
     """
     函数作用：
-        应用生命周期管理 —— 初始化数据库、记忆系统、检索系统、MCP Client 和 LangGraph 图。
+        应用生命周期管理 —— 初始化数据库、Redis、记忆系统、检索系统和 LangGraph 图。
+        FastMCP 是独立进程，不由这里启动。
     输入参数：
         - app: FastAPI
     输出参数：
@@ -76,18 +77,15 @@ async def lifespan(app: FastAPI):
     init_database()
     database_ok = await ping_database()
     if not database_ok:
-        required = os.getenv("POSTGRES_REQUIRED", "true").strip().lower() in {
-            "1", "true", "yes", "on",
-        }
-        if required:
-            await dispose_database()
-            raise RuntimeError(
-                "PostgreSQL unavailable; configure DATABASE_URL and run 'alembic upgrade head'"
-            )
-        log.warning("PostgreSQL 不可用，核心持久化已禁用（POSTGRES_REQUIRED=false）")
         await dispose_database()
+        raise RuntimeError(
+            "PostgreSQL unavailable; configure DATABASE_URL and run 'alembic upgrade head'"
+        )
 
-    init_meta_db()
+    # 所有 SQL 表只由 Alembic 初始化；这里仅绑定连接池并验证迁移结果。
+    from infrastructure.operational_store import init_operational_store
+
+    init_operational_store()
 
     # Redis 只承担缓存、限流、会话元数据与幂等标记，不可用时全链路降级，
     # 因此探活失败只告警，绝不阻塞启动。
@@ -100,18 +98,7 @@ async def lifespan(app: FastAPI):
     else:
         log.info("Redis 未启用（REDIS_URL 未配置），缓存与限流降级运行")
 
-    from services.observability import init_observability_tables
-    init_observability_tables()
-    from services.quota import init_quota_tables
-    init_quota_tables()
-    from services.cache import init_cache_tables
-    init_cache_tables()
-
-    # 初始化记忆系统表
-    from services.memory import init_memory_tables
-    init_memory_tables()
-
-    # 初始化长期记忆向量存储（ChromaDB memory collection）
+    # 初始化 Qdrant 长期记忆 collection；法律 collection 由 RAG 初始化复用。
     from services.memory_store import init_memory_store
     init_memory_store()
 
@@ -130,6 +117,9 @@ async def lifespan(app: FastAPI):
 
             yield
     finally:
+        from infrastructure.operational_store import reset_operational_store
+
+        reset_operational_store()
         await dispose_redis()
         await dispose_database()
 

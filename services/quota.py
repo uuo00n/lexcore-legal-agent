@@ -10,7 +10,7 @@ import time
 from dataclasses import dataclass
 from datetime import datetime
 
-from services.checkpoint import get_meta_conn
+from infrastructure.operational_store import get_operational_store
 
 
 @dataclass(frozen=True)
@@ -60,31 +60,6 @@ def _token_limit() -> int:
     return int(os.getenv("LEGAL_DAILY_TOKEN_LIMIT", "200000"))
 
 
-def init_quota_tables() -> None:
-    """
-    函数作用：
-        初始化配额表。
-    输入参数：
-        - 无
-    输出参数：
-        - 无
-    """
-    conn = get_meta_conn()
-    conn.execute(
-        """
-        CREATE TABLE IF NOT EXISTS quota_usage (
-            subject       TEXT NOT NULL,
-            usage_date    TEXT NOT NULL,
-            request_count INTEGER NOT NULL DEFAULT 0,
-            token_count   INTEGER NOT NULL DEFAULT 0,
-            updated_at    INTEGER NOT NULL,
-            PRIMARY KEY (subject, usage_date)
-        )
-        """
-    )
-    conn.commit()
-
-
 def get_quota_status(subject: str) -> QuotaDecision:
     """
     函数作用：
@@ -94,13 +69,9 @@ def get_quota_status(subject: str) -> QuotaDecision:
     输出参数：
         - QuotaDecision
     """
-    conn = get_meta_conn()
-    cur = conn.execute(
-        "SELECT request_count, token_count FROM quota_usage WHERE subject = ? AND usage_date = ?",
-        (subject, _today()),
-    )
-    row = cur.fetchone()
-    request_count, token_count = row if row else (0, 0)
+    row = get_operational_store().get_quota(subject, _today())
+    request_count = int(row["request_count"]) if row else 0
+    token_count = int(row["token_count"]) if row else 0
     request_limit = _request_limit()
     token_limit = _token_limit()
     if request_limit and request_count >= request_limit:
@@ -131,26 +102,38 @@ def consume_request(subject: str) -> QuotaDecision:
     输出参数：
         - QuotaDecision
     """
-    decision = get_quota_status(subject)
-    if not decision.allowed:
-        return decision
-    conn = get_meta_conn()
-    conn.execute(
-        """INSERT INTO quota_usage (subject, usage_date, request_count, token_count, updated_at)
-           VALUES (?, ?, 1, 0, ?)
-           ON CONFLICT(subject, usage_date)
-           DO UPDATE SET request_count = request_count + 1, updated_at = excluded.updated_at""",
-        (subject, _today(), int(time.time())),
+    request_limit = _request_limit()
+    token_limit = _token_limit()
+    row = get_operational_store().consume_quota(
+        subject,
+        _today(),
+        request_limit,
+        token_limit,
+        int(time.time()),
     )
-    conn.commit()
-    updated = get_quota_status(subject)
+    request_count = int(row["request_count"])
+    token_count = int(row["token_count"])
+    if not row["consumed"]:
+        reason = (
+            "daily request quota exceeded"
+            if request_limit and request_count >= request_limit
+            else "daily token quota exceeded"
+        )
+        return QuotaDecision(
+            allowed=False,
+            reason=reason,
+            request_count=request_count,
+            token_count=token_count,
+            request_limit=request_limit,
+            token_limit=token_limit,
+        )
     return QuotaDecision(
         allowed=True,
         reason="ok",
-        request_count=updated.request_count,
-        token_count=updated.token_count,
-        request_limit=updated.request_limit,
-        token_limit=updated.token_limit,
+        request_count=request_count,
+        token_count=token_count,
+        request_limit=request_limit,
+        token_limit=token_limit,
     )
 
 
@@ -166,16 +149,12 @@ def add_token_usage(subject: str | None, token_count: int | None) -> None:
     """
     if not subject or not token_count:
         return
-    conn = get_meta_conn()
-    conn.execute(
-        """INSERT INTO quota_usage (subject, usage_date, request_count, token_count, updated_at)
-           VALUES (?, ?, 0, ?, ?)
-           ON CONFLICT(subject, usage_date)
-           DO UPDATE SET token_count = token_count + excluded.token_count,
-                         updated_at = excluded.updated_at""",
-        (subject, _today(), token_count, int(time.time())),
+    get_operational_store().add_token_usage(
+        subject,
+        _today(),
+        token_count,
+        int(time.time()),
     )
-    conn.commit()
 
 
 def list_quota_usage(limit: int = 50) -> list[dict]:
@@ -187,23 +166,16 @@ def list_quota_usage(limit: int = 50) -> list[dict]:
     输出参数：
         - list[dict]
     """
-    conn = get_meta_conn()
-    cur = conn.execute(
-        """SELECT subject, usage_date, request_count, token_count, updated_at
-           FROM quota_usage
-           ORDER BY updated_at DESC
-           LIMIT ?""",
-        (limit,),
-    )
+    rows = get_operational_store().list_quota(limit)
     return [
         {
-            "subject": row[0],
-            "usage_date": row[1],
-            "request_count": row[2],
-            "token_count": row[3],
-            "updated_at": row[4],
+            "subject": row["subject"],
+            "usage_date": str(row["usage_date"]),
+            "request_count": row["request_count"],
+            "token_count": row["token_count"],
+            "updated_at": row["updated_at"],
             "request_limit": _request_limit(),
             "token_limit": _token_limit(),
         }
-        for row in cur.fetchall()
+        for row in rows
     ]

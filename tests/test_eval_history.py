@@ -1,21 +1,20 @@
 from __future__ import annotations
 
-from services.checkpoint import init_meta_db, reset_for_tests
-from services.observability import init_observability_tables, list_eval_runs
+from infrastructure.operational_store import InMemoryOperationalStore, init_operational_store
+from services.checkpoint import reset_for_tests
+from services.observability import list_eval_runs
 
 
 def setup_function():
     reset_for_tests()
+    init_operational_store(InMemoryOperationalStore())
 
 
 def teardown_function():
     reset_for_tests()
 
 
-def test_record_eval_history_from_results(tmp_path, monkeypatch):
-    monkeypatch.setenv("DOCS_DB", str(tmp_path / "meta.sqlite"))
-    init_meta_db()
-    init_observability_tables()
+def test_record_eval_history_from_results(tmp_path):
 
     from services.observability import record_eval_run
 

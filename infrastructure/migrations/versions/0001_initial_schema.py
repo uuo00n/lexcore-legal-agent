@@ -6,11 +6,7 @@ Create Date: 2026-09-01
 
 建 users / conversations / messages / agent_runs / tool_calls 五张表。
 
-跨方言说明（同一份迁移既能在 PostgreSQL 跑，也能在 SQLite 上跑通用于测试）：
-- JSONB 用 variant：PostgreSQL 上是 JSONB，其他方言退化为 JSON。
-- UUID 用 sa.Uuid：PostgreSQL 上是原生 uuid，其他方言是 CHAR(32)。
-- BIGINT 主键在 SQLite 上退化为 INTEGER，否则不会自增。
-类型在本文件内就地定义而不从 infrastructure.models 导入，保证迁移历史被冻结、
+迁移固定面向 PostgreSQL。类型在本文件内就地定义而不从 infrastructure.models 导入，保证迁移历史被冻结、
 不会随模型演进而改变含义。
 """
 from __future__ import annotations
@@ -26,9 +22,9 @@ down_revision: Union[str, None] = None
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
-JSONB_TYPE = sa.JSON().with_variant(postgresql.JSONB(), "postgresql")
-UUID_TYPE = sa.Uuid(as_uuid=True)
-BIGINT_TYPE = sa.BigInteger().with_variant(sa.Integer(), "sqlite")
+JSONB_TYPE = postgresql.JSONB()
+UUID_TYPE = postgresql.UUID(as_uuid=True)
+BIGINT_TYPE = sa.BigInteger()
 
 
 def _timestamp_columns() -> list[sa.Column]:

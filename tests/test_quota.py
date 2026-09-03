@@ -1,23 +1,22 @@
 from __future__ import annotations
 
-from services.checkpoint import init_meta_db, reset_for_tests
-from services.quota import add_token_usage, consume_request, get_quota_status, init_quota_tables
+from infrastructure.operational_store import InMemoryOperationalStore, init_operational_store
+from services.checkpoint import reset_for_tests
+from services.quota import add_token_usage, consume_request, get_quota_status
 
 
 def setup_function():
     reset_for_tests()
+    init_operational_store(InMemoryOperationalStore())
 
 
 def teardown_function():
     reset_for_tests()
 
 
-def test_quota_consumes_request_and_tokens(tmp_path, monkeypatch):
-    monkeypatch.setenv("DOCS_DB", str(tmp_path / "meta.sqlite"))
+def test_quota_consumes_request_and_tokens(monkeypatch):
     monkeypatch.setenv("LEGAL_DAILY_REQUEST_LIMIT", "2")
     monkeypatch.setenv("LEGAL_DAILY_TOKEN_LIMIT", "10")
-    init_meta_db()
-    init_quota_tables()
 
     first = consume_request("thread-1")
     second = consume_request("thread-1")

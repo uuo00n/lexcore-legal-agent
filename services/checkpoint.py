@@ -1,4 +1,4 @@
-"""LangGraph checkpoint 生命周期 + SQLite 上传文档元数据。
+"""LangGraph checkpoint 生命周期与 PostgreSQL 上传文档存取。
 
 生产环境使用 PostgreSQL ``AsyncPostgresSaver``，开发和测试可通过
 ``CHECKPOINT_BACKEND=memory`` 使用进程内 ``MemorySaver``。
@@ -9,13 +9,11 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
-import sqlite3
 import sys
 import time
 from collections.abc import AsyncIterator, Mapping
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
-from pathlib import Path
 from typing import Optional
 
 # Psycopg async 在 Windows 上不支持默认 ProactorEventLoop，必须在事件循环创建前
@@ -127,21 +125,6 @@ class CheckpointSettings:
 
 _checkpointer: BaseCheckpointSaver | None = None
 _checkpoint_settings: CheckpointSettings | None = None
-_meta_conn: Optional[sqlite3.Connection] = None
-
-
-def _ensure_parent(path: str | Path) -> Path:
-    """
-    函数作用：
-        待补充。
-    输入参数：
-        - path: str | Path
-    输出参数：
-        - Path
-    """
-    p = Path(path)
-    p.parent.mkdir(parents=True, exist_ok=True)
-    return p
 
 
 def init_checkpointer(settings: CheckpointSettings | None = None) -> MemorySaver:
@@ -222,50 +205,6 @@ def get_checkpoint_settings() -> CheckpointSettings:
     return _checkpoint_settings
 
 
-def init_meta_db(db_path: str | None = None) -> sqlite3.Connection:
-    """
-    函数作用：
-        初始化辅助元数据库（仅上传文档及其他未迁移模块）。
-    输入参数：
-        - db_path: str | None，默认值 None
-    输出参数：
-        - sqlite3.Connection
-    """
-    global _meta_conn
-    db_path = db_path or os.getenv("DOCS_DB", "data/docs.sqlite")
-    _ensure_parent(db_path)
-    conn = sqlite3.connect(db_path, check_same_thread=False)
-    conn.execute(
-        """
-        CREATE TABLE IF NOT EXISTS docs (
-            doc_id     TEXT PRIMARY KEY,
-            filename   TEXT NOT NULL,
-            text       TEXT NOT NULL,
-            char_count INTEGER NOT NULL,
-            truncated  INTEGER NOT NULL DEFAULT 0,
-            created_at INTEGER NOT NULL
-        )
-        """
-    )
-    conn.commit()
-    _meta_conn = conn
-    return conn
-
-
-def get_meta_conn() -> sqlite3.Connection:
-    """
-    函数作用：
-        待补充。
-    输入参数：
-        - 无
-    输出参数：
-        - sqlite3.Connection
-    """
-    if _meta_conn is None:
-        raise RuntimeError("meta db not initialized; call init_meta_db() first")
-    return _meta_conn
-
-
 def save_doc(doc_id: str, filename: str, text: str, truncated: bool) -> None:
     """
     函数作用：
@@ -278,12 +217,18 @@ def save_doc(doc_id: str, filename: str, text: str, truncated: bool) -> None:
     输出参数：
         - 无
     """
-    conn = get_meta_conn()
-    conn.execute(
-        "INSERT INTO docs (doc_id, filename, text, char_count, truncated, created_at) VALUES (?, ?, ?, ?, ?, ?)",
-        (doc_id, filename, text, len(text), 1 if truncated else 0, int(time.time())),
+    from infrastructure.operational_store import get_operational_store
+
+    get_operational_store().save_document(
+        {
+            "doc_id": doc_id,
+            "filename": filename,
+            "content": text,
+            "char_count": len(text),
+            "truncated": bool(truncated),
+            "created_at": int(time.time()),
+        }
     )
-    conn.commit()
 
 
 def load_doc(doc_id: str) -> Optional[dict]:
@@ -295,21 +240,12 @@ def load_doc(doc_id: str) -> Optional[dict]:
     输出参数：
         - Optional[dict]
     """
-    conn = get_meta_conn()
-    cur = conn.execute(
-        "SELECT doc_id, filename, text, char_count, truncated FROM docs WHERE doc_id = ?",
-        (doc_id,),
-    )
-    row = cur.fetchone()
-    if row is None:
-        return None
-    return {
-        "doc_id": row[0],
-        "filename": row[1],
-        "text": row[2],
-        "char_count": row[3],
-        "truncated": bool(row[4]),
-    }
+    from infrastructure.operational_store import get_operational_store
+
+    row = get_operational_store().load_document(doc_id)
+    if row is not None:
+        row["truncated"] = bool(row["truncated"])
+    return row
 
 
 def reset_for_tests() -> None:
@@ -321,12 +257,12 @@ def reset_for_tests() -> None:
     输出参数：
         - 无
     """
-    global _checkpointer, _checkpoint_settings, _meta_conn
-    if _meta_conn is not None:
-        _meta_conn.close()
+    global _checkpointer, _checkpoint_settings
+    from infrastructure.operational_store import reset_operational_store
+
     _checkpointer = None
     _checkpoint_settings = None
-    _meta_conn = None
+    reset_operational_store()
 
 
 __all__ = [
@@ -337,9 +273,7 @@ __all__ = [
     "checkpoint_scope",
     "get_checkpoint_settings",
     "get_checkpointer",
-    "get_meta_conn",
     "init_checkpointer",
-    "init_meta_db",
     "load_doc",
     "normalize_checkpoint_dsn",
     "reset_for_tests",

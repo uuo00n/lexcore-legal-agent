@@ -1,14 +1,20 @@
-"""PostgreSQL 核心持久化的跨方言集成测试。"""
+"""PostgreSQL 核心持久化集成测试。"""
 from __future__ import annotations
 
+import asyncio
+import os
+
 import pytest
+from alembic import command
+from alembic.config import Config
 from sqlalchemy import select
+from sqlalchemy.engine import make_url
 
 from infrastructure.database import (
     DatabaseSettings,
-    create_schema,
     dispose_database,
     init_database,
+    normalize_dsn,
     session_scope,
 )
 from infrastructure.models import AgentRun, ToolCall
@@ -25,13 +31,30 @@ from services.persistence import (
 )
 
 
+TEST_DATABASE_URL = os.getenv("TEST_DATABASE_URL", "").strip()
+pytestmark = pytest.mark.skipif(
+    not TEST_DATABASE_URL,
+    reason="TEST_DATABASE_URL 未配置，跳过真实 PostgreSQL 集成测试",
+)
+
+
 @pytest.fixture
-async def database():
+async def database(monkeypatch):
+    database_name = make_url(TEST_DATABASE_URL).database or ""
+    if not database_name.endswith("_test"):
+        pytest.fail("TEST_DATABASE_URL 必须指向名称以 _test 结尾的专用数据库")
     await dispose_database()
-    init_database(DatabaseSettings(dsn="sqlite+aiosqlite:///:memory:"))
-    await create_schema()
-    yield
-    await dispose_database()
+    monkeypatch.setenv("DATABASE_URL", TEST_DATABASE_URL)
+    config = Config("alembic.ini")
+    # Alembic's async env entrypoint owns its event loop.  Run the synchronous
+    # command in a worker thread because this fixture itself is async.
+    await asyncio.to_thread(command.upgrade, config, "head")
+    init_database(DatabaseSettings(dsn=normalize_dsn(TEST_DATABASE_URL)))
+    try:
+        yield
+    finally:
+        await dispose_database()
+        await asyncio.to_thread(command.downgrade, config, "base")
 
 
 async def test_conversation_and_message_round_trip(database):

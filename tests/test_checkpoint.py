@@ -54,7 +54,7 @@ def test_checkpoint_settings_support_memory_and_postgres():
 
 def test_checkpoint_settings_reject_unknown_backend():
     with pytest.raises(ValueError, match="unsupported CHECKPOINT_BACKEND"):
-        CheckpointSettings.from_env({"CHECKPOINT_BACKEND": "sqlite"})
+        CheckpointSettings.from_env({"CHECKPOINT_BACKEND": "file"})
 
 
 @pytest.mark.parametrize(

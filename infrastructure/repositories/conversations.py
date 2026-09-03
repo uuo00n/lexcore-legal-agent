@@ -10,7 +10,6 @@ from typing import Any
 
 from sqlalchemy import func, select
 from sqlalchemy.dialects.postgresql import insert as postgresql_insert
-from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 
 from infrastructure.models.base import utcnow
 from infrastructure.models.conversation import (
@@ -103,11 +102,8 @@ class ConversationRepository(BaseRepository):
         }
         bind = self.session.get_bind()
         dialect_name = bind.dialect.name if bind is not None else ""
-        if dialect_name in {"postgresql", "sqlite"}:
-            insert_factory = (
-                postgresql_insert if dialect_name == "postgresql" else sqlite_insert
-            )
-            stmt = insert_factory(Conversation.__table__).values(**values).on_conflict_do_nothing(
+        if dialect_name == "postgresql":
+            stmt = postgresql_insert(Conversation.__table__).values(**values).on_conflict_do_nothing(
                 index_elements=["thread_id"]
             )
             await self.session.execute(stmt)

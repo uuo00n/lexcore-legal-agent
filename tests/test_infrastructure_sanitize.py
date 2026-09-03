@@ -93,7 +93,7 @@ def test_mask_dsn_hides_password_only():
     masked = mask_dsn("postgresql+asyncpg://legal:s3cret@db.internal:5432/legal")
     assert "s3cret" not in masked
     assert "db.internal:5432/legal" in masked
-    assert mask_dsn("sqlite+aiosqlite:///:memory:") == "sqlite+aiosqlite:///:memory:"
+    assert mask_dsn("postgresql://legal@db.internal:5432/legal") == "postgresql://legal@db.internal:5432/legal"
 
 
 def test_logging_formatter_redacts_inline_secret():

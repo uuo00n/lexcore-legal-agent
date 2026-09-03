@@ -1,7 +1,7 @@
 """进程内异步任务队列。
 
 用于长任务第一版：合同审查报告、后续批量评测、文档索引等。任务状态保存在
-内存中，服务重启会丢失；如果要做生产级持久化，可替换成 SQLite/RQ/Celery。
+内存中，服务重启会丢失；如果要做生产级持久化，可替换成 PostgreSQL/RQ/Celery。
 """
 from __future__ import annotations
 

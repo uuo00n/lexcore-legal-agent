@@ -1,8 +1,6 @@
 """Agent 可观测性存储层。
 
-本模块保留后台页面依赖的 SQLite 可观测性镜像、LLM 日志和评测结果。
-Agent 运行状态与工具调用的权威记录已经迁移至 PostgreSQL；这里的 trace/event
-仅用于兼容现有时间线，所有写入同样必须先脱敏。
+后台时间线、LLM 日志和评测历史统一写入 PostgreSQL，所有写入必须先脱敏。
 """
 from __future__ import annotations
 
@@ -15,7 +13,7 @@ from dataclasses import dataclass, replace
 from collections.abc import Iterator
 from typing import Any, Optional
 
-from services.checkpoint import get_meta_conn
+from infrastructure.operational_store import get_operational_store
 from infrastructure.sanitize import redact, redact_text
 
 
@@ -135,7 +133,7 @@ def _json_dumps(value: Any) -> str:
     return json.dumps(redact(value), ensure_ascii=False, default=str)
 
 
-def _json_loads(value: str | None, default: Any) -> Any:
+def _json_loads(value: Any, default: Any) -> Any:
     """
     函数作用：
         从数据库文本字段恢复 JSON，失败时返回默认值。
@@ -145,109 +143,14 @@ def _json_loads(value: str | None, default: Any) -> Any:
     输出参数：
         - Any
     """
-    if not value:
+    if value is None or value == "":
         return default
+    if isinstance(value, (dict, list)):
+        return value
     try:
         return json.loads(value)
     except (json.JSONDecodeError, TypeError):
         return default
-
-
-def init_observability_tables() -> None:
-    """
-    函数作用：
-        初始化可观测性相关 SQLite 表，支持重复调用。
-    输入参数：
-        - 无
-    输出参数：
-        - 无
-    """
-    conn = get_meta_conn()
-    conn.executescript(
-        """
-        CREATE TABLE IF NOT EXISTS llm_call_logs (
-            id               INTEGER PRIMARY KEY AUTOINCREMENT,
-            trace_id         TEXT,
-            thread_id        TEXT,
-            provider         TEXT NOT NULL,
-            model            TEXT NOT NULL,
-            base_url         TEXT NOT NULL DEFAULT '',
-            status           TEXT NOT NULL,
-            latency_ms       INTEGER NOT NULL DEFAULT 0,
-            error            TEXT NOT NULL DEFAULT '',
-            fallback_from    TEXT NOT NULL DEFAULT '',
-            model_route      TEXT NOT NULL DEFAULT '',
-            prompt_tokens    INTEGER,
-            completion_tokens INTEGER,
-            total_tokens     INTEGER,
-            created_at       INTEGER NOT NULL
-        );
-        CREATE INDEX IF NOT EXISTS idx_llm_call_logs_trace
-            ON llm_call_logs(trace_id, created_at);
-        CREATE INDEX IF NOT EXISTS idx_llm_call_logs_created
-            ON llm_call_logs(created_at DESC);
-
-        CREATE TABLE IF NOT EXISTS agent_traces (
-            trace_id          TEXT PRIMARY KEY,
-            thread_id         TEXT NOT NULL,
-            user_message      TEXT NOT NULL,
-            final_answer      TEXT NOT NULL DEFAULT '',
-            status            TEXT NOT NULL DEFAULT 'running',
-            legal_analysis    TEXT NOT NULL DEFAULT '{}',
-            started_at        INTEGER NOT NULL,
-            completed_at      INTEGER,
-            latency_ms        INTEGER NOT NULL DEFAULT 0,
-            error             TEXT NOT NULL DEFAULT ''
-        );
-        CREATE INDEX IF NOT EXISTS idx_agent_traces_thread
-            ON agent_traces(thread_id, started_at DESC);
-        CREATE INDEX IF NOT EXISTS idx_agent_traces_started
-            ON agent_traces(started_at DESC);
-
-        CREATE TABLE IF NOT EXISTS agent_events (
-            id          INTEGER PRIMARY KEY AUTOINCREMENT,
-            trace_id    TEXT NOT NULL,
-            event_type  TEXT NOT NULL,
-            name        TEXT NOT NULL DEFAULT '',
-            payload     TEXT NOT NULL DEFAULT '{}',
-            created_at  INTEGER NOT NULL
-        );
-        CREATE INDEX IF NOT EXISTS idx_agent_events_trace
-            ON agent_events(trace_id, id);
-
-        CREATE TABLE IF NOT EXISTS eval_runs (
-            id          INTEGER PRIMARY KEY AUTOINCREMENT,
-            mode        TEXT NOT NULL,
-            top_k       INTEGER,
-            num_queries INTEGER NOT NULL DEFAULT 0,
-            metrics     TEXT NOT NULL DEFAULT '{}',
-            result_path TEXT NOT NULL DEFAULT '',
-            details     TEXT NOT NULL DEFAULT '[]',
-            created_at  INTEGER NOT NULL
-        );
-        CREATE INDEX IF NOT EXISTS idx_eval_runs_created
-            ON eval_runs(created_at DESC);
-        """
-    )
-    _ensure_column("llm_call_logs", "model_route", "TEXT NOT NULL DEFAULT ''")
-    conn.commit()
-
-
-def _ensure_column(table: str, column: str, definition: str) -> None:
-    """
-    函数作用：
-        为已有 SQLite 表补充新列，支持渐进式升级。
-    输入参数：
-        - table: str
-        - column: str
-        - definition: str
-    输出参数：
-        - 无
-    """
-    conn = get_meta_conn()
-    existing = {row[1] for row in conn.execute(f"PRAGMA table_info({table})").fetchall()}
-    if column not in existing:
-        conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
 
 
 def new_trace_id() -> str:
@@ -273,15 +176,15 @@ def create_trace(trace_id: str, thread_id: str, user_message: str) -> None:
     输出参数：
         - 无
     """
-    conn = get_meta_conn()
     now = int(time.time() * 1000)
-    conn.execute(
-        """INSERT OR REPLACE INTO agent_traces
-           (trace_id, thread_id, user_message, status, started_at)
-           VALUES (?, ?, ?, 'running', ?)""",
-        (trace_id, thread_id, redact_text(user_message), now),
+    get_operational_store().create_trace(
+        {
+            "trace_id": trace_id,
+            "thread_id": thread_id,
+            "user_message": redact_text(user_message),
+            "started_at": now,
+        }
     )
-    conn.commit()
 
 
 def complete_trace(
@@ -304,27 +207,17 @@ def complete_trace(
     输出参数：
         - 无
     """
-    conn = get_meta_conn()
     now = int(time.time() * 1000)
-    cur = conn.execute("SELECT started_at FROM agent_traces WHERE trace_id = ?", (trace_id,))
-    row = cur.fetchone()
-    started_at = row[0] if row else now
-    conn.execute(
-        """UPDATE agent_traces
-           SET final_answer = ?, status = ?, legal_analysis = ?, completed_at = ?,
-               latency_ms = ?, error = ?
-           WHERE trace_id = ?""",
-        (
-            redact_text(final_answer),
-            status,
-            _json_dumps(legal_analysis or {}),
-            now,
-            max(0, now - started_at),
-            redact_text(error),
-            trace_id,
-        ),
+    get_operational_store().complete_trace(
+        trace_id,
+        {
+            "final_answer": redact_text(final_answer),
+            "status": status,
+            "legal_analysis": _json_dumps(legal_analysis or {}),
+            "completed_at": now,
+            "error": redact_text(error),
+        },
     )
-    conn.commit()
 
 
 def record_event(
@@ -349,19 +242,15 @@ def record_event(
     if not effective_trace_id:
         return
     normalized_payload = _standard_event_payload(event_type, name, payload or {})
-    conn = get_meta_conn()
-    conn.execute(
-        """INSERT INTO agent_events (trace_id, event_type, name, payload, created_at)
-           VALUES (?, ?, ?, ?, ?)""",
-        (
-            effective_trace_id,
-            event_type,
-            redact_text(name),
-            _json_dumps(normalized_payload),
-            int(time.time() * 1000),
-        ),
+    get_operational_store().add_event(
+        {
+            "trace_id": effective_trace_id,
+            "event_type": event_type,
+            "name": redact_text(name),
+            "payload": _json_dumps(normalized_payload),
+            "created_at": int(time.time() * 1000),
+        }
     )
-    conn.commit()
 
 
 def record_llm_call(
@@ -399,30 +288,24 @@ def record_llm_call(
     context = get_trace_context()
     trace_id = trace_id or context.trace_id or None
     thread_id = thread_id or context.thread_id or None
-    conn = get_meta_conn()
-    conn.execute(
-        """INSERT INTO llm_call_logs
-           (trace_id, thread_id, provider, model, base_url, status, latency_ms, error,
-            fallback_from, model_route, prompt_tokens, completion_tokens, total_tokens, created_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-        (
-            trace_id,
-            thread_id,
-            redact_text(provider),
-            redact_text(model),
-            redact_text(base_url),
-            status,
-            latency_ms,
-            redact_text(error),
-            redact_text(fallback_from),
-            redact_text(model_route),
-            usage.get("prompt_tokens") or usage.get("input_tokens"),
-            usage.get("completion_tokens") or usage.get("output_tokens"),
-            usage.get("total_tokens"),
-            int(time.time() * 1000),
-        ),
+    get_operational_store().add_llm_call(
+        {
+            "trace_id": trace_id,
+            "thread_id": thread_id,
+            "provider": redact_text(provider),
+            "model": redact_text(model),
+            "base_url": redact_text(base_url),
+            "status": status,
+            "latency_ms": latency_ms,
+            "error": redact_text(error),
+            "fallback_from": redact_text(fallback_from),
+            "model_route": redact_text(model_route),
+            "prompt_tokens": usage.get("prompt_tokens") or usage.get("input_tokens"),
+            "completion_tokens": usage.get("completion_tokens") or usage.get("output_tokens"),
+            "total_tokens": usage.get("total_tokens"),
+            "created_at": int(time.time() * 1000),
+        }
     )
-    conn.commit()
 
 
 def record_eval_run(results: dict[str, Any], result_path: str = "") -> None:
@@ -435,22 +318,17 @@ def record_eval_run(results: dict[str, Any], result_path: str = "") -> None:
     输出参数：
         - 无
     """
-    conn = get_meta_conn()
-    conn.execute(
-        """INSERT INTO eval_runs
-           (mode, top_k, num_queries, metrics, result_path, details, created_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?)""",
-        (
-            results.get("mode", "unknown"),
-            results.get("top_k"),
-            results.get("num_queries", 0),
-            _json_dumps(results.get("aggregated", {})),
-            result_path,
-            _json_dumps(results.get("details", [])),
-            int(time.time() * 1000),
-        ),
+    get_operational_store().add_eval_run(
+        {
+            "mode": results.get("mode", "unknown"),
+            "top_k": results.get("top_k"),
+            "num_queries": results.get("num_queries", 0),
+            "metrics": _json_dumps(results.get("aggregated", {})),
+            "result_path": result_path,
+            "details": _json_dumps(results.get("details", [])),
+            "created_at": int(time.time() * 1000),
+        }
     )
-    conn.commit()
 
 
 def dashboard_summary() -> dict[str, Any]:
@@ -462,34 +340,18 @@ def dashboard_summary() -> dict[str, Any]:
     输出参数：
         - dict[str, Any]
     """
-    conn = get_meta_conn()
-    total_traces = conn.execute("SELECT COUNT(*) FROM agent_traces").fetchone()[0]
-    success_traces = conn.execute(
-        "SELECT COUNT(*) FROM agent_traces WHERE status = 'success'"
-    ).fetchone()[0]
-    avg_latency = conn.execute(
-        "SELECT COALESCE(AVG(latency_ms), 0) FROM agent_traces WHERE latency_ms > 0"
-    ).fetchone()[0]
-    llm_calls = conn.execute("SELECT COUNT(*) FROM llm_call_logs").fetchone()[0]
-    failed_llm_calls = conn.execute(
-        "SELECT COUNT(*) FROM llm_call_logs WHERE status != 'success'"
-    ).fetchone()[0]
-    fallback_count = conn.execute(
-        "SELECT COUNT(*) FROM llm_call_logs WHERE fallback_from != ''"
-    ).fetchone()[0]
-    routed_count = conn.execute(
-        "SELECT COUNT(*) FROM llm_call_logs WHERE model_route != ''"
-    ).fetchone()[0]
-    eval_count = conn.execute("SELECT COUNT(*) FROM eval_runs").fetchone()[0]
+    row = get_operational_store().dashboard_summary()
+    total_traces = int(row["total_traces"])
+    success_traces = int(row["success_traces"])
     return {
         "total_traces": total_traces,
         "success_rate": (success_traces / total_traces) if total_traces else 0.0,
-        "avg_trace_latency_ms": int(avg_latency or 0),
-        "llm_calls": llm_calls,
-        "failed_llm_calls": failed_llm_calls,
-        "fallback_count": fallback_count,
-        "routed_count": routed_count,
-        "eval_runs": eval_count,
+        "avg_trace_latency_ms": int(row["avg_latency"] or 0),
+        "llm_calls": int(row["llm_calls"]),
+        "failed_llm_calls": int(row["failed_llm_calls"]),
+        "fallback_count": int(row["fallback_count"]),
+        "routed_count": int(row["routed_count"]),
+        "eval_runs": int(row["eval_count"]),
     }
 
 
@@ -502,29 +364,13 @@ def list_traces(limit: int = 50) -> list[dict[str, Any]]:
     输出参数：
         - list[dict[str, Any]]
     """
-    conn = get_meta_conn()
-    cur = conn.execute(
-        """SELECT trace_id, thread_id, user_message, final_answer, status,
-                  legal_analysis, started_at, completed_at, latency_ms, error
-           FROM agent_traces
-           ORDER BY started_at DESC
-           LIMIT ?""",
-        (limit,),
-    )
+    rows = get_operational_store().list_traces(limit)
     return [
         {
-            "trace_id": row[0],
-            "thread_id": row[1],
-            "user_message": row[2],
-            "final_answer": row[3],
-            "status": row[4],
-            "legal_analysis": _json_loads(row[5], {}),
-            "started_at": row[6],
-            "completed_at": row[7],
-            "latency_ms": row[8],
-            "error": row[9],
+            **row,
+            "legal_analysis": _json_loads(row.get("legal_analysis"), {}),
         }
-        for row in cur.fetchall()
+        for row in rows
     ]
 
 
@@ -540,24 +386,14 @@ def get_trace(trace_id: str) -> Optional[dict[str, Any]]:
     traces = [item for item in list_traces(limit=200) if item["trace_id"] == trace_id]
     if not traces:
         return None
-    conn = get_meta_conn()
-    cur = conn.execute(
-        """SELECT id, event_type, name, payload, created_at
-           FROM agent_events
-           WHERE trace_id = ?
-           ORDER BY id ASC""",
-        (trace_id,),
-    )
+    rows = get_operational_store().list_events(trace_id)
     trace = traces[0]
     trace["events"] = [
         {
-            "id": row[0],
-            "event_type": row[1],
-            "name": row[2],
-            "payload": _json_loads(row[3], {}),
-            "created_at": row[4],
+            **row,
+            "payload": _json_loads(row.get("payload"), {}),
         }
-        for row in cur.fetchall()
+        for row in rows
     ]
     return trace
 
@@ -571,36 +407,7 @@ def list_llm_calls(limit: int = 50) -> list[dict[str, Any]]:
     输出参数：
         - list[dict[str, Any]]
     """
-    conn = get_meta_conn()
-    cur = conn.execute(
-        """SELECT id, trace_id, thread_id, provider, model, base_url, status,
-                  latency_ms, error, fallback_from, model_route, prompt_tokens,
-                  completion_tokens, total_tokens, created_at
-           FROM llm_call_logs
-           ORDER BY created_at DESC
-           LIMIT ?""",
-        (limit,),
-    )
-    return [
-        {
-            "id": row[0],
-            "trace_id": row[1],
-            "thread_id": row[2],
-            "provider": row[3],
-            "model": row[4],
-            "base_url": row[5],
-            "status": row[6],
-            "latency_ms": row[7],
-            "error": row[8],
-            "fallback_from": row[9],
-            "model_route": row[10],
-            "prompt_tokens": row[11],
-            "completion_tokens": row[12],
-            "total_tokens": row[13],
-            "created_at": row[14],
-        }
-        for row in cur.fetchall()
-    ]
+    return get_operational_store().list_llm_calls(limit)
 
 
 def list_eval_runs(limit: int = 20) -> list[dict[str, Any]]:
@@ -612,26 +419,14 @@ def list_eval_runs(limit: int = 20) -> list[dict[str, Any]]:
     输出参数：
         - list[dict[str, Any]]
     """
-    conn = get_meta_conn()
-    cur = conn.execute(
-        """SELECT id, mode, top_k, num_queries, metrics, result_path, details, created_at
-           FROM eval_runs
-           ORDER BY created_at DESC
-           LIMIT ?""",
-        (limit,),
-    )
+    rows = get_operational_store().list_eval_runs(limit)
     return [
         {
-            "id": row[0],
-            "mode": row[1],
-            "top_k": row[2],
-            "num_queries": row[3],
-            "metrics": _json_loads(row[4], {}),
-            "result_path": row[5],
-            "details": _json_loads(row[6], []),
-            "created_at": row[7],
+            **row,
+            "metrics": _json_loads(row.get("metrics"), {}),
+            "details": _json_loads(row.get("details"), []),
         }
-        for row in cur.fetchall()
+        for row in rows
     ]
 
 

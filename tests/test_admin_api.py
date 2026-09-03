@@ -2,13 +2,15 @@ from __future__ import annotations
 
 import pytest
 
-from services.checkpoint import init_meta_db, reset_for_tests
-from services.observability import create_trace, init_observability_tables, record_event, record_eval_run
-from services.quota import consume_request, init_quota_tables
+from infrastructure.operational_store import InMemoryOperationalStore, init_operational_store
+from services.checkpoint import reset_for_tests
+from services.observability import create_trace, record_event, record_eval_run
+from services.quota import consume_request
 
 
 def setup_function():
     reset_for_tests()
+    init_operational_store(InMemoryOperationalStore())
 
 
 def teardown_function():
@@ -16,11 +18,7 @@ def teardown_function():
 
 
 @pytest.mark.asyncio
-async def test_admin_api_returns_summary_and_traces(tmp_path, monkeypatch):
-    monkeypatch.setenv("DOCS_DB", str(tmp_path / "meta.sqlite"))
-    init_meta_db()
-    init_observability_tables()
-    init_quota_tables()
+async def test_admin_api_returns_summary_and_traces():
     create_trace("trace-1", "thread-1", "劳动合同纠纷")
     record_event("trace-1", "model_route", name="fast", payload={"route": "fast"})
     record_eval_run({"mode": "retrieval", "top_k": 3, "num_queries": 1, "aggregated": {"hit_rate": 1.0}, "details": []})

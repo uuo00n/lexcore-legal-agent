@@ -1,4 +1,4 @@
-"""tool_calls 表仓储 —— 替代 SQLite `agent_events` 中的工具事件。
+"""tool_calls 表仓储 —— Agent 工具调用的结构化明细。
 
 这是「API Key 不能写数据库日志」最关键的一处：工具入参里可能带着得理 OpenAPI 的
 app_id / secret、Authorization 头或完整连接串，因此 `input` 与 `output_summary`
