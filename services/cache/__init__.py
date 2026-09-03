@@ -1,7 +1,7 @@
 """缓存包：统一收口所有缓存与限流实现。
 
 各子模块职责：
-- `response`  ：问答响应缓存（SQLite，主图前的短路分支）
+- `response`  ：问答响应缓存（Redis，同步、主图前的短路分支）
 - `retrieval` ：Hybrid RAG 检索结果缓存（Redis，同步）
 - `delilegal` ：得理 API 响应缓存（Redis，异步）
 - `rate_limit`：固定窗口限流（Redis，fail-open）
@@ -12,8 +12,7 @@
 
 顶层导出响应缓存 API，保持与重构前 `from services.cache import get_cached_answer, ...`
 的调用方式兼容。子模块与响应缓存都通过模块级 `__getattr__` 惰性加载：
-`response` 依赖 `services.checkpoint`（连带 langgraph），而 MCP 子进程里的同步检索
-链路只需要 `retrieval`，不应为此付整条 checkpoint 依赖的导入开销。
+MCP 子进程里的同步检索链路不应为缓存导入额外的 Agent 运行依赖。
 
 Redis 相关模块各自有同名函数（`cache_enabled` / `build_key` / `ttl_seconds`），
 因此按模块使用，例如 `from services.cache import retrieval as retrieval_cache`。
@@ -31,7 +30,6 @@ _RESPONSE_EXPORTS = frozenset(
     {
         "cache_enabled",
         "get_cached_answer",
-        "init_cache_tables",
         "make_cache_key",
         "set_cached_answer",
     }
@@ -91,7 +89,6 @@ __all__ = [
     "fingerprint",
     "get_cached_answer",
     "idempotency",
-    "init_cache_tables",
     "keys",
     "make_cache_key",
     "normalize_text",

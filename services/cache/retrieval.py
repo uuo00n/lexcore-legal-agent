@@ -3,8 +3,9 @@
 Hybrid RAG 一次完整召回要付 embedding + BM25 + reranker 三段开销，
 同一问题在多轮对话与并发请求里会被反复检索，因此在管线最外层加一层缓存。
 
-同步实现的原因：`services/rag/retriever.py` 全链路同步，且运行在 MCP stdio
-子进程内，没有可用的事件循环，所以统一走 `infrastructure.redis.execute_sync`。
+同步实现的原因：`services/rag/retriever.py` 全链路同步（精排由调用方用
+`asyncio.to_thread` 挪出事件循环），缓存层不能假设自己运行在事件循环里，
+所以统一走 `infrastructure.redis.execute_sync`。
 
 安全约束：
 - key 只包含 `digest(归一化 query + 检索参数)`，原始提问不进 key（要求 2）。

@@ -158,7 +158,7 @@ def broken():
 
 @pytest.fixture
 def events(monkeypatch):
-    """捕获 record_event 调用，避免测试依赖 SQLite trace 表。"""
+    """捕获 record_event 调用，避免测试依赖 PostgreSQL trace 表。"""
     captured: list[tuple[str, str, str, dict]] = []
 
     def _record(trace_id, event_type, *, name="", payload=None):
@@ -573,6 +573,7 @@ async def test_failure_opens_breaker_and_status_degrades(broken):
 
 
 async def test_execute_returns_default_without_client():
+    # conftest 的 _isolate_redis 已把 REDIS_ENABLED 置为 false，这里 reset 后必然没有客户端。
     redis_infra.reset_for_tests()
     try:
         assert await redis_infra.execute("noop", lambda c: c.get("x"), default="fallback") == (
