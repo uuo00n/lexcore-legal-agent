@@ -1,0 +1,139 @@
+name: legal-agent
+
+x-app-environment: &app-environment
+  # 清空 .env 中面向宿主机的 DSN，强制由下面的容器网络参数安全拼装。
+  DATABASE_URL: ""
+  POSTGRES_DSN: ""
+  CHECKPOINT_DATABASE_URL: ""
+  POSTGRES_HOST: postgres
+  POSTGRES_PORT: "5432"
+  POSTGRES_USER: ${POSTGRES_USER:-legal}
+  POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-legal}
+  POSTGRES_DB: ${POSTGRES_DB:-legal}
+  CHECKPOINT_BACKEND: postgres
+  CHECKPOINT_AUTO_SETUP: "true"
+  REDIS_URL: redis://redis:6379/0
+  REDIS_ENABLED: "true"
+  VECTOR_STORE: qdrant
+  # 镜像只装 CPU 版 torch，写死 cpu：避免 .env 里残留的 MODEL_DEVICE=cuda 被插值进来，
+  # 那样 SentenceTransformer 会以 "Torch not compiled with CUDA enabled" 直接启动失败。
+  MODEL_DEVICE: cpu
+  QDRANT_PATH: ""
+  QDRANT_URL: http://qdrant:6333
+  QDRANT_COLLECTION: ${QDRANT_COLLECTION:-legal_knowledge}
+  QDRANT_MEMORY_COLLECTION: ${QDRANT_MEMORY_COLLECTION:-legal_memory}
+  QDRANT_VECTOR_SIZE: ${QDRANT_VECTOR_SIZE:-512}
+  QDRANT_MEMORY_VECTOR_SIZE: ${QDRANT_MEMORY_VECTOR_SIZE:-512}
+  QDRANT_TIMEOUT: ${QDRANT_TIMEOUT:-10}
+  LAWS_DIR: /app/data/laws
+  UPLOAD_DIR: /app/data/uploads
+  HF_HOME: /home/legal/.cache/huggingface
+
+x-app-build: &app-build
+  context: .
+  dockerfile: Dockerfile
+  args:
+    TORCH_INDEX_URL: ${TORCH_INDEX_URL:-https://download.pytorch.org/whl/cpu}
+
+services:
+  postgres:
+    image: postgres:17.10-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-legal}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-legal}
+      POSTGRES_DB: ${POSTGRES_DB:-legal}
+    ports:
+      - "${POSTGRES_BIND_ADDRESS:-127.0.0.1}:${POSTGRES_EXPOSE_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
+
+  redis:
+    image: redis:7.4.10-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes", "--save", "60", "1", "--loglevel", "warning"]
+    ports:
+      - "${REDIS_BIND_ADDRESS:-127.0.0.1}:${REDIS_EXPOSE_PORT:-6379}:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  qdrant:
+    image: qdrant/qdrant:v1.19.0
+    restart: unless-stopped
+    ports:
+      - "${QDRANT_BIND_ADDRESS:-127.0.0.1}:${QDRANT_HTTP_PORT:-6333}:6333"
+      - "${QDRANT_BIND_ADDRESS:-127.0.0.1}:${QDRANT_GRPC_PORT:-6334}:6334"
+    volumes:
+      - qdrant_data:/qdrant/storage
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c ':> /dev/tcp/127.0.0.1/6333'"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+      start_period: 10s
+
+  migrate:
+    image: legal-agent:local
+    build: *app-build
+    environment:
+      <<: *app-environment
+    command: ["alembic", "upgrade", "head"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  app:
+    image: legal-agent:local
+    build: *app-build
+    restart: unless-stopped
+    init: true
+    env_file:
+      - .env
+    environment:
+      <<: *app-environment
+    ports:
+      - "${APP_BIND_ADDRESS:-0.0.0.0}:${APP_PORT:-8000}:8000"
+    volumes:
+      # 运行数据用命名卷，规避 Linux bind mount 的 UID 写权限问题；法律语料单独只读挂载。
+      - app_data:/app/data
+      - ./data/laws:/app/data/laws:ro
+      - ./models:/app/models:ro
+      - huggingface_cache:/home/legal/.cache/huggingface
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      qdrant:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import json, urllib.request; data=json.load(urllib.request.urlopen('http://127.0.0.1:8000/api/health', timeout=5)); assert data['status'] == 'ok'"
+      interval: 30s
+      timeout: 10s
+      retries: 10
+      start_period: 10m
+
+volumes:
+  app_data:
+  postgres_data:
+  redis_data:
+  qdrant_data:
+  huggingface_cache:

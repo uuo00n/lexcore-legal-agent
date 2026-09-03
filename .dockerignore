@@ -1,0 +1,39 @@
+.git
+.github
+.idea
+.vscode
+.claude
+.Codex
+.env
+.venv
+venv
+__pycache__
+*.py[cod]
+.pytest_cache
+.coverage
+htmlcov
+tests
+eval
+
+# 本地模型通过 Compose 只读挂载，避免进入数 GB 的构建上下文。
+# 前导 / 显式锚定到上下文根目录：infrastructure/models/ 是 ORM 源码，必须进镜像。
+/models
+*.safetensors
+*.bin
+*.pt
+*.pth
+
+# 运行产物；法律语料 data/laws 仍会打入镜像。
+data/*.db
+data/uploads/*
+!data/uploads/.gitkeep
+data/evidence/*
+!data/evidence/.gitkeep
+data/reports
+data/viking_context/*
+!data/viking_context/.gitkeep
+.runtime
+output
+tmp
+
+docs
