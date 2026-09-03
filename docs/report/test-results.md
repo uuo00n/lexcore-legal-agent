@@ -3,15 +3,16 @@
 > 最近更新：2026-09-03
 > 验证环境：Windows 11 Pro，本地虚拟环境 `.venv`（Python 3.13.15），Node.js 24.18.0，VitePress 1.6.4
 > 验证分支：`codex/refactor-legal-data-sources`
-> 验证范围：pytest 全量测试、VitePress 文档构建、密钥扫描、运行数据清理、CI 与 Pages 配置
+> 验证范围：pytest 全量测试、VitePress 文档构建、密钥扫描、环境变量口径、运行数据清理、CI 与 Pages 配置
 
 ## 总览
 
 | 检查项 | 结果 | 说明 |
 | --- | --- | --- |
 | Python 测试 | 通过 | `382 passed, 9 skipped`，无 warning |
-| 文档构建 | 通过 | `npm run build` → `build complete in 8.05s`，无 dead link |
+| 文档构建 | 通过 | `npm run build` 成功，无 dead link |
 | 密钥扫描 | 通过 | 对 Git 跟踪内容做正则扫描，未命中任何真实凭证 |
+| 环境变量口径 | 通过 | 源码读取的 102 个环境变量已全部出现在 `.env.example` |
 | 运行数据清理 | 通过 | `.gitignore` 覆盖全部本地产物；仓库不跟踪向量库、模型权重与上传件 |
 | GitHub Pages | 已配置 | `.github/workflows/docs.yml` 构建 VitePress 并强推 `gh-pages` 分支 |
 | GitHub CI | 已配置 | `.github/workflows/ci.yml` 跑 9 个文件的 smoke suite + 文档构建两个 job |
@@ -30,7 +31,7 @@
 382 passed, 9 skipped
 ```
 
-耗时随机器波动，本机两次实测分别为 17.04s 和 24.05s。
+耗时随机器波动，本机三次实测分别为 17.04s、18.01s 和 24.05s。
 
 测试规模：`tests/` 下 66 个单测模块 + `tests/integration/` 下 5 个集成模块。
 
@@ -71,8 +72,10 @@ npm run build
 结果：
 
 ```text
-build complete in 8.05s
+build complete in 8.33s
 ```
+
+耗时同样随机器波动，本机实测区间为 8.05s ~ 8.33s。
 
 VitePress 的 `ignoreDeadLinks` 现在只保留 `/localhost/` 一条——原先用来屏蔽
 `docs/finetune-qwen-law-sft.md` 里 `/Users/didi/Desktop/Legal/scripts/...` 绝对路径链接的规则
@@ -154,6 +157,24 @@ checkpoint，仓库里不存在 `data/chroma_db/` 或 `data/checkpoints.sqlite*`
 也不是真实凭证。日志侧另有 `infrastructure/sanitize.py` 的 `RedactingFormatter` 兜底，
 `main.py` 启动时已把它装到根 handler 上。
 
+## 环境变量口径检查
+
+用正则扫描全部非测试 Python 源码里的 `os.getenv` / `os.environ`，得到 102 个运行时读取的变量，
+再与 `.env.example` 中声明的键名求差集，结果为空——源码读得到的变量全部在示例配置里有对应条目。
+本轮补齐的是此前只存在于代码中的一批：`MAX_STEP_RETRIES`、`RERANKER_TOP_N`、`RETRIEVER_TOP_K`、
+`QDRANT_BATCH_SIZE`、`QDRANT_FILTER_BATCH_SIZE`、`LAWS_DIR`、`EVIDENCE_DIR`、
+`MAX_VIDEO_UPLOAD_MB`、`VIKING_CONTEXT_ROOT`、`MCP_TRANSPORT` / `MCP_SSE_HOST` / `MCP_SSE_PORT`、
+`FACT_AGENT_*` 旧别名、`TEST_DATABASE_URL` / `CHECKPOINT_INTEGRATION_DSN`，以及
+`scripts/` 下 OpenViking 辅助脚本读取的十余项。
+
+两点需要注意，都写进了 `.env.example` 的注释：
+
+- `scripts/openviking_embedding_server.py:14` 的 `LEGAL_EMBEDDING_MODEL` 内置默认值仍是旧机器的
+  绝对路径 `/Users/didi/Desktop/Legal/models/bge-small-zh-v1.5`，非 macOS 环境必须显式设置该变量。
+  `scripts/start_openviking_glm47.py:141` 的 `OPENVIKING_SERVER_BIN` 同理，默认是 `/tmp/...`。
+- `run_mcp.py:40` 的 `MCP_SSE_HOST` 内置默认值是 `0.0.0.0`，而 FastMCP 自身不做鉴权。
+  该变量只在 `MCP_TRANSPORT=sse` 时生效，示例配置里给的推荐值是 `127.0.0.1`。
+
 ## 剩余风险
 
 - CI 的 smoke suite 只有 9 个文件，RAG、持久化、Redis 相关缺陷只能靠本地全量 `pytest -q` 拦住。
@@ -162,11 +183,9 @@ checkpoint，仓库里不存在 `data/chroma_db/` 或 `data/checkpoints.sqlite*`
 - 截图是 2026-06-29 的历史产物，看板数字不反映当前运行状态。
 - GitHub Pages 若返回 404，需在 Settings → Pages 选 `Deploy from a branch`，分支 `gh-pages`，
   目录 `/ (root)`；`docs.yml` 只负责推分支，不负责开启 Pages。
-- 本报告的两项结论（`382 passed, 9 skipped`、`build complete in 8.05s`）绑定
+- 本报告的两项结论（`382 passed, 9 skipped`、文档构建成功且无 dead link）绑定
   `codex/refactor-legal-data-sources` 分支当前的工作区状态，代码变更后需要重跑。
-- **这两项结论只在当前工作区成立，不在干净检出中成立。** 本分支尚有一批未跟踪文件，其中
-  `infrastructure/models/`、`infrastructure/operational_store.py`、
-  `infrastructure/migrations/versions/0002_operational_storage.py` 是运行必需，
-  `tests/test_docker_setup.py`、`tests/test_memory_store_qdrant.py`、`tests/test_storage_architecture.py`
-  是防回归门禁，`docs/refactor/` 下 3 个文件是文档构建依赖。完整清单与影响见
-  [最终差距分析](../refactor/final-gap-analysis.md)。提交前必须一起 `git add`。
+- 上一轮报告提到的「未跟踪文件导致干净检出跑不起来」已闭合：`infrastructure/models/`、
+  `infrastructure/operational_store.py`、`0002_operational_storage.py`、三个防回归测试、Docker 编排、
+  `docs/refactor/` 文档与 `AGENTS.md` 均已入库。工作区只剩根目录临时脚本 `_diag_retrieval.py` 待清理，
+  它不参与运行也不应入库。详见 [最终差距分析](../refactor/final-gap-analysis.md)。

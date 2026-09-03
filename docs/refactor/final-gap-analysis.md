@@ -21,20 +21,20 @@
 1. **Query Rewrite**：Graph 节点只做规范化，语义改写在 RAG 内部且不回写全局 State——这是命名与职责不一致，不是能力缺失。
 2. **得理 Law API / Case API**：客户端、请求构造、响应规范化、重试、缓存与工具接入齐备且 mock transport 测试通过，但 `DELILEGAL_BASE_URL` 未配置，`services/delilegal/config.py:45` 会在真实调用前拦截。没有 endpoint 可打，也不应猜测 endpoint，因此无法在本机完成真实契约验证。
 
-一项交付提醒（不改变能力判定）：本分支还有一批 `??` 未跟踪文件，必须随分支一起 `git add` 才能在干净检出中跑起来。
-截至 2026-09-03 的完整清单是：
+一项交付提醒（不改变能力判定）：本文写作时本分支还有一批 `??` 未跟踪文件，属于「代码已写好但没入库」的交付缺口。
+截至 2026-09-03 该缺口已基本闭合，下面按原清单标注当前状态：
 
 - 运行必需：`infrastructure/models/`（8 个 ORM 模块）、`infrastructure/operational_store.py`、
-  `infrastructure/migrations/versions/0002_operational_storage.py`。缺前两项 `main.py` 直接 import 失败；
-  缺第三项则只有 `0001` 会被 `alembic upgrade head` 应用，应用在 lifespan 校验必需表时拒绝启动。
+  `infrastructure/migrations/versions/0002_operational_storage.py`。**已提交。** 缺前两项 `main.py` 直接
+  import 失败；缺第三项则只有 `0001` 会被 `alembic upgrade head` 应用，应用在 lifespan 校验必需表时拒绝启动。
 - 测试门禁：`tests/test_docker_setup.py`、`tests/test_memory_store_qdrant.py`、`tests/test_storage_architecture.py`。
-  这三个正是禁止 Chroma / SQLite 回归的断言，漏提交等于门禁失效。
-- 部署与协作：`Dockerfile`、`docker-compose.yml`、`docker/`、`.dockerignore`、`AGENTS.md`。
-- 文档：`docs/refactor/current-architecture.md`、`docs/refactor/final-gap-analysis.md`（本文）、
-  `docs/refactor/postgres-redis-qdrant-migration-plan.md`。已跟踪的
-  `docs/refactor/websearch-removal-analysis.md` 链接到 `current-architecture.md`，漏提交会让
-  `npm run build` 因死链失败。
-- 不应提交：根目录的 `_diag_retrieval.py` 是临时排查脚本，提交前应删除或移入 `scripts/`。
+  **已提交**（`ea3543f`）。这三个正是禁止 Chroma / SQLite 回归的断言，漏提交等于门禁失效。
+- 部署：`Dockerfile`、`docker-compose.yml`、`docker/`、`.dockerignore`。**已提交**（`ee71c84`）。
+- 文档：`docs/refactor/` 下三份记录。**已提交**（`05666f6`），`websearch-removal-analysis.md`
+  指向 `current-architecture.md` 的链接因此不再是死链。
+- 协作约定：`AGENTS.md`（目录职责、命令与提交规范）。**已提交**（`7c7205b`）。它不影响运行与测试，
+  但漏提交会让新协作者检出后拿不到这份约定。
+- 不应提交：根目录的 `_diag_retrieval.py` 是临时排查脚本，**当前仍在工作区**，应删除或移入 `scripts/`。
 
 ## 2. 逐项验收
 
@@ -132,10 +132,9 @@ Query Rewrite（节点职责与命名不一致）、得理 Law API、得理 Case
 
 1. **P1 · 明确 Query Rewrite 职责。** 两条路都可接受：让 `query_rewrite_node` 真正调用 `rewrite_query()` 并写回 `AgentState.rewritten_query`；或把节点更名为 `query_normalize`，同时把 RAG 内部的 rewrite/HyDE 状态通过 trace 事件暴露到顶层链路。当前状态下，读图的人会以为顶层已经做了语义改写。
 2. **P1 · 得理接口真实联调。** 配置 `DELILEGAL_BASE_URL` 后逐项验证请求字段、分页、错误码、空结果与响应字段漂移，并确认重试不会造成重复计费。这一项在拿到 endpoint 前无法在本机推进。
-3. **P1 · 提交本分支所有未跟踪文件。** 清单见第 1 节，其中 `infrastructure/models/`、
-   `infrastructure/operational_store.py` 和 `0002_operational_storage.py` 是运行必需，三个 `tests/test_*.py`
-   是防回归门禁。入库后在临时干净检出中执行 `import main`、`alembic upgrade head` 与完整测试，
-   确认没有第二处交付缺口。
+3. **P2 · 清掉临时脚本并做一次干净检出验证。** 第 1 节清单已全部入库（含 `AGENTS.md`），
+   只剩根目录的 `_diag_retrieval.py` 是临时排查脚本，未跟踪也不应跟踪，建议直接删除。
+   随后在临时干净检出中执行 `import main`、`alembic upgrade head` 与完整测试，确认没有第二处交付缺口。
 4. **P2 · 处理不可达的合同 Agent。** `agent/agents/contract_agent.py` 与 `services/contract_agent/` 有完整实现，但图里没有 `add_node`，`AssignedAgent` 字面量也不含它，`api/chat.py:424` 的流式节点白名单里那个 `"contract_agent"` 永远不会命中。要么接入图并扩展 `TaskType`/`TASK_AGENT_MAP`，要么删除，避免读者误判能力边界。
 5. **P2 · 把真实后端验收固化进 CI。** 本次的 PostgreSQL / Redis / Qdrant 验证都是人工探针。建议改成带 integration marker 的测试，在 CI 里用 service container 跑，避免下一轮又退回替身验证。
 6. **P2 · 修一处环境适配。** 若希望本机（非容器）联调 Qdrant 免踩系统代理，可在 `services/rag/qdrant_store.py` 构造 client 时对 loopback 地址显式禁用 env 代理，而不是依赖调用方设置 `NO_PROXY`。
