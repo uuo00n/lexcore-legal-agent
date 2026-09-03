@@ -136,9 +136,13 @@ class DelilegalClient:
         success = False
         result_count = 0
         error_type: str | None = None
+
+        async def send_once() -> Any:
+            return await self._send_once(path, payload)
+
         try:
             data = await retry_async(
-                lambda: self._send_once(path, payload),
+                send_once,
                 operation_name=f"delilegal.{endpoint_type}",
             )
             success = True
