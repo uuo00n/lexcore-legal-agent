@@ -6,91 +6,169 @@
 graph TB
     subgraph Client["前端 (Vanilla JS SPA)"]
         UI[Web UI]
+        ADMIN[可观测后台]
     end
 
-    subgraph Server["FastAPI 服务"]
+    subgraph Server["FastAPI 服务（单进程）"]
         API[API 路由层]
-        LG[LangGraph Agent]
+        LG[LangGraph Agent<br/>19 节点]
         CTX[Context Builder]
         MEM[记忆系统]
+        RAG[RAG Pipeline]
+        OBS[Observability]
     end
 
-    subgraph MCP["MCP Server (子进程)"]
-        MCPS[FastMCP]
-        RAG[RAG Pipeline]
-        KB[知识库]
+    subgraph MCPProc["FastMCP 服务（独立进程，可选）"]
+        MCPS[run_mcp.py<br/>10 个 MCP 工具]
     end
 
     subgraph Models["模型层"]
-        DS[glm-4.7<br/>主 LLM]
-        OL[Ollama qwen2.5:1.5b<br/>查询增强]
+        DS[deepseek-v4-pro<br/>主 LLM]
+        FL[deepseek-v4-flash<br/>查询增强]
         EMB[bge-small-zh-v1.5<br/>Embedding]
         RR[bge-reranker-base<br/>Reranker]
     end
 
     subgraph Storage["存储层"]
-        CHROMA[(ChromaDB)]
-        POSTGRES[(PostgreSQL)]
-        SQLITE[(SQLite 辅助元数据)]
+        QDRANT[(Qdrant<br/>legal_knowledge / legal_memory)]
+        PG[(PostgreSQL<br/>业务 + 可观测 + checkpoint)]
+        REDIS[(Redis<br/>缓存 / 限流，可缺省)]
     end
 
     UI -->|SSE| API
+    ADMIN --> API
     API --> LG
+    API --> REDIS
+    API --> OBS
     LG --> CTX
     CTX --> MEM
-    LG -->|MCP stdio| MCPS
     LG --> MEM
-    MCPS --> RAG
-    MCPS --> KB
+    LG -->|LangChain Tools<br/>进程内直调| RAG
     LG -->|LangChain Tools| DELI[Delilegal Service Layer]
-    DELI --> OPENAPI[Delilegal OpenAPI]
+    DELI --> OPENAPI[得理开放平台 OpenAPI]
+    DELI --> REDIS
     RAG --> EMB
     RAG --> RR
-    RAG --> OL
+    RAG --> FL
+    RAG --> REDIS
+    RAG --> QDRANT
     LG --> DS
-    MEM --> CHROMA
-    MEM --> SQLITE
-    LG -->|Checkpoint| POSTGRES
-    RAG --> CHROMA
+    MEM --> QDRANT
+    MEM --> PG
+    LG -->|Checkpoint| PG
+    OBS --> PG
+    MCPS -.->|复用同一 Service Layer| RAG
+    MCPS -.-> DELI
+```
+
+FastMCP 用虚线连接，因为它是与 Web 链路平行的对外暴露层：`main.py` 的 lifespan 从不拉起 MCP
+进程，Web 请求也从不经过 MCP。两者共享 `services/` 下同一套实现。
+
+## 图拓扑
+
+```mermaid
+graph LR
+    START([START]) --> CC[context_compaction]
+    CC --> M[memory]
+    M --> ID[inject_doc]
+    ID --> QR[query_rewrite]
+    QR --> IR[intent_router]
+    IR --> P[planner]
+    P --> S{supervisor}
+
+    S -->|案情| CA[case_analysis_agent]
+    S -->|法条| SR[statute_retrieval_agent]
+    S -->|咨询| LC[legal_consult_agent]
+    S -->|计划完成| RV[result_verifier]
+    S -->|终止| E1([END])
+
+    CA -->|tools| CAT[case_analysis_tools]
+    CAT --> CCE[collect_case_evidence]
+    CCE --> CA
+    CA -->|done| S
+
+    SR -->|tools| SRT[statute_retrieval_tools]
+    SRT --> CSE[collect_statute_evidence]
+    CSE --> SR
+    SR -->|done| S
+
+    LC -->|tools| LCT[legal_consult_tools]
+    LCT --> CVE[collect_consult_evidence]
+    CVE --> LC
+    LC -->|done| S
+
+    CA -->|超限| TLE[tool_limit_exceeded]
+    SR -->|超限| TLE
+    LC -->|超限| TLE
+    TLE --> S
+
+    RV -->|replan ×1| P
+    RV --> AG[answer_generator]
+    AG --> E2([END])
 ```
 
 ## 数据流
 
 ```mermaid
 flowchart LR
-    A[用户提问] --> B[context_compaction<br/>长会话压缩]
-    B --> C[memory_node<br/>加载摘要与相关长期记忆]
-    C --> D[Context Builder<br/>分层预算构造模型输入]
-    D --> E[Specialist / Tool Loop]
-    E -->|工具结果| F[collector<br/>提取并限制 Top-N 证据]
-    F --> D
-    E -->|专家报告| G[Verifier + Answer Generator]
-    G --> H[SSE 响应]
-    H --> I[后台归档与长期记忆提取]
+    A[用户提问] --> B[限流 / 幂等 / 配额 / 回答缓存]
+    B --> C[context_compaction<br/>长会话压缩]
+    C --> D[memory_node<br/>加载摘要与相关长期记忆]
+    D --> E[Context Builder<br/>分层预算构造模型输入]
+    E --> F[Specialist / Tool Loop]
+    F -->|工具结果| G[collector<br/>提取并限制 Top-N 证据]
+    G --> E
+    F -->|专家报告| H[Verifier + Answer Generator]
+    H --> I[SSE 响应]
+    I --> J[后台归档与长期记忆提取]
 ```
 
 ## 子系统说明
 
 ### API 层
 
-FastAPI 提供 RESTful 接口，核心是 `/api/chat` 端点通过 SSE（Server-Sent Events）实现流式响应。支持文件上传和会话管理。
+FastAPI 提供 RESTful 接口，核心是 `/api/chat` 端点通过 SSE（Server-Sent Events）实现流式响应。
+另有文件上传、会话管理、合同审查报告、视频证据提取与可观测后台。完整清单见 [API 总览](/api/)。
 
 ### LangGraph Agent
 
-基于 StateGraph 构建的 ReAct 循环智能体。每轮循环：LLM 决策 → 工具调用 → 结果收集 → 再次决策。最多 6 轮迭代。
+19 节点的 StateGraph，采用 Plan-and-Execute 而非单层 ReAct：
 
-### MCP Server
+- `intent_router` 判定意图；
+- `planner` 生成最多 `MAX_PLAN_STEPS`（6）步计划；
+- `supervisor` 逐步分派给三个 Specialist；
+- 每个 Specialist 自成一个有界 ReAct 小环，单任务最多 `MAX_TOOL_CALLS`（5）次工具调用，
+  超限走 `tool_limit_exceeded` 写入观察后回到 `supervisor`；
+- `result_verifier` 校验证据，最多触发一次 replan；
+- `answer_generator` 生成最终回答。
 
-独立子进程，通过 stdio 与主进程通信。拥有 RAG 检索管线和所有工具实现。这种架构将检索逻辑与 Agent 逻辑解耦，便于独立扩展和测试。
+Router、Planner、Verifier 与格式化步骤都是确定性节点，不额外套一层 Agent。
+
+### FastMCP 服务
+
+与 Web 链路平行的对外暴露层，`python run_mcp.py` 单独启动（默认 stdio，`MCP_TRANSPORT=sse`
+可改为 SSE）。它自行调用 `initialize_rag()`，注册 10 个工具，实现全部薄封装 `services/`。
+Agent 侧的三个工具直接调用同一批 Service，不经过 MCP Client——因此 MCP 是否运行都不影响 Web 问答。
 
 ### RAG Pipeline
 
 三路检索策略：
-- **语义检索**：HyDE 假设文档 → bge-small-zh-v1.5 embedding → ChromaDB ANN
-- **关键词检索**：问题重写 → BM25 精确匹配
+
+- **语义检索**：HyDE 假设文档 + 原始 query + 重写 query → bge-small-zh-v1.5 embedding → Qdrant ANN
+- **关键词检索**：原始 query + 重写 query → BM25 精确匹配
 - **精排**：原始 query → bge-reranker-base cross-encoder
 
-通过 RRF（Reciprocal Rank Fusion）融合语义和关键词结果，再经 Reranker 精排 + 分数阈值过滤。
+通过 RRF（Reciprocal Rank Fusion，`RRF_K=60`）融合语义和关键词结果，再经 Reranker 精排 +
+分数阈值过滤。整条管线外包一层 Redis 缓存；Qdrant 或 Reranker 不可用时逐级降级而不是报错。
+详见 [RAG 检索流程](/sequences/rag-flow)。
+
+### 存储层
+
+| 存储 | 角色 | 缺失后果 |
+|------|------|----------|
+| PostgreSQL | 业务、可观测、配额与 checkpoint 的权威记录 | 应用拒绝启动 |
+| Qdrant | `legal_knowledge` 法条索引 + `legal_memory` 长期记忆 | 检索退化为纯 BM25，长期记忆不可用 |
+| Redis | 缓存、限流、会话热层、幂等 | 全部 fail-open 降级，接口照常可用 |
 
 ### 记忆系统
 
@@ -98,8 +176,10 @@ FastAPI 提供 RESTful 接口，核心是 `/api/chat` 端点通过 SSE（Server-
 
 1. Working Memory：当前 `AgentState`；
 2. Conversation Memory：`messages`，模型只读取有界近期窗口；
-3. Summary Memory：长会话滚动摘要；
-4. Long-term Memory：用户相关、值得跨轮保存的信息，使用独立且隔离的向量存储；
+3. Summary Memory：长会话滚动摘要（`conversation_summaries`）；
+4. Long-term Memory：用户相关、值得跨轮保存的信息，使用独立且隔离的向量存储（`legal_memory`）；
 5. Persistent Workflow State：PostgreSQL checkpoint，只负责工作流恢复，不等同于长期 Memory。
 
-每次模型调用均由 Context Builder 按 system、relevant memory、conversation summary、recent messages、current plan、retrieved evidence 和 current task 分配 token。详见 [Context Engineering 与 Memory](/architecture/context-engineering-memory)。
+每次模型调用均由 Context Builder 按 system、relevant memory、conversation summary、current plan、
+retrieved evidence、current task 和 recent messages 分配 token。
+详见 [Context Engineering 与 Memory](/architecture/context-engineering-memory)。

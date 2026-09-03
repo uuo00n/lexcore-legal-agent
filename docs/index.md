@@ -15,11 +15,11 @@ hero:
 
 features:
   - title: 混合检索 RAG
-    details: 语义检索 + BM25 关键词 + RRF 融合 + Reranker 精排，覆盖 52 部中国法律法规
-  - title: 7 工具 ReAct 智能体
-    details: 本地 DOC RAG、得理法规与类案检索、法律对比、风险评估、合同审查、诉讼时效与文书起草
-  - title: 4 层记忆系统
-    details: 滑动窗口 + 增量摘要 + 长期语义记忆 + 用户画像，实现跨会话上下文理解
+    details: 语义检索 + BM25 关键词 + RRF 融合 + Reranker 精排，覆盖 70 部中国法律法规
+  - title: Supervisor 多智能体
+    details: Intent Router、Planner、三个 Specialist 与 Result Verifier 组成 19 节点 LangGraph；FastMCP 另行独立暴露 10 个法律工具
+  - title: 五层记忆架构
+    details: Working Memory、对话窗口、增量摘要、长期语义记忆与 PostgreSQL 持久化工作流状态
   - title: 流式对话
-    details: SSE 实时推送思考过程、工具调用、回答内容，前端即时展示
+    details: SSE 实时推送节点进展、工具调用、上下文压缩状态与回答内容
 ---

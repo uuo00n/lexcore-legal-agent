@@ -23,40 +23,54 @@ Content-Type: application/json
 | `thread_id` | string | 是 | 会话 ID（客户端生成的 UUID） |
 | `message` | string | 是 | 用户消息 |
 | `doc_id` | string | 否 | 关联的上传文档 ID |
+| `evidence_id` | string | 否 | 关联的视频证据 ID，来自 `POST /api/evidence/video/extract` |
 
 ```json
 {
   "thread_id": "a1b2c3d4",
   "message": "房东不退押金怎么办？",
-  "doc_id": null
+  "doc_id": null,
+  "evidence_id": null
 }
 ```
 
 ## 响应
 
-返回 `text/event-stream`，包含以下事件类型：
+返回 `text/event-stream`，共 7 种事件类型：
 
-### thought — 思考过程
+### thought — 中间内容
 
-LLM 在调用工具前的推理分析。
+模型在调用工具前的推理分析，以及节点进展说明。
 
 ```
 event: thought
-data: {"content": "正在调用 legal_search 检索相关法律信息..."}
+data: {"content": "先检索本地法条，确认押金退还的请求权基础..."}
+```
+
+### context_status — 上下文窗口状态
+
+任一节点输出 `context_status` 时推送，用于前端展示上下文压力与是否发生压缩。
+
+```
+event: context_status
+data: {"message_count": 6, "compactable_messages": 0, "estimated_tokens": 3120, "token_budget": 12000, "usage_ratio": 0.26, "should_compact": false}
 ```
 
 ### tool_start — 工具调用开始
 
+Specialist 可调用的工具有 3 个：`retrieve_local_law_tool`（本地 RAG）、`search_law_tool`（得理法规）、
+`search_case_tool`（得理类案）。
+
 ```
 event: tool_start
-data: {"name": "legal_search"}
+data: {"name": "retrieve_local_law_tool"}
 ```
 
 ### tool_end — 工具调用结果
 
 ```
 event: tool_end
-data: {"name": "legal_search", "output": {"status": "found", "query": "押金退还", "results": [{"law_name": "民法典", "article_no": "第七百一十四条", "text": "..."}]}}
+data: {"name": "retrieve_local_law_tool", "output": {"status": "found", "query": "押金退还", "results": [{"law_name": "民法典", "article_no": "第七百一十四条", "text": "..."}]}}
 ```
 
 ### token — 最终回答
@@ -90,7 +104,7 @@ SSE 流建立前的校验失败返回普通 JSON 错误：
 |--------|----------|---------------|
 | `400` | `message` 或 `thread_id` 为空 | 错误说明字符串 |
 | `429` | 突发限流（Redis 固定窗口，默认 60 秒内 30 次） | `message`、`limit`、`window_seconds`、`retry_after`；同时返回 `Retry-After` 响应头 |
-| `429` | 每日配额超限（SQLite 权威记录） | `message`、`request_count`、`token_count`、`request_limit`、`token_limit` |
+| `429` | 每日配额超限（PostgreSQL 权威记录） | `message`、`request_count`、`token_count`、`request_limit`、`token_limit` |
 | `409` | 带 `Idempotency-Key` 的重复提交 | `message`、`state`（`in_progress` / `completed`） |
 
 限流与幂等都建立在 Redis 上，Redis 不可用时二者自动放行（fail-open），由每日配额继续兜底，
@@ -106,8 +120,9 @@ curl -N -X POST http://localhost:8000/api/chat \
 
 ## 行为说明
 
-- 每个 Specialist 任务最多执行 5 次工具调用（`MAX_TOOL_CALLS` 环境变量控制）
-- 最终回答末尾会附加检索到的法条引用（如 `【引用法条】《劳动合同法》第四十六条`）
+- 每个 Specialist 任务最多执行 5 次工具调用（`MAX_TOOL_CALLS` 环境变量控制），超限走 `tool_limit_exceeded` 分支回到 Supervisor
+- Result Verifier 核验失败时最多触发一次 replan，之后仍会进入 `answer_generator` 输出答案
+- 最终回答末尾会附加检索到的法条引用（如 `【引用法条】《劳动合同法》第四十六条`），未被本轮检索支撑的引用会被剔除
 - 对话结束后在后台异步执行记忆提取，不阻塞响应
-- 如果 `doc_id` 有效，文档内容会作为 SystemMessage 注入上下文
+- 如果 `doc_id` 有效，文档内容会作为 SystemMessage 注入上下文；`evidence_id` 注入视频证据摘要
 - 命中响应缓存或检索缓存时会在 trace 时间线上记 `cache_hit` 事件，被限流则记 `rate_limited`

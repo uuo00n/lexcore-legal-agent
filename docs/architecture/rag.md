@@ -16,7 +16,7 @@ flowchart TD
     Parallel --> Semantic[Semantic Retriever]
     Parallel --> Keyword[BM25 Retriever]
     Semantic --> Embed[Embedding Model]
-    Embed --> Store[(Chroma or Qdrant)]
+    Embed --> Store[(Qdrant legal_knowledge)]
     Keyword --> Corpus[In memory law corpus]
 
     Store --> VectorHits[Vector hits]
@@ -39,8 +39,7 @@ flowchart TD
 1. `normalize_query` 统一空白和法规条号表达，减少精确条款查询的表示差异。
 2. 查询增强产生语义变体；启用 HyDE 时，模型先生成假设性法律文本供向量召回使用，原始 query
    仍用于最终相关性判断。
-3. `SemanticRetriever` 使用 embedding 查询 `VectorStore` 抽象；后端由 `VECTOR_STORE` 选择
-   `chroma` 或 `qdrant`。
+3. `SemanticRetriever` 使用 embedding 查询固定的 Qdrant `legal_knowledge` collection。
 4. `BM25Retriever` 在启动时加载的法律分块上执行关键词召回，补足条号、专有名词等精确匹配。
 5. `reciprocal_rank_fusion_scored` 按排名融合任意数量结果并按文档 ID 去重，默认 `RRF_K=60`。
 6. Reranker 使用原始 query 与候选正文进行交叉编码评分；精排结果应用阈值并截取最终 Top-K。
@@ -59,7 +58,7 @@ flowchart LR
 
 执行 `python -m services.indexer.builder` 构建本地索引，`--rebuild` 会替换现有索引。
 分块的标准负载由 `LawChunk` 定义，保留法律名称、条号、来源、时效性等法律元数据。
-Chroma 默认 collection 为 `law_chunks`；Qdrant 默认 collection 为 `legal_knowledge`。
+Qdrant 默认 collection 为 `legal_knowledge`。
 
 ## 缓存与降级
 
@@ -90,6 +89,6 @@ FastMCP 的 `search_local_law` 和 `legal_search` 复用同一检索服务，但
 - RRF：`services/rag/fusion.py`
 - 精排：`services/rag/reranker.py`
 - 向量抽象：`services/rag/interfaces.py`
-- 后端：`services/rag/chroma_store.py`、`services/rag/qdrant_store.py`
+- 后端：`services/rag/qdrant_store.py`
 - 启动：`services/rag/startup.py`
 - 索引：`services/indexer/builder.py`

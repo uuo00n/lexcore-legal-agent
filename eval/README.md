@@ -88,12 +88,15 @@ python eval/run_eval.py --mode context_ab --limit 10 --fast
 # 真实 OpenViking A/B 评测（需要先启动 OpenViking server 并导入语料）
 python eval/run_eval.py --mode openviking_ab --limit 10 --top-k 5
 
-# 端到端评测（需要 MCP Server + RAGAS + 已配置的主 LLM API Key）
+# 端到端评测（需要 Qdrant + RAGAS + 已配置的主 LLM API Key）
 python eval/run_eval.py --mode e2e
 
 # 全部评测
 python eval/run_eval.py --mode all
 ```
+
+`e2e` 在进程内调用 `initialize_rag()` 与 `build_graph(checkpointer=None)`，不需要启动 FastAPI、
+也不需要 MCP Server 或 PostgreSQL——只要 Qdrant 里已有 `legal_knowledge` 索引即可运行。
 
 ## 6. OpenViking Context Layer A/B 评测
 

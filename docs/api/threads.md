@@ -71,6 +71,84 @@ curl http://localhost:8000/api/threads/abc123/history
 
 ---
 
+## GET /api/threads/{thread_id}/context
+
+读取会话当前的上下文窗口使用情况，用于判断是否接近压缩阈值。数据来自 LangGraph
+checkpoint 快照，读不到快照时按空消息列表返回。
+
+### 响应
+
+```json
+{
+  "message_count": 18,
+  "compactable_messages": 6,
+  "estimated_tokens": 9640,
+  "token_budget": 12000,
+  "usage_ratio": 0.8033,
+  "auto_compact_ratio": 0.75,
+  "auto_compact_messages": 16,
+  "keep_recent": 12,
+  "should_compact": true,
+  "thread_id": "abc123"
+}
+```
+
+| 字段 | 说明 |
+|------|------|
+| `message_count` | checkpoint 中的消息总数 |
+| `compactable_messages` | 保留最近 `keep_recent` 条之外、可被压缩的消息数 |
+| `estimated_tokens` | 估算的上下文 token 数 |
+| `token_budget` | `CONTEXT_WINDOW_TOKEN_BUDGET` |
+| `usage_ratio` | `estimated_tokens / token_budget` |
+| `auto_compact_ratio` | `CONTEXT_AUTO_COMPACT_RATIO`，达到即自动压缩 |
+| `auto_compact_messages` | `CONTEXT_AUTO_COMPACT_MESSAGES`，超过即自动压缩 |
+| `keep_recent` | `CONTEXT_RECENT_MESSAGE_COUNT`，压缩时保留的最近消息数 |
+| `should_compact` | 是否已满足自动压缩条件 |
+
+### 示例
+
+```bash
+curl http://localhost:8000/api/threads/abc123/context
+```
+
+---
+
+## POST /api/threads/{thread_id}/compact
+
+对指定会话主动执行一次上下文压缩（`force=True`，不受阈值限制）。压缩结果通过
+`aupdate_state(..., as_node="context_compaction")` 写回 checkpoint，被压缩的消息用
+`RemoveMessage` 移除，滚动摘要与用户画像同步落库。
+
+### 响应
+
+```json
+{
+  "thread_id": "abc123",
+  "compacted": true,
+  "context_status": {
+    "message_count": 12,
+    "estimated_tokens": 4210,
+    "token_budget": 12000,
+    "usage_ratio": 0.3508,
+    "should_compact": false,
+    "thread_id": "abc123"
+  }
+}
+```
+
+| 字段 | 说明 |
+|------|------|
+| `compacted` | 本次是否真的执行了压缩；没有可压缩消息时为 `false` |
+| `context_status` | 压缩之后的窗口状态，字段与 `GET /context` 相同 |
+
+### 示例
+
+```bash
+curl -X POST http://localhost:8000/api/threads/abc123/compact
+```
+
+---
+
 ## DELETE /api/threads/{thread_id}
 
 删除指定会话及其所有消息。

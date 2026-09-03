@@ -13,7 +13,7 @@ GET /api/health
 ```json
 {
   "status": "ok",
-  "provider": "zhipu",
+  "provider": "deepseek",
   "database": "ok",
   "redis": "ok"
 }
@@ -22,7 +22,7 @@ GET /api/health
 | 字段 | 说明 |
 |------|------|
 | `status` | 服务状态，正常为 `"ok"`；PostgreSQL 不可用时为 `"degraded"` |
-| `provider` | 当前使用的 LLM 提供商（`zhipu` / `deepseek` / `qwen` / `ollama`） |
+| `provider` | 当前使用的 LLM 提供商（默认 `deepseek`，可切换 `zhipu` / `qwen` / `ollama`） |
 | `database` | PostgreSQL 探活结果：`ok` / `unavailable` |
 | `redis` | Redis 状态：`ok` / `degraded`（连接失败已熔断）/ `disabled`（未配置 `REDIS_URL`）/ `uninitialized` |
 

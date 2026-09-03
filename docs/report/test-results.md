@@ -1,37 +1,63 @@
 # 验证报告
 
-> 最近更新：2026-06-29
-> 验证环境：macOS，本地虚拟环境 `.venv`，Python 3.12，Node.js 20+，VitePress 1.6.4
-> 验证范围：GitHub 展示材料、截图、文档构建、pytest 测试、密钥扫描、运行数据清理
+> 最近更新：2026-09-03
+> 验证环境：Windows 11 Pro，本地虚拟环境 `.venv`（Python 3.13.15），Node.js 24.18.0，VitePress 1.6.4
+> 验证分支：`codex/refactor-legal-data-sources`
+> 验证范围：pytest 全量测试、VitePress 文档构建、密钥扫描、运行数据清理、CI 与 Pages 配置
 
 ## 总览
 
 | 检查项 | 结果 | 说明 |
 | --- | --- | --- |
-| Python 测试 | 通过 | `176 passed, 6 skipped, 3 warnings` |
-| 文档构建 | 通过 | `npm run build` 成功生成 VitePress 静态站点 |
-| 页面截图 | 通过 | 对话页、后台看板、架构文档均为真实本地渲染截图 |
-| 控制台错误 | 通过 | 截图采集时三张页面均未捕获相关 error/warn |
-| 密钥扫描 | 通过 | 未发现真实 API key、GitHub token、AWS key 或私钥 |
-| 运行数据清理 | 通过 | `data/chroma_db/` 与 SQLite checkpoint 从 Git 跟踪中移除 |
-| GitHub Pages | 已配置 | workflow 构建 VitePress 并发布到 `gh-pages` 分支，目标地址为 `https://2249619829.github.io/Legal/` |
-| GitHub CI | 已配置 | `.github/workflows/ci.yml` 运行 pytest smoke suite 和文档构建 |
+| Python 测试 | 通过 | `382 passed, 9 skipped`，无 warning |
+| 文档构建 | 通过 | `npm run build` → `build complete in 8.05s`，无 dead link |
+| 密钥扫描 | 通过 | 对 Git 跟踪内容做正则扫描，未命中任何真实凭证 |
+| 运行数据清理 | 通过 | `.gitignore` 覆盖全部本地产物；仓库不跟踪向量库、模型权重与上传件 |
+| GitHub Pages | 已配置 | `.github/workflows/docs.yml` 构建 VitePress 并强推 `gh-pages` 分支 |
+| GitHub CI | 已配置 | `.github/workflows/ci.yml` 跑 9 个文件的 smoke suite + 文档构建两个 job |
 
 ## 测试结果
 
-命令：
+命令（仓库根目录）：
 
 ```bash
-.venv/bin/python -m pytest -q
+.venv/Scripts/python.exe -m pytest -q
 ```
 
 结果：
 
 ```text
-176 passed, 6 skipped, 3 warnings
+382 passed, 9 skipped
 ```
 
-跳过项来自 `tests/test_rag.py` 中需要完整检索器初始化或慢速集成环境的用例。3 个 warning 是 `pytest.mark.slow` 未注册的提示，不影响测试通过状态。
+耗时随机器波动，本机两次实测分别为 17.04s 和 24.05s。
+
+测试规模：`tests/` 下 66 个单测模块 + `tests/integration/` 下 5 个集成模块。
+
+### 9 个跳过项
+
+全部是「缺少外部依赖时主动跳过」，不是失败：
+
+| 数量 | 位置 | 跳过条件 |
+| --- | --- | --- |
+| 1 | `tests/integration/test_postgres_checkpointer.py:46` | 未设置 `CHECKPOINT_INTEGRATION_DSN` |
+| 2 | `tests/test_infrastructure_persistence.py:60,81` | 未设置 `TEST_DATABASE_URL` |
+| 6 | `tests/test_rag.py:390,411,434,465,487,511` | 检索器未初始化（需要 embedding 权重与 Qdrant 索引） |
+
+配好对应环境变量后这些用例会真实执行；默认跳过是为了让 `pytest -q` 在没有数据库和索引的机器上
+也能干净跑完。
+
+### Redis 测试隔离
+
+`tests/conftest.py` 有一个 autouse fixture `_isolate_redis`，把 `REDIS_ENABLED` 强制置为
+`false` 并在用例前后调用 `reset_for_tests()`。原因是 `main.py` 在导入时执行 `load_dotenv()`，
+会把开发机 `.env` 里的 `REDIS_URL` 注入 `os.environ`；本机按项目文档跑过
+`docker compose up -d postgres redis qdrant` 之后，缓存层就会连上真实 Redis，检索用例会读到上
+一次运行留下的缓存，导致 `HybridRetriever` 根本不执行、拿不到调用记录与 trace 事件，测试结果
+随本机 Redis 内容漂移。需要 Redis 行为的用例（`tests/test_redis_cache.py`）自行注入替身客户端，
+不受该 fixture 影响。
+
+CI 只跑 9 个文件的 smoke suite 且不起 Redis，所以这个问题在 CI 上不会暴露，只在本地全量跑时出现。
 
 ## 文档构建
 
@@ -42,9 +68,23 @@ cd docs
 npm run build
 ```
 
-结果：VitePress 构建成功。构建时出现 Mermaid/代码高亮相关提示和 chunk size warning，属于前端构建警告，不阻断部署。
+结果：
+
+```text
+build complete in 8.05s
+```
+
+VitePress 的 `ignoreDeadLinks` 现在只保留 `/localhost/` 一条——原先用来屏蔽
+`docs/finetune-qwen-law-sft.md` 里 `/Users/didi/Desktop/Legal/scripts/...` 绝对路径链接的规则
+已随那些路径一起删除，因此文档里的相对链接现在是真检查的。构建剩余输出只有一条 chunk size
+> 500 kB 的前端体积提示，不阻断部署。
 
 ## 截图证据
+
+::: tip 这三张是 2026-06-29 采集的历史截图
+本轮验证只跑了 pytest 与文档构建，没有重新起服务采集页面，所以截图沿用上一轮的产物。UI 结构
+此后没有改动，但看板里的 trace 数量、成功率等数字是当时那一刻的运行数据，不代表当前状态。
+:::
 
 ### 对话页面
 
@@ -64,47 +104,69 @@ npm run build
 
 说明：截图来自 VitePress 本地预览 `http://127.0.0.1:5173/Legal/guide/architecture`，页面展示系统架构图和文档导航。
 
-## GitHub 展示项
+## CI 与 Pages 配置
 
-| 项目 | 状态 |
+`.github/workflows/ci.yml`（push / PR 到 `main`，或手动触发）有两个并行 job：
+
+- `test`：Ubuntu + Python 3.12，安装 `requirements.txt` 与 `requirements-dev.txt`，跑 9 个文件的
+  smoke suite —— `test_auth`、`test_cache`、`test_context_compaction`、`test_contract_agent_core`、
+  `test_gateway`、`test_model_routing`、`test_quota`、`test_task_queue`、`test_static_app_js`。
+- `docs`：Node.js 24 + `npm ci` + `npm run build`。
+
+smoke suite 刻意不覆盖 RAG 与持久化：GitHub runner 上没有 embedding/reranker 权重、没有
+PostgreSQL、也没有 Qdrant 索引，全量跑只会大面积跳过或超时。代价是本地才会暴露的问题（例如上面
+那个 Redis 隔离缺陷）CI 拦不住，合并前仍需在有依赖的环境跑一遍 `pytest -q`。
+
+`.github/workflows/docs.yml` 只在 `docs/**` 变更时触发，构建产物加 `.nojekyll` 后强推到
+`gh-pages` 分支，用 `concurrency: pages` 串行化，避免两次部署互相覆盖。
+
+## 运行数据清理
+
+本地运行产物一律不进仓库，`.gitignore` 当前覆盖：
+
+| 条目 | 内容 |
 | --- | --- |
-| 根目录 README | 已新增，包含项目定位、截图、快速开始、测试、目录结构 |
-| 在线文档 | 已配置 GitHub Pages workflow |
-| 项目截图 | 已保存到 `docs/public/screenshots/` |
-| 架构说明 | 已有 `PROJECT_INFO.md`、`docs/guide/architecture.md` |
-| 测试说明 | README 和本报告均包含测试命令与结果 |
-| CI | 已新增 `.github/workflows/ci.yml` |
+| `.env` | 真实密钥 |
+| `.venv/`、`venv/`、`__pycache__/`、`*.pyc` | Python 环境与字节码 |
+| `/models/` | 根目录模型权重（`infrastructure/models/` 是 ORM 源码，不受影响） |
+| `*.safetensors`、`*.bin`、`*.pt`、`*.pth` | 任意位置的权重文件 |
+| `data/*.db` | 遗留的本地 SQLite 文件 |
+| `data/uploads/*`、`data/evidence/*`、`data/viking_context/*` | 用户上传与运行产物，各保留 `.gitkeep` |
+| `data/reports/`、`output/`、`tmp/`、`.runtime/` | 生成的报告与临时目录 |
+| `data/finetune/`、`data/DISC-Law-SFT-*.jsonl` | 微调语料与派生数据集 |
+| `docs/.vitepress/dist/`、`docs/.vitepress/cache/`、`docs/node_modules/` | 文档构建产物与依赖 |
+| `.pytest_cache/`、`.coverage`、`htmlcov/` | 测试缓存与覆盖率报告 |
 
-## 清理说明
-
-以下内容是本地运行产物，不适合进入 GitHub 仓库：
-
-- `data/chroma_db/`
-- `data/checkpoints.sqlite-shm`
-- `data/checkpoints.sqlite-wal`
-- `.env`
-- `.venv/`
-- `models/`
-- `output/`
-- `tmp/`
-- `docs/.vitepress/dist/`
-- `docs/.vitepress/cache/`
-
-`.gitignore` 已覆盖这些路径；本轮同时把远端已跟踪的 ChromaDB 和 checkpoint 文件从 Git 索引中移除，保留本地文件不删除。
+向量库不再需要单独忽略：Qdrant 数据存在 Docker 命名卷里，PostgreSQL 承担全部关系型持久化与
+checkpoint，仓库里不存在 `data/chroma_db/` 或 `data/checkpoints.sqlite*` 这类落盘目录。
+`data/laws/` 与 `data/templates/` 是随代码版本管理的只读资产，正常跟踪。
 
 ## 密钥检查
 
-本轮使用正则扫描 Git 跟踪内容，覆盖：
+对 `git ls-files` 列出的全部跟踪内容做正则扫描，覆盖：
 
-- OpenAI/兼容 API key 形态：`sk-...`
-- `OPENAI_API_KEY`、`ANTHROPIC_API_KEY`、`GITHUB_TOKEN`
-- AWS access key：`AKIA...`
-- PEM/OpenSSH 私钥头
+- OpenAI/兼容 API key：`sk-` + 20 位以上字符
+- AWS access key：`AKIA` + 16 位大写字母数字
+- GitHub token：`ghp_` / `gho_` / `ghu_` / `ghs_` / `ghr_` + 20 位以上字符
+- PEM / OpenSSH 私钥头
 
-扫描未发现真实密钥。仓库中仅保留 `.env.example` 的占位值，例如 `sk-xxx`、`tvly-xxx`。
+扫描无命中。仓库中只保留 `.env.example` 的占位值（如 `sk-xxx`、`sk-your-api-key`），长度短于阈值，
+也不是真实凭证。日志侧另有 `infrastructure/sanitize.py` 的 `RedactingFormatter` 兜底，
+`main.py` 启动时已把它装到根 handler 上。
 
 ## 剩余风险
 
-- GitHub Pages workflow 会发布静态文件到 `gh-pages` 分支；若 `https://2249619829.github.io/Legal/` 仍返回 404，需要在 GitHub Settings -> Pages 中选择 `Deploy from a branch`，分支选 `gh-pages`，目录选 `/ (root)`。
-- CI 使用 smoke suite，避免在 GitHub runner 上下载本地大模型；完整 RAG 集成仍建议在有模型和索引的本地环境运行。
-- README 中的在线文档链接需要等 GitHub Actions 部署成功后才会返回页面。
+- CI 的 smoke suite 只有 9 个文件，RAG、持久化、Redis 相关缺陷只能靠本地全量 `pytest -q` 拦住。
+- 6 个 RAG 用例与 3 个数据库用例默认跳过；要真正验证这两条链路，需要准备 embedding 权重 + Qdrant
+  索引，并设置 `TEST_DATABASE_URL` 与 `CHECKPOINT_INTEGRATION_DSN`。
+- 截图是 2026-06-29 的历史产物，看板数字不反映当前运行状态。
+- GitHub Pages 若返回 404，需在 Settings → Pages 选 `Deploy from a branch`，分支 `gh-pages`，
+  目录 `/ (root)`；`docs.yml` 只负责推分支，不负责开启 Pages。
+- 本报告的两项结论（`382 passed, 9 skipped`、`build complete in 8.05s`）绑定
+  `codex/refactor-legal-data-sources` 分支当前的工作区状态，代码变更后需要重跑。
+- **这两项结论只在当前工作区成立，不在干净检出中成立。** 本分支尚有一批未跟踪文件，其中
+  `infrastructure/models/`、`infrastructure/operational_store.py`、
+  `infrastructure/migrations/versions/0002_operational_storage.py` 是运行必需，
+  `tests/test_docker_setup.py`、`tests/test_memory_store_qdrant.py`、`tests/test_storage_architecture.py`
+  是防回归门禁，`docs/refactor/` 下 3 个文件是文档构建依赖。完整清单与影响见
+  [最终差距分析](../refactor/final-gap-analysis.md)。提交前必须一起 `git add`。

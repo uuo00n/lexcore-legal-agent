@@ -29,9 +29,11 @@ Agent 不直接发送 HTTP 请求。调用链固定为：
 
 调用链为：
 
-`Legal Agent → retrieve_local_law_tool → FastMCP legal_search → LocalLegalRetriever → 现有 HybridRetriever`
+`Legal Agent → retrieve_local_law_tool → services.search.search_local_law_service → LocalLegalRetriever → HybridRetriever`
 
-`LocalLegalRetriever` 仅是适配层。现有 DOC ingestion、Embedding、ChromaDB、BM25、RRF 和 Reranker 均保持不变。
+`retrieve_local_law_tool` 直接调用进程内 RAG Service Layer，不经过 MCP Client；FastMCP 的
+`search_local_law` / `legal_search` 复用同一 Service Layer，作为面向外部客户端的独立暴露层。
+`LocalLegalRetriever` 仅是适配层，DOC ingestion、Embedding、Qdrant、BM25、RRF 和 Reranker 均保持不变。
 
 ## Evidence Insufficient
 

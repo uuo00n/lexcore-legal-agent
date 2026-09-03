@@ -1,8 +1,8 @@
 # Redis 缓存 / 限流 / 会话元数据
 
 第十九阶段引入 Redis。Redis **不是长期 Memory 主数据库**，也不是任何数据的唯一副本：
-它只承载可以随时丢弃并重建的热数据。权威记录仍然在 PostgreSQL（核心业务表与
-LangGraph checkpoint）、SQLite（辅助表）与 Chroma/Qdrant（向量）里。
+它只承载可以随时丢弃并重建的热数据。权威记录在 PostgreSQL（业务表与
+LangGraph checkpoint）与 Qdrant（向量）里。
 
 连接与降级入口在 `infrastructure/redis.py`，五类用途实现在 `services/cache/`。
 
@@ -12,15 +12,13 @@ LangGraph checkpoint）、SQLite（辅助表）与 Chroma/Qdrant（向量）里�
 |------|------|--------------|----------|----------------|
 | 检索结果缓存 | `services/cache/retrieval.py` | `legal:cache:retrieval:{v}:{query 摘要}:{参数指纹}` | 1800s | 每次执行完整 Hybrid 检索 |
 | 得理 API 响应缓存 | `services/cache/delilegal.py` | `legal:cache:delilegal:{endpoint_type}:{请求体指纹}` | 3600s | 每次请求真实上游 |
+| 精确回答缓存 | `services/cache/response.py` | `legal:cache:response:{v}:{问题与文档摘要}` | 3600s；文档 300s | 视为未命中并重新生成 |
 | 突发限流 | `services/cache/rate_limit.py` | `legal:ratelimit:{scope}:{window}:{subject 摘要}` | = 窗口长度 | fail-open 放行，由每日配额兜底 |
 | 会话元数据热层 | `services/cache/session.py` | `legal:session:{thread_id 摘要}` | 86400s | 读返回空 dict，写为 no-op |
 | 幂等标记 | `services/cache/idempotency.py` | `legal:idempotency:{scope}:{token 摘要}` | 600s | 放行（宁可重复执行一次） |
 
-响应缓存（`services/cache/response.py`）刻意留在 SQLite：它是主图前的短路分支，
-语义上属于业务数据而不是可丢弃的热缓存。
-
 限流与 `services/quota.py` 互补：配额是「每天多少次 / 多少 token」的业务额度，落在
-SQLite 上是权威记录；Redis 限流是「每分钟多少次」的突发保护。Redis 挂掉时只失去突发
+PostgreSQL 上是权威记录；Redis 限流是「每分钟多少次」的突发保护。Redis 挂掉时只失去突发
 保护，每日配额仍然生效。
 
 ## 配置
@@ -53,8 +51,8 @@ IDEMPOTENCY_TTL_SECONDS=600
 ## 降级设计
 
 所有 Redis 访问必须经 `infrastructure.redis.execute()`（异步）或 `execute_sync()`
-（同步，供 MCP 子进程内的同步检索链路使用）。两者在客户端缺失、依赖未安装、熔断打开或
-命令抛错时返回调用方给定的 `default`，**绝不向上抛异常**。
+（同步，供 `services/rag/retriever.py` 这类全链路同步的检索与响应缓存调用）。两者在客户端
+缺失、依赖未安装、熔断打开或命令抛错时返回调用方给定的 `default`，**绝不向上抛异常**。
 
 首次失败会打开熔断器（默认 30s），期间直接降级而不再付连接超时的代价——否则 Redis 宕机
 会让每个请求都多等一个 socket timeout。任一命令成功即关闭熔断器。
@@ -80,8 +78,8 @@ IDEMPOTENCY_TTL_SECONDS=600
 活跃时间、请求计数、最近 trace_id、是否带文档、provider/model，任何其他键被直接丢弃；
 幂等记录只存状态、时间戳和一个非敏感引用（trace_id）。
 
-合同与文书正文不进 Redis。带 `doc_id` 的回答仍走 SQLite 响应缓存，并使用独立的短 TTL
-（`RESPONSE_CACHE_DOC_TTL_SECONDS`，默认 300s），避免长期缓存合同相关正文。
+带 `doc_id` 的回答使用独立的短 TTL（`RESPONSE_CACHE_DOC_TTL_SECONDS`，默认 300s），
+并仅在 Redis 中缓存；Redis 不可用时不保留回答，直接重新生成。
 
 ## 可观测性
 

@@ -46,6 +46,17 @@ Content-Type: multipart/form-data
 | 422 | 文件解析后内容为空 |
 | 500 | 解析失败 |
 
+## 配置
+
+| 环境变量 | 默认值 | 说明 |
+|------|------|------|
+| `UPLOAD_DIR` | `data/uploads` | 原始文件落盘目录，目录不存在时自动创建 |
+| `MAX_UPLOAD_MB` | `10` | 单文件大小上限，超过返回 413 |
+
+字符数上限 60000 由 `services/doc_parser.py:11` 的 `MAX_CHARS` 固定，不走环境变量。
+解析失败、内容为空或类型不支持时，已落盘的原始文件会被删除。
+文档正文与元数据由 `services/checkpoint.py::save_doc` 写入 PostgreSQL 的 `documents` 表。
+
 ## 示例
 
 ```bash

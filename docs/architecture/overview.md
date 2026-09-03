@@ -30,8 +30,7 @@ flowchart TB
     subgraph Storage[Storage]
         PG[(PostgreSQL)]
         Redis[(Redis)]
-        Vector[(Chroma or Qdrant)]
-        Meta[(SQLite Metadata)]
+        Vector[(Qdrant)]
         LawFiles[(Law Corpus)]
     end
 
@@ -46,7 +45,7 @@ flowchart TB
     API -->|Conversation and Runs| PG
     Gateway -->|Rate Limit and Idempotency| Redis
     Services -->|Hot Cache| Redis
-    Memory -->|Summary Profile and Mirror| Meta
+    Memory -->|Summary Profile and History| PG
     Memory -->|Long Term Vectors| Vector
 
     MCPClient[MCP Client] -->|stdio or MCP transport| MCP[Independent FastMCP Server]
@@ -83,7 +82,7 @@ Service Layer；`run_mcp.py` 启动的 FastMCP Server 是面向外部 MCP Client
 - Router、Planner、Supervisor、Verifier 和格式化步骤保持确定性边界；模型只补充需要语义判断的部分。
 - 每个专业 Agent 只绑定完成其职责所需的工具，单个计划步骤最多执行 5 次工具调用。
 - 模型上下文不是 checkpoint 的完整转储，而是由 Context Builder 按层预算构造。
-- PostgreSQL 故障是否阻止启动由 `POSTGRES_REQUIRED` 控制；Redis 始终 fail-open，不阻断 Agent 主链。
+- PostgreSQL 或迁移不完整时应用拒绝启动；Redis 始终 fail-open，不阻断 Agent 主链。
 - 原始提示词、上传文档正文和敏感字段不进入普通请求日志；日志格式化器统一脱敏。
 
 ## 文档索引
@@ -92,7 +91,7 @@ Service Layer；`run_mcp.py` 启动的 FastMCP Server 是面向外部 MCP Client
 - [RAG](./rag.md)：混合检索、融合、精排与降级。
 - [Memory](./memory.md)：五层记忆和上下文预算。
 - [Tools](./tools.md)：Agent Tools、Service Layer 与 FastMCP。
-- [Persistence](./persistence.md)：PostgreSQL、Redis、SQLite 和向量存储。
+- [Persistence](./persistence.md)：PostgreSQL、Redis 和 Qdrant。
 - [Observability](./observability.md)：Trace、事件、指标和隐私边界。
 
 ## 代码入口

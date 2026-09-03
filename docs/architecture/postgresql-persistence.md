@@ -12,14 +12,18 @@ PostgreSQL 负责：
 - `messages`
 - `agent_runs`
 - `tool_calls`
+- `documents`
+- `conversation_summaries`
+- `user_profiles`
+- `quota_usage`
+- `agent_traces` / `agent_events` / `llm_call_logs` / `eval_runs`
 
-上传文档、缓存、配额、评测历史、LLM 调用统计、会话摘要和用户画像暂时保留在
-SQLite。LangGraph 的 thread-scoped state 默认通过 `AsyncPostgresSaver` 写入 PostgreSQL；
+上传文档、配额、评测历史、LLM 调用统计、会话摘要和用户画像均已迁入 PostgreSQL；
+缓存由 Redis 承担。LangGraph 的 thread-scoped state 默认通过 `AsyncPostgresSaver` 写入 PostgreSQL；
 开发和测试可显式设置 `CHECKPOINT_BACKEND=memory` 使用进程内后端。
 
-后台时间线使用的通用 `agent_events` 与旧版 trace 展示镜像暂时仍在 SQLite；运行状态
-的权威记录是 PostgreSQL `agent_runs`，工具调用的权威记录是 `tool_calls`。该镜像只为
-保持现有后台页面兼容，写入前使用与 PostgreSQL 相同的脱敏器。
+后台时间线使用的 `agent_events` 与 trace 历史也位于 PostgreSQL；运行状态
+的权威记录是 `agent_runs`，工具调用的权威记录是 `tool_calls`。
 
 `agent_runs.plan`、`tool_calls.input`、`tool_calls.output_summary` 以及各模型的结构化
 `metadata`/偏好字段在 PostgreSQL 中使用 JSONB。工具输出只写命中数、状态、字段名等
@@ -33,7 +37,6 @@ SQLite。LangGraph 的 thread-scoped state 默认通过 `AsyncPostgresSaver` 写
 DATABASE_URL=postgresql+asyncpg://legal:change-me@localhost:5432/legal
 CHECKPOINT_BACKEND=postgres
 LANGGRAPH_STRICT_MSGPACK=true
-POSTGRES_REQUIRED=true
 ```
 
 再执行迁移：
@@ -44,14 +47,13 @@ alembic current
 alembic check
 ```
 
-回退初始迁移会删除五张核心表，仅应在确认数据可丢弃的环境执行：
+回退迁移会删除业务与运行数据表，仅应在确认数据可丢弃的环境执行：
 
 ```bash
 alembic downgrade base
 ```
 
-应用启动只做连接探活，不自动建表或自动执行迁移。`POSTGRES_REQUIRED=false` 仅用于
-临时开发降级；此时核心持久化被禁用，不能作为生产配置。
+应用启动只做连接探活和 schema 完整性校验，不自动建表或自动执行迁移。PostgreSQL 是必需组件。
 
 LangGraph checkpoint 表由 `langgraph-checkpoint-postgres` 自带的 schema migration
 管理，不进入本项目 Alembic revision。`CHECKPOINT_AUTO_SETUP=true`（默认）会在启动时
@@ -69,5 +71,5 @@ python -m pytest -q tests/integration/test_postgres_checkpointer.py
 ## 敏感信息
 
 仓储层是 JSONB Trace 和错误文本的唯一写入口。`api_key`、`secret`、`token`、
-`Authorization`、密码、Cookie、DSN 等字段和值会在写入前递归脱敏。旧 SQLite
-可观测性事件也复用同一脱敏器，避免过渡期旁路写入泄露凭据。
+`Authorization`、密码、Cookie、DSN 等字段和值会在写入前递归脱敏。可观测性事件
+复用同一脱敏器，避免旁路写入泄露凭据。

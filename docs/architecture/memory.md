@@ -20,8 +20,8 @@ flowchart TB
     Conversation --> Extract[Background Memory Extractor]
     Extract --> Profile[User Profile]
     Extract --> LongTerm[Long Term Memory]
-    LongTerm --> MemoryVector[(Chroma memory collection)]
-    Profile --> Meta[(SQLite metadata)]
+    LongTerm --> MemoryVector[(Qdrant legal_memory)]
+    Profile --> Meta[(PostgreSQL)]
     Summary --> Meta
 
     Request --> Recall[Semantic memory recall]
@@ -42,7 +42,7 @@ flowchart TB
 | --- | --- | --- | --- |
 | Working Memory | 当前 `AgentState` 的计划、证据、报告和控制字段 | 当前 thread，可由 checkpoint 恢复 | 仅选择当前任务相关字段 |
 | Conversation Memory | 用户、助手和工具消息 | 会话级，归档到 PostgreSQL | 最近且协议完整的有限窗口 |
-| Summary Memory | 较早对话的滚动摘要与实体合并结果 | 会话级，存入 SQLite 辅助库 | 独立 token 预算 |
+| Summary Memory | 较早对话的滚动摘要与实体合并结果 | 会话级，存入 PostgreSQL | 独立 token 预算 |
 | Long-term Memory | 稳定身份、偏好、持续事项和明确要求记住的信息 | 跨轮；按用户或 thread 隔离 | 语义命中的 Top-K |
 | Persistent Workflow State | LangGraph checkpoint 的节点进度和完整状态 | thread 级，生产环境 PostgreSQL | 不直接整体注入模型 |
 
@@ -94,7 +94,7 @@ collector 提取证据。法规和案例只注入按分数稳定排序后的 Top
 
 SSE 正常结束后，FastAPI BackgroundTasks 调用 `extract_and_save_memory`，避免增加首 token 延迟。
 提取器只处理尚未归档的新消息，并通过专用记忆模型识别画像更新与长期记忆候选。长期记忆写入
-独立的 Chroma `memory` collection；相同内容使用稳定 ID upsert，避免重试产生重复数据。
+独立的 Qdrant `legal_memory` collection；相同内容使用稳定 ID upsert，避免重试产生重复数据。
 
 ## 隐私与删除边界
 

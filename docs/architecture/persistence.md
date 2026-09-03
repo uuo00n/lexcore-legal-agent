@@ -1,7 +1,7 @@
 # Persistence 架构
 
-持久化按数据职责拆分。PostgreSQL 保存业务权威记录和生产 LangGraph checkpoint；Redis 只保存
-可丢失的热数据；SQLite 保存单机辅助元数据与可观测性镜像；向量数据库保存法律索引和长期记忆。
+持久化按数据职责拆分。PostgreSQL 保存全部关系型权威记录和生产 LangGraph checkpoint；Redis 保存
+可丢失的热数据；Qdrant 保存法律索引和长期记忆。
 
 ## 存储拓扑
 
@@ -15,13 +15,13 @@ flowchart TB
     API --> RedisLayer[Fail open Redis adapters]
     RedisLayer --> Redis[(Redis)]
 
-    Upload[Upload and local metadata] --> SQLite[(SQLite metadata DB)]
-    Observe[Observability mirror] --> SQLite
-    Summary[Summary and profile] --> SQLite
+    Upload[Upload documents] --> PG
+    Observe[Observability history] --> PG
+    Summary[Summary and profile] --> PG
 
-    Indexer[Law indexer] --> Vector[(Chroma or Qdrant)]
-    RAG[Hybrid RAG] --> Vector
-    LongMemory[Long term memory] --> MemoryCollection[(Chroma memory collection)]
+    Indexer[Law indexer] --> LegalCollection[(Qdrant legal_knowledge)]
+    RAG[Hybrid RAG] --> LegalCollection
+    LongMemory[Long term memory] --> MemoryCollection[(Qdrant legal_memory)]
 
     Archive[Conversation archive] --> PG
     Runs[Agent runs and tool calls] --> PG
@@ -36,17 +36,16 @@ flowchart TB
 | LangGraph state | PostgreSQL checkpoint | `thread_id` 隔离的图状态和节点进度；测试可使用 MemorySaver |
 | 限流、幂等、session 热元数据 | Redis | 有 TTL、可丢失、故障时 fail-open |
 | 检索与外部 API 缓存 | Redis | 由参数指纹隔离版本；不作为业务事实来源 |
-| 最终回答缓存 | SQLite | 本机优化，命中与否不影响正确性 |
-| 上传文档元数据与文本 | SQLite | 通过 `doc_id` 读取，正文不写普通日志 |
-| 摘要、画像、观测镜像 | SQLite | 本地辅助数据；Agent run 的权威记录仍在 PostgreSQL |
-| 法律向量索引 | Chroma 或 Qdrant | 通过 `VectorStore` 抽象切换 |
-| 长期记忆 | Chroma `memory` collection | 与法律 collection 逻辑隔离，并按 owner namespace 查询 |
+| 最终回答缓存 | Redis | 精确匹配、有 TTL，故障时直接未命中 |
+| 上传文档元数据与文本 | PostgreSQL | 通过 `doc_id` 读取，正文不写普通日志 |
+| 摘要、画像、可观测性历史 | PostgreSQL | Alembic 管理的运行数据表 |
+| 法律向量索引 | Qdrant `legal_knowledge` | 固定后端，可从法律语料重建 |
+| 长期记忆 | Qdrant `legal_memory` | 与法律 collection 隔离，并强制按 owner/thread 查询 |
 
 ## PostgreSQL
 
-`infrastructure/database.py` 管理异步 SQLAlchemy Engine 和 Session。Alembic 初始 schema 包含
-`users`、`conversations`、`messages`、`agent_runs` 和 `tool_calls`；Repository 封装查询与写入，
-API 不直接拼接 SQL。
+`infrastructure/database.py` 管理异步 SQLAlchemy Engine 和同步 PostgreSQL Engine。Alembic `0001`
+创建核心业务表，`0002` 创建文档、摘要、画像、配额与可观测性表；API 不直接拼接 SQL。
 
 生产 checkpoint 由 `AsyncPostgresSaver` 承担，其连接生命周期覆盖 compiled graph 的完整生命周期。
 `CHECKPOINT_BACKEND=postgres` 时使用独立 checkpoint DSN 或数据库 DSN；开发和单元测试可设置
@@ -87,13 +86,14 @@ Redis 只承担缓存、限流、幂等和 session 元数据。所有访问经�
 3. 熔断期间不再为每个请求支付连接超时。
 4. 后续成功操作关闭熔断器。
 
-因此 Redis 不参与 `/api/health` 的整体 `status` 判定。限流和幂等在 Redis 故障时自动放行，SQLite
+因此 Redis 不参与 `/api/health` 的整体 `status` 判定。限流和幂等在 Redis 故障时自动放行，PostgreSQL
 每日配额继续兜底；这是一致性与可用性之间的有意选择。
 
 ## 生命周期与迁移
 
-FastAPI lifespan 按顺序初始化 PostgreSQL、SQLite 元数据、Redis、观测/配额/缓存/记忆表、长期
-记忆存储、RAG 和 checkpointer。应用退出时释放 Redis 与数据库连接池。
+Compose 的 `migrate` 服务先执行 `alembic upgrade head`。FastAPI lifespan 随后连接 PostgreSQL、校验
+迁移表、连接 Redis、幂等初始化 Qdrant 双 collection、加载 RAG，最后建立 PostgreSQL checkpointer。
+应用进程不执行关系表 DDL，退出时释放 Redis 与数据库连接池。
 
 数据库 schema 变更必须通过 Alembic：
 
@@ -112,13 +112,13 @@ python -m services.indexer.builder
 - PostgreSQL 备份覆盖业务表和 LangGraph checkpoint schema，并验证时间点恢复。
 - 向量索引可由法律语料重建；长期记忆 collection 不可仅依赖语料重建，应单独制定备份策略。
 - Redis 不进入持久备份恢复目标，丢失后由请求重新填充。
-- SQLite 文件包含上传内容和可观测性镜像，仍按敏感数据管理，不应提交 Git。
 - 会话删除必须按 thread/user namespace 清理所有权威副本和衍生副本，并保留可审计的删除结果。
 
 ## 代码入口
 
 - 数据库生命周期：`infrastructure/database.py`
-- ORM 与 Repository：`infrastructure/models.py`、`infrastructure/repositories/`
+- 运行数据存储：`infrastructure/operational_store.py`
+- ORM 与 Repository：`infrastructure/models/`、`infrastructure/repositories/`
 - 业务持久化：`services/persistence.py`
 - Checkpoint：`services/checkpoint.py`
 - Redis：`infrastructure/redis.py`、`services/cache/`

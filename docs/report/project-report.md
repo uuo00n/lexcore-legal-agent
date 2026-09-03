@@ -4,19 +4,19 @@ title: 法智项目介绍报告
 
 # 法智项目介绍报告
 
-法智是一个面向普通用户的中国法律咨询智能助手。项目以 FastAPI 为服务入口，以 LangGraph 实现 Supervisor 多智能体流程，以本地 DOC RAG 和得理 OpenAPI 提供可信法律数据，并通过 LLM Gateway、Agent Trace、记忆系统、文档上传和自动评测体系逐步提升回答的稳定性与可信度。
+法智是一个面向普通用户的中国法律咨询智能助手。项目以 FastAPI 为服务入口，以 LangGraph 实现 Plan-and-Execute 多智能体流程，以本地法条 RAG 和得理开放平台 OpenAPI 提供可信法律数据，并通过 LLM Gateway、Agent Trace、五层记忆系统、文档上传和自动评测体系逐步提升回答的稳定性与可信度。
 
-这份报告基于当前代码仓库整理，覆盖项目定位、系统架构、模块划分、RAG 流程、MCP 工具体系、记忆系统、API、前端、评测、部署与后续优化方向。
+这份报告基于当前代码仓库整理（分支 `codex/refactor-legal-data-sources`，整理日期 2026-09-03），覆盖项目定位、系统架构、模块划分、执行流程、RAG 流程、工具体系、记忆系统、可观测性、API、前端、评测、部署与后续优化方向。文中出现的常量、默认值与文件路径均以当前代码为准。
 
 ## 一、项目定位
 
 ### 1.1 一句话概括
 
-法智是一个“先判断事实是否足够、再检索法条、最后给出保守法律分析”的中国法律 AI 助手。
+法智是一个"先判断事实是否足够、再检索法条、最后给出保守法律分析"的中国法律 AI 助手。
 
 它不是单纯的大模型聊天页，而是一个由检索、工具、记忆、评测和前端流式交互共同组成的法律问答系统。
 
-当前项目采用“中控智能体 + 业务智能体 + 确定性服务”的架构。中控智能体只负责路由，不直接解决问题；事实审查、合同审查和法律咨询分别由不同业务智能体处理；法条检索、引用校验、缓存、配额、报告生成和评测继续作为可测试服务实现。
+当前项目采用"确定性编排 + 业务智能体 + 可测试服务"的架构。Intent Router 与 Planner 负责意图判定和计划生成，Supervisor 只负责逐步分派而不直接解决问题；案件分析、法规检索和法律咨询分别由不同 Specialist 处理；法条检索、引用校验、缓存、配额、报告生成和评测继续作为可测试服务实现。
 
 ### 1.2 目标用户
 
@@ -26,7 +26,7 @@ title: 法智项目介绍报告
 | --- | --- | --- |
 | 普通个人用户 | 校园霸凌、租房押金、劳动纠纷、消费维权、借贷、婚姻家事 | 用通俗语言解释法律性质、风险和下一步行动 |
 | 小微企业或个体经营者 | 合同审查、用工风险、欠款追讨、合作协议 | 快速定位风险点并提示需要补充的事实 |
-| 法律学习者或开发者 | RAG、MCP、LangGraph、评测体系学习 | 作为完整法律 RAG Agent 工程样例 |
+| 法律学习者或开发者 | RAG、LangGraph、MCP、评测体系学习 | 作为完整法律 RAG Agent 工程样例 |
 | 内部测试人员 | 检索准确率、回答忠实度、工具链稳定性验证 | 通过 eval 数据集持续量化系统质量 |
 
 ### 1.3 当前能力边界
@@ -35,16 +35,16 @@ title: 法智项目介绍报告
 
 - 判断用户输入属于日常问题还是法律问题。
 - 对法律问题先判断事实是否足够，不足时追问关键事实。
-- 通过 Supervisor Agent 将请求路由到事实审查智能体、合同审查智能体或法律咨询智能体。
-- 使用本地法律条文库进行 RAG 检索。
-- 通过 MCP 调用本地法律检索及其他确定性法律工具，通过统一 Service Layer 调用得理法规与类案检索。
+- 通过 Planner 生成结构化计划，由 Supervisor 逐步分派到案件分析、法规检索或法律咨询智能体。
+- 使用本地法律条文库进行混合 RAG 检索（语义 + BM25 + RRF + Reranker）。
+- 通过进程内 Service Layer 调用本地检索、得理法规检索与得理类案检索。
 - 对上传文档进行解析，并把文档内容注入对话上下文。
-- 对检索到的法条进行引用收集，最终回答后附简洁法条出处。
-- 使用短期摘要、长期向量记忆和用户画像增强多轮对话。
+- 对检索到的法条进行引用收集，由 Result Verifier 校验后附简洁法条出处。
+- 使用近期消息窗口、滚动摘要、长期向量记忆和用户画像增强多轮对话。
 - 使用评测数据集评估检索命中率、MRR、Precision、Recall。
 - 通过 LLM Gateway 记录模型调用、耗时、失败原因和 fallback 情况。
 - 通过 Agent Trace 追踪每次对话的节点、工具、检索、引用校验和最终回答。
-- 通过后台 Dashboard 查看请求成功率、平均耗时、LLM 调用、评测历史和 trace 明细。
+- 通过后台 Dashboard 查看请求成功率、平均耗时、LLM 调用、配额、评测历史和 trace 时间线。
 
 当前不应该承诺：
 
@@ -57,118 +57,547 @@ title: 法智项目介绍报告
 
 ### 2.1 法律回答必须可追溯
 
-系统提示词明确要求：法律问题不得凭空引用法条，引用的法条必须来自本轮检索结果。Agent 节点还会在最终回答阶段对明确法条引用做校验，移除未被本轮检索结果支撑的法条引用。
+系统提示词明确要求：法律问题不得凭空引用法条，引用的法条必须来自本轮检索结果。`result_verifier` 节点还会在生成最终回答之前校验证据与引用，移除未被本轮检索结果支撑的法条引用，必要时触发一次重新规划。
 
 相关代码：
 
-- `/Users/didi/Desktop/Legal/agent/prompts.py`
-- `/Users/didi/Desktop/Legal/agent/nodes.py`
+- `agent/prompts.py`
+- `agent/nodes/verifier.py`
+- `agent/nodes/answer.py`
+- `services/legal_analysis.py`
 
 ### 2.2 事实不足时先追问
 
 法律问题不是所有情况都能直接检索和回答。例如校园霸凌至少需要确认孩子年龄、行为方式、伤害后果、学校是否知情、证据情况。提示词要求事实不足时必须追问 1-3 个关键问题，不先检索、不引用法条、不强行下结论。
 
-这是法律助手区别于普通问答机器人的关键点。系统需要先判断“缺事实”还是“缺法条”。缺事实时追问用户；缺法条时查询本地 DOC RAG 或得理 OpenAPI，可信来源仍无依据时返回证据不足。
+这是法律助手区别于普通问答机器人的关键点。系统需要先判断"缺事实"还是"缺法条"。缺事实时追问用户；缺法条时查询本地法条 RAG 或得理 OpenAPI，可信来源仍无依据时返回证据不足。`services/legal_analysis.py` 提供不依赖 LLM 的事实完整性检查，`AgentState` 中的 `needs_follow_up` 与 `evidence_insufficient` 把这个判断显式化。
 
-### 2.3 工具逻辑集中在 MCP Server
+### 2.3 工具实现集中在 Service Layer
 
-Agent 侧工具只是代理函数，真正的工具实现集中在 MCP Server。这样做的好处是：
+检索与法律工具的真实实现只写在 `services/`，`agent/tools/` 与 `mcp_server/tools/` 都是薄封装。这样做的好处是：
 
-- 工具实现与 Agent 解耦。
-- 以后可以让其他客户端复用同一组 MCP 工具。
+- 工具实现与调用协议解耦，同一份逻辑同时服务 Web 链路和外部 MCP 客户端。
+- Web 请求链路进程内直调，不经过 MCP Client，因此 MCP 进程是否运行都不影响问答可用性。
 - 工具能力可以独立演进，不必把全部逻辑塞进 LangGraph 节点。
-- 更接近企业级 Agent 工具治理方式。
+- 服务函数返回结构化结果（`SearchServiceResult`），带 `status` 与 `evidence_insufficient` 标记，便于测试和上层决策。
+
+需要强调一个容易误读的历史细节：早期版本确实由主进程通过 stdio 拉起 MCP Server 子进程，Agent 工具只是转发代理。当前代码已不再如此——`main.py` 的 lifespan 从不启动 MCP 进程，仓库里也不存在 `services/mcp_client.py`。FastMCP 现在是与 Web 链路平行的对外暴露层。
 
 ### 2.4 检索质量优先于工具数量
 
-当前项目已经具备 7 个 MCP 工具，但法律助手的核心质量仍然取决于 RAG 检索。评测显示检索质量仍有优化空间，因此下一阶段重点应该放在检索召回、排序、数据集质量和查询理解上，而不是继续堆工具。
+当前项目对外暴露 10 个 MCP 工具，Agent 侧只用 3 个工具，但法律助手的核心质量仍然取决于 RAG 检索。评测显示检索质量仍有优化空间，因此下一阶段重点应该放在检索召回、排序、数据集质量和查询理解上，而不是继续堆工具。
 
 ## 三、技术栈总览
 
 | 层级 | 技术/组件 | 作用 |
 | --- | --- | --- |
-| Web 服务 | FastAPI | 提供首页、健康检查、聊天、上传、会话管理 API |
-| 流式响应 | SSE / sse-starlette | 向前端流式推送 token、工具事件、错误和完成事件 |
-| Agent 编排 | LangGraph | 构建 ReAct 状态机和工具循环 |
-| LLM 接入 | LangChain ChatOpenAI | 通过 OpenAI-compatible 协议接入智谱、DeepSeek、通义、Ollama |
-| 主模型 | glm-4.7 等 | 负责对话、工具选择、法律分析 |
-| 查询增强模型 | Ollama qwen2.5:1.5b 或本地 Qwen LoRA | 负责问题重写和 HyDE 假设文档生成 |
-| 工具协议 | MCP / FastMCP | 统一暴露法律工具 |
-| 向量库 | ChromaDB | 存储法律条文向量和长期记忆向量 |
+| Web 服务 | FastAPI | 提供首页、健康检查、聊天、上传、会话管理、报告、证据与后台 API |
+| 流式响应 | SSE / sse-starlette | 向前端流式推送 token、工具事件、上下文状态、错误和完成事件 |
+| Agent 编排 | LangGraph | StateGraph + Plan-and-Execute + 有界 ReAct 工具循环 |
+| LLM 接入 | LangChain ChatOpenAI | 通过 OpenAI-compatible 协议接入 DeepSeek、智谱、通义、Ollama |
+| 主模型 | `deepseek-v4-pro`（默认 provider `deepseek`） | 负责对话、工具选择、法律分析 |
+| 查询增强模型 | `deepseek-v4-flash`（`HYDE_BACKEND=openai`，可切 `hf_lora` 本地 Qwen + LoRA） | 负责问题重写和 HyDE 假设文档生成 |
+| 工具协议 | MCP / FastMCP | 面向外部客户端统一暴露法律工具（独立进程，不在 Web 链路上） |
+| 向量库 | Qdrant | `legal_knowledge` 存法条向量，`legal_memory` 存长期记忆向量 |
 | Embedding | bge-small-zh-v1.5 | 法条和记忆向量化 |
-| Reranker | bge-reranker-base | 对候选法条进行精排 |
+| Reranker | bge-reranker-base | 对候选法条进行 cross-encoder 精排 |
 | 关键词检索 | BM25 | 处理法条关键词、条号、法律概念匹配 |
-| 数据库 | SQLite | 存储会话、文档、摘要、用户画像等结构化数据 |
-| 可观测性 | SQLite Trace Tables | 存储 LLM 调用、Agent 事件、评测历史和 Dashboard 指标 |
+| 关系数据库 | PostgreSQL 17+ | 会话、文档、摘要、用户画像、配额、可观测与 LangGraph checkpoint，硬依赖 |
+| 缓存 / 限流 | Redis | 检索缓存、得理缓存、回答缓存、限流、会话热层、幂等标记，可缺省降级 |
+| 可观测性 | PostgreSQL Trace 表 + Prometheus `/metrics` | 存储 LLM 调用、Agent 事件、评测历史与 Dashboard 指标 |
 | 前端 | Vanilla JS + HTML + CSS | 聊天界面、会话列表、文档上传、SSE 渲染 |
-| 后台看板 | Vanilla JS + Admin API | 展示 Agent Trace、LLM Gateway、Eval History |
+| 后台看板 | Vanilla JS + Admin API | 展示 Agent Trace、LLM Gateway、配额、Eval History |
 | 文档站 | VitePress + Mermaid | 项目文档、架构图、API 文档和报告网页 |
-| 评测 | eval 脚本 + RAGAS 思路 | 检索和端到端质量评估 |
+| 评测 | `eval/` 脚本 + RAGAS 思路 | 检索、上下文与端到端质量评估 |
 
-## 四、LLM Gateway 与 Agent 可观测性
+## 四、系统总架构
 
-项目新增了内部 LLM Gateway 和 Agent Trace 能力，使系统从“能回答问题”升级为“能解释每次回答如何产生”。
+### 4.1 分层视图
 
-### 4.1 LLM Gateway
+```mermaid
+graph TB
+    subgraph Client["前端"]
+        UI["static/index.html + app.js"]
+        ADMIN["static/admin.html"]
+    end
 
-LLM Gateway 位于 `/Users/didi/Desktop/Legal/services/llm.py` 和 `/Users/didi/Desktop/Legal/services/gateway.py`。调用方仍然通过 `get_llm()` 获取模型，但返回对象会在 `ainvoke()` 外层记录：
+    subgraph Server["FastAPI 单进程"]
+        API["api/ 路由层"]
+        CACHE["services/cache/<br/>限流 / 幂等 / 回答缓存"]
+        LG["LangGraph<br/>19 节点 Plan-and-Execute"]
+        CTX["services/context_builder<br/>分层预算"]
+        MEM["记忆系统"]
+        SEARCH["services/search<br/>检索 Service Layer"]
+        RAG["services/rag<br/>混合检索管线"]
+        DELI["services/delilegal<br/>得理开放平台客户端"]
+        OBS["services/observability"]
+    end
 
-- provider 和 model。
-- base_url。
-- 调用状态。
-- 调用耗时。
-- 错误信息。
-- fallback 来源。
-- prompt/completion/total token 字段。
+    subgraph MCPProc["FastMCP 独立进程（可选）"]
+        MCPS["run_mcp.py<br/>10 个 MCP 工具"]
+    end
 
-Gateway 支持通过 `LLM_FALLBACK_PROVIDERS` 配置备用 provider。主模型失败后会按顺序尝试备用模型，并把失败与成功尝试都写入 `llm_call_logs` 表。
+    subgraph Storage["存储层"]
+        PG[("PostgreSQL<br/>业务 + 可观测 + checkpoint")]
+        QDRANT[("Qdrant<br/>legal_knowledge / legal_memory")]
+        REDIS[("Redis<br/>缓存 / 限流，可缺省")]
+    end
 
-Gateway 还支持动态模型路由。系统会根据问题长度、法律风险、复杂关键词、上传文档长度和工具循环次数选择 `fast`、`strong` 或 `long` 路由：
+    UI -->|SSE| API
+    ADMIN --> API
+    API --> CACHE
+    API --> LG
+    API --> OBS
+    LG --> CTX
+    CTX --> MEM
+    LG -->|LangChain Tools 进程内直调| SEARCH
+    SEARCH --> RAG
+    SEARCH --> DELI
+    DELI --> OPENAPI["得理开放平台 OpenAPI"]
+    RAG --> QDRANT
+    RAG --> REDIS
+    MEM --> QDRANT
+    MEM --> PG
+    LG -->|Checkpoint| PG
+    OBS --> PG
+    CACHE --> REDIS
+    MCPS -.->|复用同一 Service Layer| SEARCH
+```
+
+虚线表示 FastMCP 是与 Web 链路平行的对外暴露层：`main.py` 的 lifespan 从不拉起 MCP 进程，Web 请求也从不经过 MCP，两者共享 `services/` 下同一套实现。
+
+架构的核心是：FastAPI 只负责 Web/API 生命周期，LangGraph 负责智能体流程，`services/` 负责全部工具与检索能力，`infrastructure/` 负责存储访问，PostgreSQL 与 Qdrant 分别承担结构化数据与向量数据存储，Redis 只放可丢弃的热数据。
+
+### 4.2 存储职责
+
+| 存储 | 角色 | 缺失后果 |
+| --- | --- | --- |
+| PostgreSQL | 业务、可观测、配额与 LangGraph checkpoint 的权威记录 | 应用拒绝启动 |
+| Qdrant | `legal_knowledge` 法条索引 + `legal_memory` 长期记忆 | 检索退化为纯 BM25，长期记忆不可用 |
+| Redis | 检索/得理/回答缓存、限流、会话热层、幂等 | 全部 fail-open 降级，接口照常可用 |
+
+所有 SQL DDL 只由 Alembic 负责。应用启动时校验迁移结果，绝不自己建表。
+
+## 五、目录与模块划分
+
+```text
+Legal/
+├── main.py                     # FastAPI 入口 + lifespan
+├── run_mcp.py                  # FastMCP 入口（独立进程）
+├── alembic.ini
+├── docker-compose.yml          # postgres / redis / qdrant / migrate / app
+├── api/                        # HTTP 路由层
+├── agent/                      # LangGraph 智能体
+│   ├── graph.py                # 19 节点拓扑
+│   ├── graph_runtime.py        # 节点观测包装
+│   ├── state.py                # AgentState 与 reducer
+│   ├── nodes/                  # 确定性节点
+│   ├── agents/                 # Specialist + 合同 Agent
+│   ├── tools/                  # 3 个 Agent 工具
+│   ├── tool_loop.py            # 工具调用预算
+│   ├── replan.py               # replan 预算
+│   ├── prompts.py
+│   └── skills/                 # 可复用技能包
+├── services/                   # 业务逻辑层（34 个模块 + 6 个子包）
+├── infrastructure/             # 存储基础设施
+│   ├── database.py             # 异步引擎与会话
+│   ├── models/                 # SQLAlchemy ORM
+│   ├── repositories/           # 仓储层
+│   ├── operational_store.py
+│   ├── redis.py                # 连接、熔断与降级入口
+│   ├── sanitize.py             # 日志脱敏
+│   └── migrations/             # Alembic 版本
+├── mcp_server/                 # FastMCP 对外暴露层
+├── static/                     # 前端 SPA + 后台页面
+├── data/laws/                  # 70 部法律法规原文
+├── eval/                       # 检索、上下文与 A/B 评测
+├── docs/                       # VitePress 文档站
+└── tests/                      # 82 个测试文件
+```
+
+### 5.1 API 层
+
+| 文件 | 职责 |
+| --- | --- |
+| `api/chat.py` | `POST /api/chat`，SSE 流式问答主链路 |
+| `api/upload.py` | `POST /api/upload`，PDF/DOCX/TXT 解析与文档登记 |
+| `api/threads.py` | 会话列表、历史、上下文状态、手动压缩、删除 |
+| `api/reports.py` | 合同审查报告与异步任务 |
+| `api/evidence.py` | 视频证据提取与产物下载 |
+| `api/admin.py` | 8 个 `/api/admin/*` 可观测接口 |
+
+### 5.2 Agent 层
+
+`agent/nodes/` 存放确定性节点：`context.py`（上下文压缩）、`memory.py`（记忆装载）、`document.py`（文档注入）、`query.py`（查询改写）、`routing.py`（意图路由）、`planner.py`、`supervisor.py`、`verifier.py`、`answer.py`。
+
+`agent/agents/` 存放需要模型自主决策的智能体：`case_analysis_agent.py`、`statute_retrieval_agent.py`、`legal_consult_agent.py`、`contract_agent.py`。
+
+`agent/tools/` 只有三个工具，全部直接调用进程内 Service：
+
+```python
+# agent/tools/rag_search.py 的模块文档字符串
+"""直接调用进程内 RAG Service，不经过 MCP Client。"""
+```
+
+### 5.3 服务层
+
+| 模块 | 职责 |
+| --- | --- |
+| `services/llm.py` | 多 Provider LLM 工厂与 fallback |
+| `services/gateway.py` | LLM 调用记录、耗时、错误与 fallback 日志 |
+| `services/model_routing.py` | `fast` / `strong` / `long` 动态模型路由 |
+| `services/search.py` | 检索 Service Layer 统一入口，返回 `SearchServiceResult` |
+| `services/rag/` | 混合检索管线与 VectorStore 抽象 |
+| `services/retriever/hyde.py` | HyDE 与问题重写 |
+| `services/indexer/` | 法条切块与索引构建 |
+| `services/delilegal/` | 得理开放平台客户端、归一化与处理器 |
+| `services/legal_tools.py` | 法律对比、风险、时效、文书模板 |
+| `services/legal_analysis.py` | 不依赖 LLM 的确定性法律分析 |
+| `services/case_retrieval.py` | 相似法律场景库 |
+| `services/contract_agent/` | 合同审查确定性工作流 |
+| `services/contract_report.py` | Markdown 审查报告生成 |
+| `services/task_queue.py` | 进程内异步任务队列 |
+| `services/evidence_video.py` | 视频证据抽帧与摘要 |
+| `services/context_builder.py` | 分层预算构造模型输入 |
+| `services/context_compaction.py` | 长会话压缩与 `context_status` |
+| `services/memory.py` / `memory_extractor.py` / `memory_store.py` | 摘要、画像、后台提取与长期记忆 |
+| `services/openviking_*.py` / `viking_context.py` | OpenViking 风格上下文层（尽力而为，可缺省） |
+| `services/checkpoint.py` | LangGraph checkpoint 生命周期与 Memory fallback |
+| `services/cache/` | 检索/得理/回答缓存、限流、会话元数据、幂等 |
+| `services/quota.py` | 每日配额 |
+| `services/observability.py` / `metrics.py` | trace、事件、LLM 日志与 Prometheus 指标 |
+
+### 5.4 MCP 暴露层
+
+`mcp_server/server.py` 创建 FastMCP 实例，`mcp_server/startup.py` 自行调用 `initialize_rag()`，`mcp_server/tools/` 下 7 个文件注册 10 个工具，全部薄封装 `services/`。
+
+## 六、Plan-and-Execute 执行流程
+
+### 6.1 图拓扑
+
+```mermaid
+graph LR
+    START([START]) --> CC[context_compaction]
+    CC --> M[memory]
+    M --> ID[inject_doc]
+    ID --> QR[query_rewrite]
+    QR --> IR[intent_router]
+    IR --> P[planner]
+    P --> S{supervisor}
+
+    S -->|案情| CA[case_analysis_agent]
+    S -->|法条| SR[statute_retrieval_agent]
+    S -->|咨询| LC[legal_consult_agent]
+    S -->|计划完成| RV[result_verifier]
+    S -->|终止| E1([END])
+
+    CA -->|tools| CAT[case_analysis_tools]
+    CAT --> CCE[collect_case_evidence]
+    CCE --> CA
+    CA -->|done| S
+
+    SR -->|tools| SRT[statute_retrieval_tools]
+    SRT --> CSE[collect_statute_evidence]
+    CSE --> SR
+    SR -->|done| S
+
+    LC -->|tools| LCT[legal_consult_tools]
+    LCT --> CVE[collect_consult_evidence]
+    CVE --> LC
+    LC -->|done| S
+
+    CA -->|超限| TLE[tool_limit_exceeded]
+    SR -->|超限| TLE
+    LC -->|超限| TLE
+    TLE --> S
+
+    RV -->|replan ×1| P
+    RV --> AG[answer_generator]
+    AG --> E2([END])
+```
+
+图由 19 个节点、15 条静态边和 5 组条件边组成，编译时绑定 `AsyncPostgresSaver`。三个条件函数分别是 `should_execute_next`（supervisor 分派）、`should_continue`（Specialist 决定继续调工具、超限还是交回 supervisor）、`should_after_verifier`（决定 replan 还是生成回答）。
+
+### 6.2 节点职责
+
+| 节点 | 类型 | 职责 |
+| --- | --- | --- |
+| `context_compaction` | 确定性 | 超预算时压缩历史，写 `context_status` |
+| `memory` | 确定性 | 装载画像、摘要、相关长期记忆与可选 OpenViking 上下文 |
+| `inject_doc` | 确定性 | 注入上传文档或视频证据摘要 |
+| `query_rewrite` | LLM | 生成检索友好的 `rewritten_query` |
+| `intent_router` | 确定性 | 判定意图与复杂度，写 `intent_routed` |
+| `planner` | LLM | 生成最多 `MAX_PLAN_STEPS` 步结构化计划 |
+| `supervisor` | 确定性 | 取下一个 pending 步骤并分派 |
+| `*_agent` | LLM + 工具 | 有界 ReAct 小环，产出 `AgentReport` |
+| `collect_*_evidence` | 确定性 | 从工具结果提取并限制 Top-N 证据 |
+| `tool_limit_exceeded` | 确定性 | 写入超限观察后回到 supervisor |
+| `result_verifier` | LLM + 确定性校验 | 校验证据与引用，最多触发一次 replan |
+| `answer_generator` | LLM | 生成最终回答与引用列表 |
+
+Router、Planner、Verifier 与格式化步骤都保持确定性节点，不额外套一层 Agent。
+
+### 6.3 三个 Specialist
+
+| Specialist | 负责任务 | 可用工具 |
+| --- | --- | --- |
+| `case_analysis_agent` | 案情梳理、争议焦点、类案参考 | `retrieve_local_law_tool`、`search_law_tool`、`search_case_tool` |
+| `statute_retrieval_agent` | 法条定位与条文比对 | `retrieve_local_law_tool`、`search_law_tool` |
+| `legal_consult_agent` | 通俗解释、风险与行动建议 | `retrieve_local_law_tool`、`search_law_tool` |
+
+`contract_agent` 不在问答主图上，服务于 `/api/reports/contract` 的确定性合同审查工作流。
+
+### 6.4 有界执行预算
+
+| 预算 | 默认值 | 位置 |
+| --- | --- | --- |
+| 计划步数 | `MAX_PLAN_STEPS = 6` | `agent/nodes/planner.py` |
+| 单任务工具调用次数 | `MAX_TOOL_CALLS = 5`（环境变量可调） | `agent/tool_loop.py` |
+| replan 次数 | `MAX_AGENT_REPLAN_RETRIES = 1` | `agent/replan.py` |
+| 模型输入 token | 分层预算 | `services/context_builder.py` |
+
+任何一层超限都不抛异常，而是写入显式状态后继续走图，最终仍会产出回答。
+
+### 6.5 AgentState 结构
+
+`AgentState` 是一个带 reducer 的 TypedDict，字段按用途分组：
+
+| 分组 | 字段 |
+| --- | --- |
+| 会话与追踪 | `messages`、`user_id`、`thread_id`、`trace_id` |
+| 查询 | `original_query`、`rewritten_query` |
+| 意图 | `intent`、`intent_confidence`、`intent_routed`、`task_complexity` |
+| 路由 | `supervisor_route`、`supervisor_reason`、`supervisor_finalized` |
+| 计划 | `plan`、`current_step`、`completed_steps`、`remaining_steps` |
+| 证据 | `retrieved_laws`、`retrieved_cases`、`evidence_insufficient` |
+| 报告与校验 | `agent_reports`、`verification_result`、`citations` |
+| 预算与保护 | `retry_count`、`replan_retry_count`、`tool_call_count`、`tool_loop_failure` |
+| 记忆 | `memory_profile`、`memory_longterm`、`memory_summary` |
+| 上传物 | `uploaded_doc_text`、`uploaded_doc_name`、`uploaded_evidence_id`、`uploaded_evidence_text` |
+| 上下文 | `viking_context`、`viking_context_hits`、`context_status`、`context_compacted`、`context_build_status` |
+| 交互 | `needs_follow_up` |
+
+列表字段都带自定义 reducer（`merge_plan_steps`、`merge_retrieved_laws`、`merge_retrieved_cases`、`merge_agent_reports`、`merge_unique_items`），避免并行分支互相覆盖。`verifier_retry_count` 是旧 checkpoint 的兼容字段，新代码统一用 `replan_retry_count`。
+
+## 七、RAG 检索架构
+
+```mermaid
+flowchart LR
+    Q[用户问题] --> RW[问题重写 + HyDE]
+    RW --> SEM[语义检索<br/>Qdrant legal_knowledge]
+    Q --> BM[BM25 关键词检索]
+    SEM --> SUP[_drop_superseded<br/>过滤失效条文]
+    BM --> SUP
+    SUP --> RRF[reciprocal_rank_fusion_scored<br/>RRF_K=60]
+    RRF --> RR[CrossEncoder 精排<br/>bge-reranker-base]
+    RR --> TH[阈值 + 最小结果数兜底]
+    TH --> OUT[SearchServiceResult]
+```
+
+### 7.1 法条分块
+
+`data/laws/` 当前有 70 个法律文本文件。`services/indexer/chunker.py` 按"法律名称 + 条文编号"切块，默认 `DEFAULT_MAX_CHUNK_SIZE = 2000`、`DEFAULT_CHUNK_OVERLAP = 100`，超长条文才继续二次切分。当前语料切出的 chunk 数量为 **8941**（`chunk_all_laws('data/laws')` 实测值）。
+
+每个 chunk 保留法律名称、条号、生效状态等 metadata，因此检索结果能直接给出"《民法典》第七百一十四条"这样的可追溯出处。
+
+### 7.2 向量检索
+
+`services/rag/qdrant_store.py` 实现 `VectorStore` Protocol，写入 Qdrant `legal_knowledge` collection（`QDRANT_VECTOR_SIZE=512`）。Embedding 使用本地 `models/bge-small-zh-v1.5`，不走外部 API。
+
+`services/rag/interfaces.py` 用 Python Protocol 定义 `Retriever` 与 `VectorStore`，`HybridRetriever` 通过构造函数注入各组件，因此替换向量库或召回器不需要改动上层节点。
+
+### 7.3 查询增强
+
+`services/retriever/hyde.py` 同时做问题重写和 HyDE 假设文档生成，默认 `HYDE_BACKEND=openai`，模型 `deepseek-v4-flash`；设为 `hf_lora` 时改用本地 Qwen + LoRA 权重。
+
+语义召回不只用一个查询，而是把原始 query、重写 query 和 HyDE 假设文档都作为检索变体，BM25 侧使用原始 query 与重写 query，精排阶段回到原始 query 计算相关性。
+
+### 7.4 RRF 融合
+
+融合前先执行 `_drop_superseded()`，按 metadata 过滤已失效条文（`RETRIEVAL_INCLUDE_SUPERSEDED=false` 时生效）。随后 `reciprocal_rank_fusion_scored()` 以 `RRF_K=60` 融合语义与关键词两路排名。
+
+融合结果带降级标记，共四种模式：
+
+| 模式 | 含义 |
+| --- | --- |
+| `rrf` | 两路都有结果，正常融合 |
+| `vector_fallback` | BM25 无结果，只用语义排名 |
+| `bm25_fallback` | 向量库不可用，只用关键词排名 |
+| `empty` | 两路都无结果 |
+
+### 7.5 Reranker 精排
+
+`services/rag/reranker.py` 使用本地 `models/bge-reranker-base` cross-encoder 精排，默认 `RERANKER_TOP_N=5`、`RERANKER_SCORE_THRESHOLD=0.3`，检索侧默认 `RETRIEVAL_VECTOR_TOP_K=10`、`RETRIEVAL_BM25_TOP_K=10`、`RETRIEVAL_FINAL_TOP_K=5`。Reranker 加载或推理失败时降级为直接沿用融合顺序，不让整条链路失败。
+
+### 7.6 无结果与降级处理
+
+`RETRIEVAL_MIN_RESULTS=1` 保证阈值过滤不会把结果清空到零；如果确实没有可用法条，`services/search.py` 返回带状态的结构化结果而不是空字符串：
+
+```python
+SearchServiceResult.status: Literal["found", "no_relevant_result", "low_quality", "error"]
+```
+
+配合 `evidence_insufficient` 标记，上层节点可以区分"检索到了但质量低"和"确实没有"，从而选择追问、说明证据不足或转向得理 OpenAPI，而不是让模型自行编造法条。
+
+整条管线外包一层 Redis 检索缓存（`RETRIEVAL_CACHE_ENABLED=true`，`RETRIEVAL_CACHE_TTL_SECONDS=1800`），Redis 不可用时直接穿透到检索。检索过程会记录 `vector_hits`、`bm25_hits`、`fused_hits`、`reranker_hits` 四个 trace 事件，便于在 Dashboard 里逐级复盘召回质量。
+
+## 八、工具体系
+
+### 8.1 Agent 工具（3 个）
+
+Specialist 在 ReAct 循环里直接调用进程内 Service Layer：
+
+| 工具 | 功能 | 可用于 |
+| --- | --- | --- |
+| `retrieve_local_law_tool` | 混合检索本地法条（语义 + BM25 + RRF + Rerank） | 三个 Specialist |
+| `search_law_tool` | 得理开放平台正式法规检索 | 三个 Specialist |
+| `search_case_tool` | 得理开放平台类案检索 | `case_analysis_agent` |
+
+### 8.2 MCP 工具（10 个）
+
+`python run_mcp.py` 单独启动（默认 stdio，`MCP_TRANSPORT=sse` 可改为 SSE），面向 Claude Desktop 之类的外部 MCP 客户端：
+
+| 工具 | 功能 |
+| --- | --- |
+| `legal_search` | 混合检索法条（本地语料） |
+| `search_local_law` | 本地法库检索，返回结构化结果与质量标记 |
+| `search_law` | 得理正式法规检索 |
+| `search_case` | 得理类案检索 |
+| `law_compare` | 对比两部法律在某主题上的规定 |
+| `risk_assess` | 根据事实情况评估法律风险 |
+| `contract_review` | 审查合同文本的法律合规性 |
+| `statute_of_limitations` | 计算诉讼时效 |
+| `jurisdiction_route` | 判定管辖法院与立案路径 |
+| `legal_document_draft` | 起草法律文书（起诉状、仲裁申请书、合同） |
+
+### 8.3 为什么保留 MCP
+
+Web 链路已经不需要 MCP，但 MCP 层仍有价值：
+
+- 让同一套法律能力可以被外部客户端复用，而不必嵌入本项目的 FastAPI。
+- 作为工具契约的公开描述，工具入参与返回结构必须显式声明。
+- 提供一个与 Web 链路隔离的验证面：MCP 侧调用异常不会影响线上问答。
+
+代价是需要单独维护一层薄封装，并保证它与 `services/` 的签名不漂移，这部分由 `tests/` 中的 MCP 工具测试覆盖。
+
+## 九、记忆系统
+
+### 9.1 五层结构
+
+```mermaid
+graph TB
+    WM["1. Working Memory<br/>AgentState"] --> CM["2. Conversation Memory<br/>近期消息窗口"]
+    CM --> SM["3. Summary Memory<br/>PostgreSQL conversation_summaries"]
+    SM --> LM["4. Long-term Memory<br/>Qdrant legal_memory + PostgreSQL 画像"]
+    LM --> PS["5. Persistent Workflow State<br/>PostgreSQL checkpoint"]
+```
+
+记忆和持久化明确分层：checkpoint 只负责工作流恢复，不等同于长期记忆；长期记忆使用独立且隔离的 `legal_memory` collection，不与法条索引混用。
+
+### 9.2 短期记忆与摘要边界
+
+这里有两个容易混淆的常量：
+
+- `SLIDING_WINDOW_SIZE = 8` 与 `MAX_WINDOW_TOKENS = 3000`（`services/memory.py`）是**摘要与压缩的边界**，决定保留多少条近期消息不做摘要，溢出部分由 LLM 压缩成滚动摘要写入 `conversation_summaries`。
+- 真正注入模型的近期消息条数是 `CONTEXT_RECENT_MESSAGE_COUNT = 12`（`services/context_builder.py`），并另受 recent-message token 预算限制。
+
+长会话还有一层自动压缩：`CONTEXT_WINDOW_TOKEN_BUDGET=12000`、`CONTEXT_AUTO_COMPACT_RATIO=0.75`、`CONTEXT_AUTO_COMPACT_MESSAGES=16`，由 `context_compaction` 节点在入图第一步执行，并把结果写入 `context_status` 通过 SSE 告知前端。
+
+### 9.3 长期记忆
+
+`services/memory_store.py` 把值得跨轮保存的关键事实写入 Qdrant `legal_memory`（`QDRANT_MEMORY_VECTOR_SIZE=512`），按语义相似度检索，`memory` 节点默认取 `top_k=3`。用户画像存 PostgreSQL，与向量记忆分开管理。
+
+`memory` 节点还会尽力而为地调用 `services/openviking_context.py` 检索 OpenViking 风格的 Resource/Memory/Skill 上下文，命中后写入 `viking_context` 并记录 `viking_context_retrieval` 事件。这一层整段包在 `try/except` 中，服务缺失只写 debug 日志，不影响主链路。
+
+### 9.4 新鲜度权重
+
+长期记忆检索不只看语义相似度，还叠加时间衰减，让近期事实优先于陈旧事实。这对法律咨询很重要：用户的诉讼阶段、证据情况、协商进展会随时间变化，旧记忆不该压过新事实。
+
+### 9.5 后台提取
+
+`services/memory_extractor.py` 在回答返回之后异步执行，不阻塞 SSE：抽取本轮值得长期保存的事实写入 `legal_memory`，更新用户画像，并通过 `save_case_workspace` 维护案件工作区。模型可通过 `MEMORY_EXTRACTOR_MODEL` 单独配置。
+
+## 十、LLM Gateway 与可观测性
+
+项目具备内部 LLM Gateway 和 Agent Trace 能力，使系统从"能回答问题"升级为"能解释每次回答如何产生"。
+
+### 10.1 LLM Gateway
+
+LLM Gateway 位于 `services/llm.py` 与 `services/gateway.py`。调用方仍然通过 `get_llm()` 获取模型，但返回对象会在 `ainvoke()` 外层记录 provider、model、base_url、调用状态、耗时、错误信息、fallback 来源以及 prompt/completion/total token 字段。
+
+Gateway 支持通过 `LLM_FALLBACK_PROVIDERS` 配置备用 provider。主模型失败后按顺序尝试备用模型，失败与成功尝试都写入 `llm_call_logs` 表。
+
+`services/llm.py` 的 `PROVIDERS` 是模型默认值的唯一来源：
+
+| provider | 默认模型 | Base URL | API Key 环境变量 |
+| --- | --- | --- | --- |
+| `deepseek`（默认） | `deepseek-v4-pro` | `https://api.deepseek.com` | `DEEPSEEK_API_KEY` |
+| `zhipu` | `glm-4.7` | `https://open.bigmodel.cn/api/paas/v4` | `ZHIPU_API_KEY` |
+| `qwen` | `qwen-plus` | DashScope 兼容端点 | `DASHSCOPE_API_KEY` |
+| `ollama` | `qwen2.5:7b` | `http://localhost:11434/v1` | 不需要 |
+
+### 10.2 模型路由
+
+`services/model_routing.py` 根据问题长度、法律风险、复杂关键词、上传文档长度和工具循环次数选择路由：
 
 - `fast`：低风险、短问题，适合轻量模型。
 - `strong`：复杂法律分析、诉讼/仲裁/刑事/高风险问题，适合强模型。
 - `long`：长合同、长文档审查，适合长上下文模型。
 
-路由模型可通过 `LLM_ROUTE_FAST_PROVIDER`、`LLM_ROUTE_STRONG_PROVIDER`、`LLM_ROUTE_LONG_PROVIDER` 以及对应 `*_MODEL` 环境变量配置。每次路由决策都会写入 Agent Trace，LLM 调用日志也会记录 `model_route` 字段。
+路由模型通过 `LLM_ROUTE_FAST_PROVIDER`、`LLM_ROUTE_STRONG_PROVIDER`、`LLM_ROUTE_LONG_PROVIDER` 以及对应 `*_MODEL` 配置。每次路由决策写入 `model_route` trace 事件，LLM 调用日志同时记录 `model_route` 字段。
 
-### 4.2 Agent Trace
+除全局路由外，各节点还可以单独指定模型，且带明确的回退链：
 
-每次 `/api/chat` 请求都会生成一个 `trace_id`，并写入 `agent_traces`。执行过程中会持续记录 `agent_events`：
+| 环境变量 | 回退链 |
+| --- | --- |
+| `SUPERVISOR_PROVIDER` / `SUPERVISOR_MODEL` | 默认 `deepseek` / `deepseek-v4-flash-vision-exp` |
+| `PLANNER_*` | → `SUPERVISOR_*` |
+| `VERIFIER_*` | → `SUPERVISOR_*` |
+| `ANSWER_GENERATOR_*` | → `VERIFIER_*` → `SUPERVISOR_*` |
+| `CASE_ANALYSIS_AGENT_*` | → 旧名 `FACT_AGENT_*` → `deepseek` |
+| `STATUTE_RETRIEVAL_AGENT_*` | → `deepseek` |
+| `CONTRACT_AGENT_*` | 默认 `deepseek` / `deepseek-v4-pro` |
 
-- `chat_start`：用户问题和文档上下文。
-- `graph_node`：LangGraph 节点输出。
-- `agent_tool_request`：模型决定调用哪些工具。
-- `tool_start` / `tool_end`：工具调用开始和结束。
-- `retrieval_collect`：本轮收集到的法条。
-- `citation_guard`：法条引用守门是否修改回答。
-- `final_answer`：最终回答摘要。
-- `chat_done`：请求完成耗时。
+### 10.3 Agent Trace
 
-这让项目具备了可观测 Agent 系统的关键能力：失败可定位、工具链可复盘、检索依据可追踪。
+每次 `/api/chat` 请求都会生成 `trace_id` 并写入 `agent_traces`，HTTP 中间件同时把它放进响应头 `X-Trace-ID`。执行过程持续写入 `agent_events`，Dashboard 时间线目前识别以下事件类型：
 
-### 4.3 后台 Dashboard
+`chat_start`、`supervisor_route`、`fact_check`、`contract_agent`、`case_analysis_agent`、`statute_retrieval_agent`、`legal_consult_agent`、`graph_node`、`model_route`、`case_retrieval`、`agent_tool_request`、`agent_report`、`tool_start`、`tool_end`、`retrieval_collect`、`vector_hits`、`bm25_hits`、`fused_hits`、`reranker_hits`、`rag_retrieval`、`cache_hit`、`cache_miss`、`citation_guard`、`llm_call`、`llm_error`、`llm_fallback`、`final_answer`、`chat_done`。
 
-后台页面位于 `/admin`，由 `/api/admin/*` 提供数据：
+未登记的事件类型（例如 `viking_context_retrieval`）仍会记录，只是显示原始类型名。这让项目具备可观测 Agent 系统的关键能力：失败可定位、工具链可复盘、检索依据可追踪。
 
-- `/api/admin/summary`
-- `/api/admin/traces`
-- `/api/admin/traces/{trace_id}`
-- `/api/admin/llm-calls`
-- `/api/admin/eval-runs`
+### 10.4 后台 Dashboard
 
-Dashboard 展示请求总数、成功率、平均耗时、LLM 调用数、失败调用数、fallback 次数、最近 trace、LLM 调用日志和评测历史。
+后台页面位于 `/admin`，由 8 个 `/api/admin/*` 接口提供数据：
 
-Dashboard 第一版还加入了 trace 时间线回放、模型路由统计、每日配额使用和评测趋势展示。时间线把一次回答拆成用户提交、模型路由、节点执行、工具调用、检索收集、引用校验和最终回答等步骤，更适合排查 Agent 行为和面试演示。
+| 接口 | 内容 |
+| --- | --- |
+| `GET /api/admin/summary` | 请求总数、成功率、平均耗时、LLM 调用与 fallback 统计 |
+| `GET /api/admin/traces` | 最近 trace 列表 |
+| `GET /api/admin/traces/{trace_id}` | 单条 trace 明细 |
+| `GET /api/admin/traces/{trace_id}/timeline` | trace 时间线回放 |
+| `GET /api/admin/llm-calls` | LLM 调用日志 |
+| `GET /api/admin/eval-runs` | 评测历史 |
+| `GET /api/admin/eval-trends` | 评测趋势 |
+| `GET /api/admin/quota` | 每日配额使用 |
 
-项目新增 `/metrics` Prometheus 文本指标接口，记录聊天请求数、响应缓存命中/未命中、聊天延迟、LLM 调用次数和 LLM 延迟。第一版使用进程内轻量指标实现，不引入额外依赖，适合本地演示和后续迁移到 OpenTelemetry/Prometheus。
-
-响应缓存由 `/Users/didi/Desktop/Legal/services/cache.py` 提供，默认只做精确问题缓存，避免法律问题因为语义相似但事实不同而误命中。缓存可通过 `RESPONSE_CACHE_ENABLED=false` 关闭，通过 `RESPONSE_CACHE_TTL_SECONDS` 调整过期时间。
+时间线把一次回答拆成用户提交、模型路由、节点执行、工具调用、检索收集、引用校验和最终回答等步骤，适合排查 Agent 行为。
 
 后台 API 支持可选 `ADMIN_API_KEY` 鉴权。未配置时保持本地开发便利；配置后访问 `/api/admin/*` 需要请求头 `X-Admin-Key`，适合把项目部署到局域网或演示环境时保护 trace、调用日志和评测数据。
 
-## 五、法律专业控制与评测闭环
+### 10.5 Prometheus 指标与缓存
 
-项目新增 `/Users/didi/Desktop/Legal/services/legal_analysis.py`，提供一组不依赖 LLM 的确定性法律场景分析能力：
+`/metrics` 导出 Prometheus 文本指标，记录聊天请求数、响应缓存命中/未命中、聊天延迟、LLM 调用次数和 LLM 延迟。当前使用 `services/metrics.py` 的进程内轻量实现，不引入额外依赖。
+
+回答缓存由 `services/cache/response.py` 提供，默认只做精确问题缓存，避免法律问题因为语义相似但事实不同而误命中。命中缓存时 `/api/chat` 直接回放答案，完全跳过 LangGraph。可通过 `RESPONSE_CACHE_ENABLED=false` 关闭，通过 `RESPONSE_CACHE_TTL_SECONDS` 调整过期时间。
+
+日志侧由 `infrastructure/sanitize.py` 的 `RedactingFormatter` 统一脱敏，请求日志只记录方法、路径、状态码和耗时，绝不记录请求体、提示词或上传文档正文。
+
+## 十一、法律专业控制与评测闭环
+
+### 11.1 确定性法律分析服务
+
+`services/legal_analysis.py` 提供一组不依赖 LLM 的确定性能力，被 `planner`、`supervisor`、`answer` 节点与 `case_analysis_agent` 共同复用：
 
 - 法律意图分类：识别劳动、租赁、债务、侵权、合同、婚姻家事等场景。
 - 事实完整性检查：判断是否缺少主体、时间、金额、证据、合同约定等关键事实。
@@ -177,444 +606,29 @@ Dashboard 第一版还加入了 trace 时间线回放、模型路由统计、每
 - 证据清单：按场景生成合同、转账、聊天记录、报警回执、医院诊断等证据建议。
 - 回答评分：检查回答是否包含事实分析、法条依据、风险提示、行动建议，以及是否过度承诺。
 
-LangGraph 中新增了 `fact_check` 前置节点。对于“房东不退押金”“公司辞退我怎么办”这类事实明显不足的短法律问题，系统会先追问 1-3 个关键事实，而不是直接检索和下结论。这个节点让“事实不足先追问”的要求从 prompt 约束升级成了图结构约束。
+早期版本曾把"事实不足先追问"实现为图上的 `fact_check` 前置节点。当前拓扑已经没有这个节点：判断能力下沉到 `services/legal_analysis.py`，由 Planner 决定是否需要追问、由 Verifier 决定证据是否足够，`fact_check` 只作为 Dashboard 时间线的事件类型保留。
 
-项目还新增 `/Users/didi/Desktop/Legal/services/case_retrieval.py` 作为相似法律场景库。它不把结果伪装成真实裁判文书，而是提供“类似争议通常如何分析”的场景参考，例如拖欠工资、租房押金、微信借款、校园霸凌、合同违约、离婚抚养权等。Agent 会把相似场景注入系统提示词，并在 trace 中记录 `case_retrieval` 事件。
+### 11.2 相似场景库
 
-合同审查方面，项目新增 `/Users/didi/Desktop/Legal/services/contract_report.py` 和 `/api/reports/contract`。用户上传合同后，可以基于 `doc_id` 生成 Markdown 审查报告，报告包含风险条款、修改建议、补充材料清单和免责声明。报告文件保存在 `data/reports/`，可通过 `/api/reports/{report_id}` 下载。
+`services/case_retrieval.py` 是相似法律场景库。它不把结果伪装成真实裁判文书，而是提供"类似争议通常如何分析"的场景参考，例如拖欠工资、租房押金、微信借款、校园霸凌、合同违约、离婚抚养权等。命中结果会注入提示词，并在 trace 中记录 `case_retrieval` 事件。真实裁判文书由 `search_case_tool` 走得理开放平台获取，两者不混用。
 
-对于长合同或后续批量任务，项目新增进程内异步任务队列 `/Users/didi/Desktop/Legal/services/task_queue.py`，并提供 `/api/reports/contract/tasks`、`/api/tasks`、`/api/tasks/{task_id}`。第一版任务状态保存在内存中，适合本地演示；如果要生产化，可替换为 SQLite 持久任务表、RQ 或 Celery。
+### 11.3 合同审查报告与异步任务
 
-评测脚本 `/Users/didi/Desktop/Legal/eval/run_eval.py` 保留 JSON 文件输出，同时把评测指标写入 `eval_runs` 表，便于在 Dashboard 中查看历史趋势。
+`services/contract_agent/` 实现确定性合同审查工作流（分类 → checklist → 打分），`services/contract_report.py` 负责生成 Markdown 审查报告。用户上传合同后可基于 `doc_id` 调用 `/api/reports/contract` 生成报告，内容包含风险条款、修改建议、补充材料清单和免责声明；报告文件保存在 `data/reports/`，通过 `/api/reports/{report_id}` 下载。
 
-## 六、系统总架构
+长合同或批量任务走 `services/task_queue.py` 提供的进程内异步队列，对应 `/api/reports/contract/tasks`、`/api/tasks`、`/api/tasks/{task_id}`。当前任务状态保存在内存中，适合本地演示；生产化需要替换为 PostgreSQL 持久任务表、RQ 或 Celery。
 
-```mermaid
-flowchart TB
-  User["用户"] --> Browser["前端聊天页 static/"]
-  Browser -->|POST /api/chat SSE| FastAPI["FastAPI 应用 main.py"]
-  Browser -->|POST /api/upload| UploadAPI["上传 API"]
-  Browser -->|GET /api/threads| ThreadAPI["会话 API"]
+### 11.4 视频证据提取
 
-  FastAPI --> Graph["LangGraph Agent"]
-  Graph --> MemoryNode["记忆加载节点"]
-  Graph --> DocNode["文档注入节点"]
-  Graph --> AgentNode["LLM Agent 节点"]
-  Graph --> ToolNode["LangGraph ToolNode"]
-  Graph --> CollectLaws["法条收集节点"]
+`services/evidence_video.py` 支持上传视频提取关键帧与摘要，对应 `/api/evidence/video/extract`、`/api/evidence/{id}`、`/api/evidence/{id}/files/{relative_path}`。提取结果可以通过 `evidence_id` 注入对话上下文，与文档上传走同一条 `inject_doc` 路径。
 
-  AgentNode --> LLM["主 LLM Provider"]
-  ToolNode --> AgentTools["Agent 工具代理"]
-  AgentTools --> MCPClient["MCP Client stdio"]
-  MCPClient --> MCPServer["MCP Server 子进程"]
+### 11.5 评测写回
 
-  MCPServer --> LegalSearch["legal_search"]
-  MCPServer --> Compare["law_compare"]
-  MCPServer --> Risk["risk_assess"]
-  MCPServer --> Review["contract_review"]
-  MCPServer --> Limitations["statute_of_limitations"]
-  MCPServer --> Draft["legal_document_draft"]
-  LegalAgent --> Delilegal["Delilegal laws / cases"]
+`eval/run_eval.py` 保留 JSON 文件输出，同时把评测指标写入 `eval_runs` 表，便于在 Dashboard 中查看历史趋势。`eval/context_ab.py` 与 `eval/openviking_ab.py` 分别用于上下文策略和 OpenViking 上下文层的 A/B 实验。
 
-  LegalSearch --> Retriever["HybridRetriever"]
-  Retriever --> VectorDB["ChromaDB law_chunks"]
-  Retriever --> BM25["BM25 关键词索引"]
-  Retriever --> Reranker["Cross Encoder Reranker"]
+## 十二、提示词与输出治理
 
-  MemoryNode --> MemorySQLite["SQLite 摘要/画像/消息归档"]
-  MemoryNode --> MemoryVector["ChromaDB memory"]
-  UploadAPI --> DocStore["SQLite 文档库"]
-```
-
-这个架构的核心是：FastAPI 只负责 Web/API 生命周期，LangGraph 负责智能体流程，MCP Server 负责工具能力，RAG 检索器负责法条检索，ChromaDB 和 SQLite 分别承担向量数据和结构化数据存储。
-
-## 七、目录与模块划分
-
-当前仓库的主要目录如下：
-
-```text
-/Users/didi/Desktop/Legal
-├── main.py                  # FastAPI 入口和应用生命周期
-├── run_mcp.py               # MCP Server 启动入口
-├── api/                     # HTTP API
-├── agent/                   # LangGraph Agent、状态、节点、提示词、工具代理
-├── mcp_server/              # MCP Server 和工具实现
-├── services/                # LLM、RAG、记忆、向量库、文档解析等服务层
-├── static/                  # 前端聊天页
-├── data/laws/               # 法律文本语料
-├── data/chroma_db/          # ChromaDB 持久化目录
-├── models/                  # 本地 embedding、reranker、Qwen 模型
-├── eval/                    # RAG 评测体系
-├── docs/                    # VitePress 技术文档站
-└── tests/                   # 测试代码
-```
-
-### 5.1 API 层
-
-| 文件 | 职责 |
-| --- | --- |
-| `/Users/didi/Desktop/Legal/api/chat.py` | 聊天接口，负责 SSE 流式输出、调用 LangGraph、会话标题生成、后台记忆提取 |
-| `/Users/didi/Desktop/Legal/api/upload.py` | 文件上传，解析 PDF/DOCX/TXT 并保存文档内容 |
-| `/Users/didi/Desktop/Legal/api/threads.py` | 会话列表、历史消息读取、会话删除 |
-
-### 5.2 Agent 层
-
-| 文件 | 职责 |
-| --- | --- |
-| `/Users/didi/Desktop/Legal/agent/graph.py` | 定义 LangGraph 状态图 |
-| `/Users/didi/Desktop/Legal/agent/state.py` | 定义 AgentState |
-| `/Users/didi/Desktop/Legal/agent/nodes.py` | 记忆加载、文档注入、LLM 调用、法条收集、循环控制 |
-| `/Users/didi/Desktop/Legal/agent/prompts.py` | 主系统提示词和记忆上下文模板 |
-| `/Users/didi/Desktop/Legal/agent/tools/` | Agent 侧工具代理，异步转发到 MCP Client |
-
-### 5.3 MCP 工具层
-
-| 文件 | 职责 |
-| --- | --- |
-| `/Users/didi/Desktop/Legal/mcp_server/server.py` | 创建 FastMCP 实例并注册工具模块 |
-| `/Users/didi/Desktop/Legal/mcp_server/startup.py` | MCP Server 启动时初始化 RAG |
-| `/Users/didi/Desktop/Legal/mcp_server/tools/search.py` | 本地法律检索工具 |
-| `services/delilegal/` | 得理法规与类案统一 Service Layer |
-| `/Users/didi/Desktop/Legal/mcp_server/tools/compare.py` | 法律对比工具 |
-| `/Users/didi/Desktop/Legal/mcp_server/tools/risk.py` | 法律风险评估工具 |
-| `/Users/didi/Desktop/Legal/mcp_server/tools/review.py` | 合同审查工具 |
-| `/Users/didi/Desktop/Legal/mcp_server/tools/limitations.py` | 诉讼时效计算工具 |
-| `/Users/didi/Desktop/Legal/mcp_server/tools/draft.py` | 法律文书生成工具 |
-
-### 5.4 服务层
-
-| 模块 | 职责 |
-| --- | --- |
-| `/Users/didi/Desktop/Legal/services/llm.py` | 多 LLM Provider 抽象 |
-| `/Users/didi/Desktop/Legal/services/mcp_client.py` | 通过 stdio 连接 MCP Server 子进程 |
-| `/Users/didi/Desktop/Legal/services/retriever/` | 语义检索、BM25、HyDE、RRF、Reranker |
-| `/Users/didi/Desktop/Legal/services/vectorstore/` | ChromaDB 法条向量存储 |
-| `/Users/didi/Desktop/Legal/services/indexer/` | 法条分块、向量索引构建 |
-| `/Users/didi/Desktop/Legal/services/memory.py` | SQLite 记忆结构化存储 |
-| `/Users/didi/Desktop/Legal/services/memory_store.py` | ChromaDB 长期记忆向量存储 |
-| `/Users/didi/Desktop/Legal/services/memory_extractor.py` | 对话结束后异步提取摘要、长期记忆、用户画像 |
-| `/Users/didi/Desktop/Legal/services/doc_parser.py` | 上传文档解析 |
-| `/Users/didi/Desktop/Legal/services/checkpoint.py` | LangGraph checkpoint 与元数据连接 |
-
-## 八、Supervisor 多智能体执行流程
-
-LangGraph 图已升级为 Supervisor 多智能体范式：
-
-```mermaid
-flowchart LR
-  Start["START"] --> Memory["memory_node"]
-  Memory --> InjectDoc["inject_doc_node"]
-  InjectDoc --> Supervisor["supervisor_agent"]
-  Supervisor -->|事实不足| Fact["fact_agent"]
-  Supervisor -->|合同/协议审查| Contract["contract_agent"]
-  Supervisor -->|普通法律咨询| Consult["legal_consult_agent"]
-  Fact --> End1["END"]
-  Contract --> End2["END"]
-  Consult --> Decision{"是否调用工具?"}
-  Decision -->|是| Tools["MCP Tools"]
-  Tools --> Collect["collect_laws"]
-  Collect --> Consult
-  Decision -->|否| End3["END"]
-```
-
-### 8.1 Supervisor Agent
-
-`supervisor_agent` 负责选择业务 Agent。它不直接生成法律建议，而是输出路由决策：
-
-- `fact_agent`：用户问题明显缺少关键事实，需要先追问。
-- `contract_agent`：用户上传合同/协议，或明确要求审查合同。
-- `legal_consult_agent`：普通法律咨询、概念解释、流程问题和事实相对充分的问题。
-
-这样设计避免“为了多智能体而多智能体”。法条检索仍是 RAG 服务，引用校验仍是 guardrail，合同报告仍是报告服务。
-
-当前中控智能体是真正的大模型 Agent，默认使用 `SUPERVISOR_PROVIDER=zhipu` 和 `SUPERVISOR_MODEL=GLM-4.6V`。它只输出结构化 JSON 路由结果，因此 token 消耗较低；如果模型输出异常或 API 失败，系统会退回规则路由，保证主流程可用。
-
-### 8.2 Fact Agent
-
-`fact_agent` 只负责事实审查和追问。它适合处理“房东不退押金怎么办”“公司辞退我合法吗”这类事实不足的问题，先追问合同、金额、时间、证据等核心事实，再进入下一轮分析。
-
-事实审查智能体默认使用 `FACT_AGENT_MODEL=GLM-4.6V`。它只生成 1-3 个追问问题，不引用法条、不下结论，适合用轻量模型控制成本。
-
-### 8.3 Contract Agent
-
-`contract_agent` 负责合同/协议场景。没有文档时提示用户上传；有文档时生成合同审查报告入口，复用合同报告服务输出风险条款、修改建议和补充材料清单。
-
-合同审查智能体默认使用 `CONTRACT_AGENT_MODEL=glm-4.7`。结构化报告仍由规则服务生成，大模型负责摘要和用户可读说明。
-
-### 8.4 Legal Consult Agent
-
-`legal_consult_agent` 复用原有 ReAct 能力，负责普通法律咨询。它可以调用 MCP 工具和 RAG 检索服务，最终回答仍经过引用守门、回答评分和 Trace 记录。
-
-法律咨询智能体默认通过动态模型路由使用智谱 `glm-4.7`，因为它需要绑定工具并生成最终法律解决方案。当前推荐配置是：`LLM_ROUTE_FAST_MODEL=glm-4.7`、`LLM_ROUTE_STRONG_MODEL=glm-4.7`、`LLM_ROUTE_LONG_MODEL=glm-4.7`。如果后续要进一步省成本，可以把低风险 fast 路由换成更便宜且支持工具调用的模型。
-
-## 九、法律咨询智能体的 ReAct 工具循环
-
-`legal_consult_agent` 内部保留原有 ReAct 工具循环，主要流程如下：
-
-```mermaid
-flowchart LR
-  Start["START"] --> Memory["memory_node"]
-  Memory --> InjectDoc["inject_doc_node"]
-  InjectDoc --> Supervisor["supervisor_agent"]
-  Supervisor --> Consult["legal_consult_agent"]
-  Consult --> Decision{"是否有工具调用?"}
-  Decision -->|否| End["END"]
-  Decision -->|是且未超过上限| Tools["ToolNode"]
-  Decision -->|超过 MAX_TOOL_CALLS| Supervisor
-  Tools --> Collect["collect_retrieved_laws"]
-  Collect --> Consult
-```
-
-### 9.1 状态结构
-
-AgentState 当前包含：
-
-| 字段 | 含义 |
-| --- | --- |
-| `messages` | LangChain 消息列表 |
-| `uploaded_doc_text` | 上传文档内容 |
-| `uploaded_doc_name` | 上传文档名称 |
-| `retrieved_laws` | 本轮工具返回的法条 |
-| `thread_id` | 当前会话 ID |
-| `supervisor_route` | 中控智能体选择的业务 Agent |
-| `supervisor_reason` | 中控智能体路由原因 |
-| `memory_profile` | 用户画像 |
-| `memory_longterm` | 长期记忆检索结果 |
-| `memory_summary` | 历史摘要 |
-| `tool_call_count` | 工具调用轮次计数 |
-
-### 9.2 最大循环次数
-
-`MAX_TOOL_CALLS` 默认值为 5。每个 Specialist 任务达到上限后仍可基于已有 Observation 形成报告；若继续请求工具，则记录失败原因并返回 Supervisor，避免 ReAct 循环失控。
-
-相关代码：
-
-- `/Users/didi/Desktop/Legal/agent/nodes.py`
-
-### 9.3 最终回答的法条出处
-
-当最终回答没有新的工具调用，且本轮存在工具结果时，Agent 会：
-
-1. 从状态中的 `retrieved_laws` 读取本轮检索到的法条。
-2. 用 `_guard_law_citations()` 删除未被检索结果支撑的明确法条引用。
-3. 用 `_format_law_sources()` 在回答末尾追加简洁出处列表。
-
-这让输出更可追溯，但也带来一个需要持续优化的问题：如果检索结果相关性不足，附上的法条出处也会影响用户信任。因此 RAG 评测和阈值过滤非常关键。
-
-## 十、RAG 检索架构
-
-当前项目的 RAG 不是简单向量检索，而是混合检索和精排流程。
-
-```mermaid
-flowchart TB
-  Q["用户原始问题"] --> Normalize["条号归一化 第10条 -> 第十条"]
-  Normalize --> Enhance{"HYDE_ENABLED?"}
-
-  Enhance -->|是| Rewrite["问题重写"]
-  Enhance -->|是| Hyde["HyDE 假设文档生成"]
-  Enhance -->|否| Raw1["原始 Query"]
-
-  Rewrite --> BM25Rewrite["BM25 关键词检索"]
-  Normalize --> BM25Raw["原始 Query BM25 兜底"]
-
-  Hyde --> SemanticHyde["语义向量检索"]
-  Normalize --> SemanticRaw["原始 Query 语义兜底"]
-
-  BM25Rewrite --> MergeKW["关键词结果合并去重"]
-  BM25Raw --> MergeKW
-  SemanticHyde --> MergeSemantic["语义结果合并去重"]
-  SemanticRaw --> MergeSemantic
-
-  MergeKW --> RRF["RRF 融合"]
-  MergeSemantic --> RRF
-  RRF --> Rerank["Reranker 使用原始 Query 精排"]
-  Rerank --> Threshold["分数阈值过滤"]
-  Threshold --> Results["返回 Top K 法条"]
-```
-
-### 7.1 法条分块
-
-法条分块由 `/Users/didi/Desktop/Legal/services/indexer/chunker.py` 实现：
-
-- 按“第X条”切分，每个条款是一个 LawChunk。
-- 支持“第X条之一”等增补条款。
-- 自动提取编、分编、章、节层级作为 metadata。
-- `chunk_id` 格式为 `{law_name}_{article_no}`，例如 `民法典_第七百一十四条`。
-
-当前 `data/laws/` 中有 52 个法律文本文件。
-
-### 7.2 向量检索
-
-法条向量存储由 `/Users/didi/Desktop/Legal/services/vectorstore/chroma_store.py` 实现：
-
-- 使用 ChromaDB PersistentClient。
-- collection 名称为 `law_chunks`。
-- 使用 cosine 距离。
-- 持久化路径默认是 `data/chroma_db`。
-- metadata 包含 `law_name`、`hierarchy`、`article_no`。
-
-### 7.3 查询增强
-
-查询增强由 `/Users/didi/Desktop/Legal/services/retriever/hyde.py` 实现，分为两个独立能力：
-
-| 能力 | 用途 | 输入 | 输出 | 服务对象 |
-| --- | --- | --- | --- | --- |
-| 问题重写 | 将口语问题改写为法律检索 query | 原始问题 | 精炼法律关键词 | BM25 |
-| HyDE | 生成假设性法律文本 | 原始问题 | 假设法条/法律文档 | 语义检索 |
-
-当前支持两种 HyDE 后端：
-
-- OpenAI-compatible 方式，默认通过 Ollama `qwen2.5:1.5b`。
-- HuggingFace + LoRA 方式，使用本地 Qwen2.5 模型和 HyDE LoRA 适配器。
-
-### 7.4 RRF 融合
-
-语义检索和关键词检索的候选结果通过 RRF 融合。RRF 不直接相信某一路检索的分数，而是根据排名位置进行融合，适合把不同分数体系的结果合在一起。
-
-配置项：
-
-| 环境变量 | 默认值 | 作用 |
-| --- | --- | --- |
-| `RRF_K` | `60` | RRF 排名平滑参数 |
-| `RETRIEVAL_VECTOR_TOP_K` | `10` | 向量召回候选数量 |
-| `RETRIEVAL_BM25_TOP_K` | `10` | BM25 召回候选数量 |
-| `RETRIEVAL_FINAL_TOP_K` | `5` | 精排最终返回数量 |
-| `RERANKER_SCORE_THRESHOLD` | `0.3` | 精排后过滤阈值 |
-
-### 7.5 Reranker 精排
-
-Reranker 使用原始用户问题作为判断依据，对 RRF 候选重新排序。这一点很重要：重写 query 和 HyDE 是为了提高召回，但最终相关性仍然回到用户原始问题。
-
-### 7.6 无结果处理
-
-`legal_search` 如果没有命中相关法条，会返回：
-
-```json
-{
-  "status": "no_relevant_result",
-  "query": "...",
-  "results": [],
-  "hint": "本地法库未命中..."
-}
-```
-
-Agent 应根据问题类型决定：
-
-1. 如果是事实不足，追问用户。
-2. 如果事实足够但本地库未覆盖，调用得理法规或类案检索工具。
-3. 如果可信数据源仍无明确结果，返回 `evidence_insufficient=true`，不要编造。
-
-## 十一、MCP 工具体系
-
-当前 MCP Server 使用 FastMCP 创建，主进程通过 stdio 连接 MCP Server 子进程。
-
-```mermaid
-sequenceDiagram
-  participant Agent as LangGraph Agent
-  participant ToolProxy as Agent Tool Proxy
-  participant Client as MCP Client
-  participant Server as MCP Server
-  participant Tool as MCP Tool
-
-  Agent->>ToolProxy: 调用 legal_search_tool(query)
-  ToolProxy->>Client: call_tool("legal_search", args)
-  Client->>Server: stdio JSON-RPC
-  Server->>Tool: 执行 legal_search
-  Tool-->>Server: JSON 字符串结果
-  Server-->>Client: MCP ToolResult
-  Client-->>ToolProxy: 文本结果
-  ToolProxy-->>Agent: ToolMessage
-```
-
-### 8.1 MCP 工具列表
-
-| 工具名 | 作用 | 当前定位 |
-| --- | --- | --- |
-| `legal_search` | 本地法律条文检索 | RAG 核心工具 |
-| `law_compare` | 两部法律或条款对比 | 辅助分析 |
-| `risk_assess` | 法律风险评估 | 面向用户场景的风险总结 |
-| `contract_review` | 合同审查 | 上传文档或合同场景 |
-| `statute_of_limitations` | 诉讼时效计算 | 时效类问题 |
-| `legal_document_draft` | 法律文书生成 | 起草类能力 |
-| `search_law_tool` / `search_case_tool` | 得理法规与类案检索 | 通过统一 Service Layer 调用 |
-
-### 8.2 为什么不是普通函数
-
-普通函数只能在当前代码进程里被调用；MCP 工具是通过协议暴露出来的能力。对 Agent 来说，工具有名称、参数 schema、描述、调用协议和返回结果。这样模型可以基于工具描述选择是否调用，工程上也可以把工具服务独立出来。
-
-本项目的 Agent 工具代理位于 `/Users/didi/Desktop/Legal/agent/tools/`，它们不直接实现业务逻辑，而是调用 `/Users/didi/Desktop/Legal/services/mcp_client.py` 转发到 MCP Server。
-
-## 十二、记忆系统
-
-项目实现了四层记忆结构，不只是简单保留聊天历史。
-
-```mermaid
-flowchart TB
-  Chat["本轮对话"] --> Archive["SQLite messages_archive 完整归档"]
-  Archive --> Window["滑动窗口 最近 8 条消息"]
-  Archive --> Summary{"超过窗口或 token 上限?"}
-  Summary -->|是| SummaryDB["SQLite summaries 增量摘要"]
-  Chat --> Extract["对话结束后后台记忆提取"]
-  Extract --> LongTerm["ChromaDB memory 长期记忆"]
-  Extract --> Profile["SQLite user_profiles 用户画像"]
-
-  Window --> Prompt["注入 Prompt"]
-  SummaryDB --> Prompt
-  LongTerm --> Prompt
-  Profile --> Prompt
-```
-
-### 9.1 短期记忆
-
-短期记忆由最近消息滑动窗口构成：
-
-- `SLIDING_WINDOW_SIZE = 8`
-- `MAX_WINDOW_TOKENS = 3000`
-- 中文 token 估算使用 `CHARS_PER_TOKEN = 1.5`
-
-当历史超过窗口或 token 上限时，系统会对溢出部分生成增量摘要。
-
-### 9.2 长期记忆
-
-长期记忆由 `/Users/didi/Desktop/Legal/services/memory_store.py` 实现：
-
-- 使用 ChromaDB 的 `memory` collection。
-- 与法条库共用 ChromaDB 持久化目录，但使用独立 collection。
-- 记忆类型包括 `semantic`、`episodic`、`procedural`。
-- 存储粒度是“一次完整交互”或“一个独立知识点”。
-
-### 9.3 新鲜度权重
-
-长期记忆检索时会结合语义相似度和时间新鲜度：
-
-| 参数 | 当前值 | 含义 |
-| --- | --- | --- |
-| `SEMANTIC_WEIGHT` | `0.7` | 语义相似度权重 |
-| `FRESHNESS_WEIGHT` | `0.3` | 新鲜度权重 |
-| `DECAY_RATE` | `0.05` | 时间衰减系数 |
-
-最终得分约等于：
-
-```text
-final_score = 0.7 * semantic_score + 0.3 * freshness_score
-```
-
-### 9.4 后台提取
-
-记忆提取在聊天流结束后通过 FastAPI `BackgroundTasks` 异步执行，不阻塞用户当前回答。
-
-提取内容包括：
-
-1. 完整消息归档。
-2. 历史摘要更新。
-3. 长期记忆提取并写入 ChromaDB。
-4. 用户画像提取并写入 SQLite。
-
-## 十三、提示词与输出治理
-
-主提示词位于 `/Users/didi/Desktop/Legal/agent/prompts.py`。
-
-当前提示词的核心约束是：
+主提示词位于 `agent/prompts.py`。核心约束是：
 
 - 先判断日常问题还是法律问题。
 - 日常问题直接简短回答。
@@ -625,45 +639,53 @@ final_score = 0.7 * semantic_score + 0.3 * freshness_score
 - 不展示内部推理过程。
 - 对刑事、重大财产、婚姻财产、公司股权等事项提醒咨询执业律师。
 
-### 10.1 当前输出治理链路
+### 12.1 输出治理链路
 
 ```mermaid
 flowchart LR
-  Prompt["系统提示词约束"] --> LLM["LLM 生成回答"]
-  LLM --> Guard["法条引用校验"]
-  Guard --> Sources["追加本轮检索法条出处"]
-  Sources --> SSE["SSE 流式返回前端"]
+  Prompt["系统提示词约束"] --> Plan["Planner 生成计划"]
+  Plan --> Spec["Specialist 检索并产出报告"]
+  Spec --> Verify["result_verifier<br/>证据与引用校验"]
+  Verify --> Answer["answer_generator<br/>生成回答与引用"]
+  Answer --> SSE["SSE 流式返回前端"]
 ```
 
-### 10.2 当前需要注意的问题
+与早期"生成后再守门"的做法相比，当前链路把校验放在生成最终回答之前：Verifier 先判断证据是否支撑主张，不通过时可以触发一次 replan，而不是事后删引用。
 
-前端和 API 仍保留 `thought` 事件渲染逻辑，用于显示模型工具调用前的中间内容。用户体验上，如果希望“不要显示思维链/中间思考”，后续应把这类事件改成更克制的状态提示，例如“正在判断是否需要检索”“正在检索相关法条”，而不是展示模型自然语言中间内容。
+### 12.2 当前需要注意的问题
+
+前端和 API 仍保留 `thought` 事件渲染逻辑，用于显示模型工具调用前的中间内容。用户体验上，如果希望"不要显示思维链/中间思考"，后续应把这类事件改成更克制的状态提示，例如"正在判断是否需要检索""正在检索相关法条"，而不是展示模型自然语言中间内容。
 
 相关代码：
 
-- `/Users/didi/Desktop/Legal/api/chat.py`
-- `/Users/didi/Desktop/Legal/static/app.js`
+- `api/chat.py`
+- `static/app.js`
 
-## 十四、API 文档概览
+## 十三、API 文档概览
 
-### 11.1 `GET /`
+### 13.1 页面与健康检查
 
-返回前端聊天页 `/static/index.html`。
+| 接口 | 作用 |
+| --- | --- |
+| `GET /` | 返回前端聊天页 `static/index.html` |
+| `GET /admin` | 返回后台看板页 `static/admin.html` |
+| `GET /api/health` | 服务健康状态 |
+| `GET /metrics` | Prometheus 文本指标 |
 
-### 11.2 `GET /api/health`
-
-返回服务健康状态和当前 LLM Provider。
-
-示例：
+`/api/health` 示例：
 
 ```json
 {
   "status": "ok",
-  "provider": "zhipu"
+  "provider": "deepseek",
+  "database": "ok",
+  "redis": "enabled"
 }
 ```
 
-### 11.3 `POST /api/chat`
+`status` 只由 PostgreSQL 决定：数据库不可用时报 `degraded`。Redis 降级只体现在 `redis` 字段，不影响整体状态。
+
+### 13.2 `POST /api/chat`
 
 聊天接口，使用 SSE 流式返回。
 
@@ -673,45 +695,68 @@ flowchart LR
 {
   "thread_id": "会话 ID",
   "message": "用户问题",
-  "doc_id": "可选上传文档 ID"
+  "doc_id": "可选上传文档 ID",
+  "evidence_id": "可选视频证据 ID"
 }
 ```
+
+进入图之前依次执行：突发限流 → 每日配额 → 幂等标记 → trace 与会话元数据 → 文档/证据装载 → checkpoint 或历史消息回放 → 回答缓存查询（命中则完全跳过 Graph）→ `graph.astream(state_input, config, stream_mode="updates")`。
 
 主要 SSE 事件：
 
 | 事件 | 含义 |
 | --- | --- |
+| `thought` | 当前代码中的中间内容事件 |
+| `context_status` | 上下文压缩与预算状态 |
 | `tool_start` | 工具调用开始 |
 | `tool_end` | 工具调用结束 |
-| `thought` | 当前代码中的中间内容事件 |
 | `token` | 最终回答 token 片段 |
 | `error` | 错误 |
 | `done` | 流结束 |
 
-### 11.4 `POST /api/upload`
+### 13.3 `POST /api/upload`
 
 上传 PDF、DOCX 或 TXT 文件，解析后保存文档内容。后续聊天可以通过 `doc_id` 将文档内容注入上下文。
 
-返回字段包括：
+返回字段：`doc_id`、`filename`、`char_count`、`truncated`。
 
-- `doc_id`
-- `filename`
-- `char_count`
-- `truncated`
-
-### 11.5 会话接口
+### 13.4 会话接口
 
 | 接口 | 作用 |
 | --- | --- |
 | `GET /api/threads` | 获取会话列表 |
 | `GET /api/threads/{thread_id}/history` | 获取会话历史 |
+| `GET /api/threads/{thread_id}/context` | 查看上下文预算与压缩状态 |
+| `POST /api/threads/{thread_id}/compact` | 手动触发上下文压缩 |
 | `DELETE /api/threads/{thread_id}` | 删除会话 |
 
-## 十五、前端交互
+### 13.5 报告与任务接口
 
-前端位于 `/Users/didi/Desktop/Legal/static/`，当前是一个轻量级 Vanilla JS 单页应用。
+| 接口 | 作用 |
+| --- | --- |
+| `POST /api/reports/contract` | 同步生成合同审查报告 |
+| `POST /api/reports/contract/tasks` | 提交异步审查任务 |
+| `GET /api/reports/{report_id}` | 下载报告 |
+| `GET /api/tasks` | 任务列表 |
+| `GET /api/tasks/{task_id}` | 任务状态 |
 
-### 12.1 页面结构
+### 13.6 证据接口
+
+| 接口 | 作用 |
+| --- | --- |
+| `POST /api/evidence/video/extract` | 上传视频并提取关键帧与摘要 |
+| `GET /api/evidence/{evidence_id}` | 查看证据处理报告 |
+| `GET /api/evidence/{evidence_id}/files/{relative_path}` | 下载证据产物 |
+
+### 13.7 后台接口
+
+8 个 `/api/admin/*` 接口见 §10.4，可选 `X-Admin-Key` 鉴权。
+
+## 十四、前端交互
+
+前端位于 `static/`，是一个轻量级 Vanilla JS 单页应用，由 FastAPI 直接托管。
+
+### 14.1 页面结构
 
 | 区域 | 功能 |
 | --- | --- |
@@ -720,20 +765,21 @@ flowchart LR
 | 消息区 | 用户消息、助手消息、工具卡片、错误提示 |
 | 输入区 | 文档上传、文本输入、发送按钮 |
 
-### 12.2 SSE 渲染流程
+### 14.2 SSE 渲染流程
 
 ```mermaid
 sequenceDiagram
   participant User as 用户
-  participant UI as 前端 static/app.js
+  participant UI as static/app.js
   participant API as POST /api/chat
   participant Graph as LangGraph
-  participant Tool as MCP Tool
+  participant Svc as services/ 检索与工具
 
   User->>UI: 输入问题并发送
   UI->>API: fetch /api/chat
-  API->>Graph: astream updates
-  Graph->>Tool: 如需要则调用工具
+  API->>Graph: astream(stream_mode="updates")
+  Graph->>Svc: 进程内直调工具
+  API-->>UI: context_status
   API-->>UI: tool_start
   API-->>UI: tool_end
   API-->>UI: token token token
@@ -741,34 +787,37 @@ sequenceDiagram
   UI->>UI: 渲染最终回答
 ```
 
-### 12.3 当前前端优点
+### 14.3 当前前端优点
 
 - 无复杂构建链，FastAPI 可直接托管。
 - 支持流式输出，用户不用等待完整回答。
 - 支持上传文档并显示文档 chip。
 - 支持多会话管理。
 
-### 12.4 当前前端改进点
+### 14.4 当前前端改进点
 
 - 去掉或改造 `thought` 事件展示，避免 AI 味过重。
-- 工具卡片可以更克制，只显示“检索中/已检索到法条”，不要把大段原文直接打断回答。
+- 工具卡片可以更克制，只显示"检索中/已检索到法条"，不要把大段原文直接打断回答。
 - 移动端布局需要加强。
 - 法条出处可以做成可折叠引用区，减少回答末尾压迫感。
 
-## 十六、评测体系
+## 十五、评测体系
 
-项目已经建立 `eval/` 目录，用于评估 RAG 质量。
+`eval/` 目录用于评估检索与上下文质量：
 
 ```text
 eval/
+├── README.md
 ├── dataset.json
 ├── generate_prompt.md
 ├── metrics.py
-├── run_eval.py
+├── run_eval.py            # 检索评测
+├── context_ab.py          # 上下文策略 A/B
+├── openviking_ab.py       # OpenViking 上下文层 A/B
 └── results/
 ```
 
-### 13.1 数据集格式
+### 15.1 数据集格式
 
 每条评测数据包括：
 
@@ -782,9 +831,9 @@ eval/
 }
 ```
 
-### 13.2 检索指标
+### 15.2 检索指标
 
-`/Users/didi/Desktop/Legal/eval/metrics.py` 当前实现了：
+`eval/metrics.py` 当前实现了：
 
 | 指标 | 含义 |
 | --- | --- |
@@ -793,9 +842,9 @@ eval/
 | Precision | 返回结果里相关法条比例 |
 | Recall | 标准法条中被召回的比例 |
 
-### 13.3 最新读取到的检索结果
+### 15.3 最近一次检索评测快照
 
-当前报告读取到 `/Users/didi/Desktop/Legal/eval/results/eval_retrieval_20260603_192734.json`：
+`eval/results/` 中最新的检索评测结果为 `eval_retrieval_20260603_192734.json`：
 
 | 指标 | 数值 |
 | --- | --- |
@@ -805,9 +854,9 @@ eval/
 | `precision` | `0.1408` |
 | `recall` | `0.5717` |
 
-这说明系统已经比早期结果有所提升，但对法律助手而言仍需继续优化。尤其是 precision 较低，代表返回的 Top K 中有不少不相关法条；hit_rate 也还没有达到可以放心使用的水平。
+这是一次历史快照，记录的是 2026-06-03 的检索表现，不代表当前分支重跑后的结果。它说明系统已经比早期结果有所提升，但对法律助手而言仍需继续优化：precision 较低，代表返回的 Top K 中有不少不相关法条；hit_rate 也还没有达到可以放心使用的水平。
 
-### 13.4 下一阶段评测建议
+### 15.4 下一阶段评测建议
 
 建议把评测分为三层：
 
@@ -817,89 +866,108 @@ eval/
 
 对法律助手来说，仅命中法条还不够，还要确保回答没有过度推断、没有引用无关法条、事实不足时会追问。
 
-## 十七、部署与运行
+## 十六、部署与运行
 
-### 14.1 本地启动依赖
+### 16.1 本地启动依赖
 
-本地运行通常需要：
+| 依赖 | 是否必需 | 说明 |
+| --- | --- | --- |
+| Python 3.11+ | 必需 | 见 `requirements.txt` |
+| PostgreSQL 17+ | 必需 | 缺失时应用直接拒绝启动 |
+| Qdrant | 强烈建议 | 缺失时检索退化为纯 BM25，长期记忆不可用 |
+| Redis | 可选 | 缺失时缓存与限流全部 fail-open 降级 |
+| 本地模型权重 | 必需 | `models/bge-small-zh-v1.5`、`models/bge-reranker-base` |
+| LLM API Key | 必需 | 默认 `DEEPSEEK_API_KEY` |
 
-- Python 虚拟环境。
-- FastAPI 相关依赖。
-- ChromaDB。
-- sentence-transformers。
-- 本地 embedding/reranker 模型。
-- Ollama，用于 HyDE 和问题重写。
-- 主 LLM Provider 的 API Key，例如智谱或其他 OpenAI-compatible 服务。
+`docker-compose.yml` 已经定义 `postgres`、`redis`、`qdrant`、`migrate`、`app` 五个服务，本地只拉起依赖服务也可以：
 
-### 14.2 关键环境变量
+```powershell
+docker compose up -d postgres redis qdrant
+```
 
-| 环境变量 | 作用 |
-| --- | --- |
-| `LLM_PROVIDER` | 主模型供应商，如 `zhipu`、`deepseek`、`qwen`、`ollama` |
-| `ZHIPU_API_KEY` | 智谱 API Key |
-| `LLM_MODEL` | 主模型名称 |
-| `LLM_BASE_URL_OVERRIDE` | 自定义 OpenAI-compatible base_url |
-| `HYDE_ENABLED` | 是否启用查询增强 |
-| `HYDE_MODEL` | HyDE/重写模型 |
-| `HYDE_LLM_BASE_URL` | Ollama OpenAI-compatible 地址 |
-| `HYDE_BACKEND` | HyDE 后端，可选 openai 或 hf_lora |
-| `RETRIEVAL_VECTOR_TOP_K` | 向量召回候选数量 |
-| `RETRIEVAL_BM25_TOP_K` | BM25 召回候选数量 |
-| `RETRIEVAL_FINAL_TOP_K` | 精排最终返回数量 |
-| `RERANKER_SCORE_THRESHOLD` | 精排阈值 |
-| `RRF_K` | RRF 参数 |
-| `MAX_TOOL_CALLS` | ReAct 最大工具循环次数 |
-| `DELILEGAL_API_KEY` | 得理 Bearer API Key |
-| `DELILEGAL_LAW_SEARCH_PATH` | 法规检索路径，默认 `/api/v1/generice/law/list` |
-| `DELILEGAL_CASE_SEARCH_PATH` | 类案检索路径 |
+### 16.2 关键环境变量
 
-### 14.3 启动流程
+完整清单见 `.env.example`（当前项目的环境变量口径以该文件为准）。最常用的一批：
 
-FastAPI 启动时，`main.py` 的 lifespan 会执行：
+| 变量 | 默认值 | 说明 |
+| --- | --- | --- |
+| `LLM_PROVIDER` | `deepseek` | 主 LLM provider，可切 `zhipu` / `qwen` / `ollama` |
+| `DEEPSEEK_API_KEY` | — | 默认 provider 的密钥 |
+| `LLM_FALLBACK_PROVIDERS` | 空 | 逗号分隔的备用 provider |
+| `HYDE_BACKEND` | `openai` | 查询增强后端，可切 `hf_lora` |
+| `HYDE_MODEL` | `deepseek-v4-flash` | 查询增强模型 |
+| `DATABASE_URL` | — | PostgreSQL 连接串，必填 |
+| `QDRANT_URL` | `http://localhost:6333` | 向量库地址 |
+| `QDRANT_COLLECTION` | `legal_knowledge` | 法条 collection |
+| `QDRANT_MEMORY_COLLECTION` | `legal_memory` | 长期记忆 collection |
+| `REDIS_URL` | 空 | 未配置即视为未启用 Redis |
+| `MAX_TOOL_CALLS` | `5` | 单任务工具调用上限 |
+| `MAX_STEP_RETRIES` | `1` | Supervisor 判定步骤失败后的重试次数 |
+| `RRF_K` | `60` | RRF 融合常数 |
+| `RETRIEVAL_FINAL_TOP_K` | `5` | 最终返回法条数 |
+| `RERANKER_SCORE_THRESHOLD` | `0.3` | 精排分数阈值 |
+| `RATE_LIMIT_REQUESTS` / `RATE_LIMIT_WINDOW_SECONDS` | `30` / `60` | 突发限流 |
+| `LEGAL_DAILY_REQUEST_LIMIT` / `LEGAL_DAILY_TOKEN_LIMIT` | `200` / `200000` | 每日配额 |
+| `RESPONSE_CACHE_ENABLED` / `RESPONSE_CACHE_TTL_SECONDS` | `true` / `3600` | 回答缓存 |
+| `ADMIN_API_KEY` | 未配置 | 配置后 `/api/admin/*` 需要 `X-Admin-Key` |
+| `MCP_TRANSPORT` | `stdio` | FastMCP 传输方式，可设 `sse` |
 
-1. 加载 `.env`。
-2. 初始化元数据库。
-3. 初始化 LangGraph checkpointer。
-4. 初始化记忆数据表。
-5. 初始化长期记忆向量库。
-6. 启动 MCP Client。
-7. MCP Client 通过 stdio 启动 MCP Server 子进程。
-8. MCP Server 初始化 RAG。
-9. 构建 LangGraph。
+密钥只从环境变量读取，`.env.example` 里只放占位符，`.env` 不入库。
 
-### 14.4 免费部署现实判断
+### 16.3 启动流程
 
-这个项目不适合直接部署到大多数免费 Serverless 平台，原因是：
+```powershell
+# 1. 依赖服务
+docker compose up -d postgres redis qdrant
 
-- 本地模型和向量库占用磁盘与内存。
-- ChromaDB 需要持久化目录。
-- Reranker 和 embedding 模型加载较重。
-- MCP Server 是子进程，部分 Serverless 平台不适合长期运行。
-- SSE 流式响应需要稳定连接。
+# 2. 数据库迁移（所有 DDL 只由 Alembic 负责）
+alembic upgrade head
 
-如果要低成本上线，比较现实的路径是：
+# 3. 启动 Web 服务（Windows 下 PostgreSQL checkpointer 需要 SelectorEventLoop）
+uvicorn main:app --reload --loop services.checkpoint:selector_event_loop_factory
 
-1. 前端和文档站部署到 GitHub Pages 或 Vercel 免费层。
-2. 后端部署到有免费额度或低成本的云服务器。
-3. 法条向量库先保留 ChromaDB 本地持久化，后续再迁移到 Milvus、Qdrant 或云向量数据库。
-4. 主 LLM 使用云 API，本地 Ollama 只适合开发环境。
+# 4. 可选：单独启动 FastMCP 对外暴露层
+python run_mcp.py
+```
 
-## 十八、当前优势
+`main.py` 的 lifespan 顺序是固定的：
 
-### 15.1 架构不是玩具级
+1. `init_database()` 绑定异步引擎。
+2. `ping_database()` 探活，失败直接抛 `RuntimeError`，提示配置 `DATABASE_URL` 并执行 `alembic upgrade head`。
+3. `init_operational_store()` 绑定可观测存储。
+4. `init_redis()` 并探活，不可用只告警不阻塞启动。
+5. `init_memory_store()` 初始化 Qdrant 长期记忆 collection。
+6. `initialize_rag()` 初始化混合检索管线。
+7. `checkpoint_scope()` 打开 checkpointer，并在其作用域内 `build_graph(checkpointer)`。
+
+lifespan **不会**拉起 MCP 进程，Web 请求也不经过 MCP。
+
+### 16.4 部署现实判断
+
+- PostgreSQL 是硬依赖，任何部署方案都要先解决托管数据库，免费层通常有连接数与存储限制。
+- Qdrant 需要持久卷；只在评测或临时环境才建议 `QDRANT_PATH=:memory:`。
+- Embedding 与 Reranker 是本地模型，镜像体积和内存占用比纯 API 方案高，小规格实例可能跑不动 cross-encoder。
+- Redis 可以先不部署，代价只是缓存和限流失效。
+- FastMCP 是独立进程，需要额外的进程管理；如果只提供 Web 问答，可以完全不部署它。
+
+## 十七、当前优势
+
+### 17.1 架构不是玩具级
 
 项目已经具备较完整的 Agent 工程结构：
 
-- Web/API 层、Agent 层、MCP 工具层、RAG 服务层分开。
-- 工具通过 MCP 集中管理。
-- 检索不是单一路径，而是混合检索加 rerank。
-- 记忆系统有结构化存储和向量存储。
-- 有自动评测体系。
+- Web/API 层、Agent 层、Service 层、基础设施层分开，MCP 只是可选的对外暴露层。
+- 工具实现集中在 `services/`，调用协议与实现解耦。
+- 检索不是单一路径，而是多变体混合检索加 rerank，并且逐级降级。
+- 记忆系统分五层，关系库与向量库职责清晰。
+- 执行有显式预算，超限走确定性兜底而不是抛异常。
+- 有 trace、指标、配额与后台看板。
+- 有自动评测体系和 82 个测试文件。
 - 有技术文档站。
 
-### 15.2 法律场景意识明确
+### 17.2 法律场景意识明确
 
-提示词已经引入法律场景的基本判断：
+提示词与确定性服务共同约束了法律场景的基本判断：
 
 - 事实不足要追问。
 - 法条不能编造。
@@ -907,9 +975,9 @@ FastAPI 启动时，`main.py` 的 lifespan 会执行：
 - 重大事项提醒咨询律师。
 - 检索无关时不能凑法条。
 
-这比“直接让大模型回答法律问题”安全得多。
+这比"直接让大模型回答法律问题"安全得多。
 
-### 15.3 可演进空间清晰
+### 17.3 可演进空间清晰
 
 项目现在的问题不是方向不清，而是每一层都可以继续打磨：
 
@@ -920,11 +988,11 @@ FastAPI 启动时，`main.py` 的 lifespan 会执行：
 - 评测闭环。
 - 线上部署方案。
 
-## 十九、当前风险与问题
+## 十八、当前风险与问题
 
-### 16.1 检索质量仍需提升
+### 18.1 检索质量仍需提升
 
-最新读取到的检索结果 hit_rate 为 0.59，precision 为 0.1408。对法律助手来说，这意味着用户看到的法条出处仍可能包含噪声。下一阶段应优先优化检索，而不是继续增加工具。
+最近一次检索评测快照 hit_rate 为 0.59，precision 为 0.1408。对法律助手来说，这意味着用户看到的法条出处仍可能包含噪声。下一阶段应优先优化检索，而不是继续增加工具。
 
 建议重点优化：
 
@@ -935,7 +1003,7 @@ FastAPI 启动时，`main.py` 的 lifespan 会执行：
 - Reranker 阈值和候选数量。
 - 数据集标准答案和 acceptable_contexts 的覆盖。
 
-### 16.2 输出风格还需要产品化
+### 18.2 输出风格还需要产品化
 
 当前前端仍有 `thought` 事件展示，工具卡片也可能打断用户阅读。用户希望减少 AI 味，因此后续建议统一输出格式：
 
@@ -944,20 +1012,24 @@ FastAPI 启动时，`main.py` 的 lifespan 会执行：
 - 无明确法条：明确说明未检索到，不凑法条。
 - 紧急风险：先给安全提醒，再追问。
 
-### 16.3 法条引用要继续收敛
+### 18.3 法条引用要继续收敛
 
 当前系统会追加检索到的法条出处，但如果工具返回过多弱相关法条，末尾引用会显得不准确。后续可以改为：
 
 - 只展示 reranker 分数最高且被回答实际使用的 3-5 条。
-- 区分“核心依据”和“相关参考”。
+- 区分"核心依据"和"相关参考"。
 - 对引用法条做二次相关性判断。
 - 评测最终回答引用是否和主张一致。
 
-### 16.4 可信数据源边界
+### 18.4 可信数据源边界
 
-运行时法律依据严格来自本地 DOC RAG 与得理 OpenAPI。两者都没有提供充分证据时，系统明确报告证据不足，不使用外部搜索兜底。
+运行时法律依据严格来自本地法条 RAG 与得理 OpenAPI。两者都没有提供充分证据时，系统明确报告证据不足，不使用外部搜索兜底。
 
-## 二十、路线图建议
+### 18.5 运维复杂度上升
+
+相比早期的单机 SQLite + 本地向量目录，当前系统引入了 PostgreSQL 硬依赖、Qdrant、Alembic 迁移和 Redis 可选层。好处是权威记录清晰、并发安全、可观测数据可查询；代价是首次启动的前置条件变多，本地开发必须先跑迁移。这部分复杂度需要靠 `docker-compose.yml` 与文档来吸收。
+
+## 十九、路线图建议
 
 ### 第一阶段：修输出体验
 
@@ -981,12 +1053,12 @@ FastAPI 启动时，`main.py` 的 lifespan 会执行：
 - 给法律文本增加主题、案由、关键词 metadata。
 - 改进中文法律分词。
 - 建立同义词和场景词映射。
-- 调参 top_k、RRF_K、reranker threshold。
+- 调参 `RETRIEVAL_*`、`RRF_K`、`RERANKER_SCORE_THRESHOLD`。
 - 对 HyDE 和问题重写做专门评测。
 
 ### 第三阶段：建立端到端评测
 
-目标：从“检索命中”升级到“回答可信”。
+目标：从"检索命中"升级到"回答可信"。
 
 建议事项：
 
@@ -1004,12 +1076,23 @@ FastAPI 启动时，`main.py` 的 lifespan 会执行：
 - API Key 和密钥管理。
 - 后端部署环境固定化。
 - 日志、错误追踪、健康检查。
-- 数据库和向量库备份。
+- PostgreSQL 和 Qdrant 备份策略。
 - 用户输入和模型输出安全审计。
 - 加入免责声明和人工律师提示。
 
-## 二十一、结论
+## 二十、结论
 
-法智当前已经具备一个法律 RAG Agent 项目的完整骨架：FastAPI 提供 Web 服务，LangGraph 管理 ReAct 流程，MCP 管理工具，ChromaDB 存储法条和记忆，混合检索提升召回，评测系统量化质量，VitePress 承载技术文档。
+法智当前已经具备一个法律 RAG Agent 项目的完整骨架：FastAPI 提供 Web 服务，LangGraph 以 19 节点 Plan-and-Execute 管理执行流程，`services/` 集中实现全部检索与法律工具，PostgreSQL 承担权威记录与 checkpoint，Qdrant 存储法条与长期记忆，Redis 提供可降级的缓存与限流，混合检索提升召回，评测系统量化质量，VitePress 承载技术文档，FastMCP 作为可选的对外暴露层。
 
-它现在最重要的工作不是继续堆功能，而是把“检索准确、事实追问、引用克制、输出自然、评测闭环”打磨扎实。只要这几项继续推进，项目会从一个可运行 demo 逐步变成一个更接近生产级的法律智能助手。
+它现在最重要的工作不是继续堆功能，而是把"检索准确、事实追问、引用克制、输出自然、评测闭环"打磨扎实。只要这几项继续推进，项目会从一个可运行 demo 逐步变成一个更接近生产级的法律智能助手。
+
+
+
+
+
+
+
+
+
+
+

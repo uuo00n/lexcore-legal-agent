@@ -6,7 +6,7 @@
 | --- | --- | --- | --- |
 | Working Memory | 当前 `AgentState`：计划、检索证据、报告、控制字段 | 当前 LangGraph thread；由 checkpoint 恢复 | 只选当前任务需要的字段 |
 | Conversation Memory | `messages` | checkpoint 中的近期对话；业务消息另行归档 | 只注入最近、协议完整的有限窗口 |
-| Summary Memory | 长会话滚动摘要 | `summaries` 表，按 thread 更新 | 独立预算注入 |
+| Summary Memory | 长会话滚动摘要 | `conversation_summaries` 表，按 thread 更新 | 独立预算注入 |
 | Long-term Memory | 用户稳定身份、偏好、持续事项和明确要求记住的信息 | 独立 Memory Store；按 `user_id` namespace，无用户身份时退化为 thread 隔离 | 仅语义检索命中的 Top-K |
 | Persistent Workflow State | PostgreSQL `AsyncPostgresSaver` checkpoint | 保存可恢复的图状态、节点进度与近期消息 | 不等于长期用户记忆 |
 

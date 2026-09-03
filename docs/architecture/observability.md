@@ -14,7 +14,7 @@ sequenceDiagram
     participant A as Specialist Agent
     participant T as Tool and RAG
     participant O as Observability
-    participant DB as PostgreSQL and SQLite
+    participant DB as PostgreSQL
 
     C->>M: POST api chat
     M->>M: generate one trace id
@@ -82,16 +82,15 @@ flowchart LR
     Runtime[Runtime signals] --> Events[Structured events]
     Runtime --> Metrics[In process metrics]
     Runtime --> Logs[Redacted logs]
-    Events --> Mirror[(SQLite trace mirror)]
+    Events --> History[(PostgreSQL trace history)]
     Events --> Runs[(PostgreSQL runs and tool calls)]
     Metrics --> Prom[/metrics Prometheus text]
-    Mirror --> Admin[Admin dashboard and timeline]
+    History --> Admin[Admin dashboard and timeline]
     Logs --> Stdout[Process log collector]
 ```
 
-SQLite 的 `agent_traces`、`agent_events` 和 `llm_call_logs` 支持本地后台页面与时间线；PostgreSQL
-`agent_runs` 和 `tool_calls` 是运行状态与工具调用的权威业务记录。两者暂时并存，消费方必须明确
-所需的数据权威性，不能把观测镜像当成事务记录。
+PostgreSQL 的 `agent_traces`、`agent_events` 和 `llm_call_logs` 支持后台页面与时间线；
+`agent_runs` 和 `tool_calls` 保存运行状态与工具调用的权威业务记录。
 
 `/metrics` 输出 Prometheus 文本，包含请求量、延迟、缓存命中、Redis 降级等指标。`/admin` 和
 相关 API 从观测镜像生成成功率、平均延迟、最近 Trace、LLM 调用与检索时间线。

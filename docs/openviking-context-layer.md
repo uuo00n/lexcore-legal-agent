@@ -4,7 +4,9 @@
 
 OpenViking 的定位是 Agent Context Database。它不是替代 LangGraph 的多智能体编排框架，而是用文件系统范式统一管理 Agent 运行时需要的上下文：Resource、Memory、Skill，并通过 `viking://` URI、L0/L1/L2 分层加载和层级检索改善传统 flat RAG 链路。
 
-本项目原有链路已经包含 LangGraph、MCP、Hybrid RAG、ChromaDB 长期记忆和 Trace。继续堆 Agent 的收益不高，因此本次优化选择把 OpenViking 思路作为旁路 Context Layer 接入，不推翻现有架构。
+本项目原有链路已经包含 LangGraph、MCP、Hybrid RAG、长期记忆向量库和 Trace（写这份记录时长期记忆用的是
+ChromaDB，现已随存储迁移换成 Qdrant `legal_memory` collection）。继续堆 Agent 的收益不高，因此本次优化选择把
+OpenViking 思路作为旁路 Context Layer 接入，不推翻现有架构。
 
 ## 阶段结论
 
@@ -118,12 +120,18 @@ OpenViking 主要提升的是“上下文怎么被组织、定位、解释和复
 
 修改：
 
-- `agent/state.py`：新增 `viking_context` 和 `viking_context_hits` 状态字段。
-- `agent/prompts.py`：新增 `VIKING_CONTEXT_TEMPLATE`。
-- `agent/nodes.py`：
-  - `memory_node` 优先检索真实 OpenViking Resource / Skill，上下文不可用时回退本地 OpenViking-style Context Layer。
-  - `memory_node` 记录 `viking_context_retrieval` Trace 事件。
-  - `legal_consult_agent_node` 将上下文注入系统提示词。
+- `agent/state.py`：新增 `viking_context` 和 `viking_context_hits` 状态字段（`agent/state.py:311-312`）。
+- `agent/prompts.py`：新增 `VIKING_CONTEXT_TEMPLATE`（`agent/prompts.py:40`）。注意这个模板现在已经没有调用方，
+  上下文拼装改由 `services/context_builder.py` 统一负责，模板属于定义但未使用的残留。
+- `agent/nodes/memory.py`：
+  - `memory_node` 优先检索真实 OpenViking Resource / Skill，上下文不可用时回退本地 OpenViking-style Context Layer，
+    结果写入 `state["viking_context"]` 与 `state["viking_context_hits"]`（`agent/nodes/memory.py:81-82`）。
+  - `memory_node` 记录 `viking_context_retrieval` Trace 事件（`agent/nodes/memory.py:87`）。
+- `services/context_builder.py`：`build_model_context` 把 `viking_context` 与 `memory_profile`、`memory_longterm`
+  一并放进 Relevant Memory 层（`services/context_builder.py:244-248`），受 `CONTEXT_MEMORY_TOKEN_BUDGET` 约束。
+  因此三个 Specialist（`legal_consult_agent.py:251`、`case_analysis_agent.py:73,153`、
+  `statute_retrieval_agent.py:110`）都会拿到这段上下文，而不是只有法律咨询 Agent。
+  端到端行为由 `tests/test_viking_context.py::test_legal_consult_agent_injects_viking_context_into_system_prompt` 覆盖。
 - `services/memory_extractor.py`：对话结束后写入案件工作区。
 - `eval/run_eval.py`：新增 `context_ab`、`openviking_ab` 评测模式和 `--limit` 参数。
 - `eval/README.md`：补充 Context Layer A/B 和真实 OpenViking A/B 评测说明。
@@ -140,7 +148,8 @@ OpenViking 主要提升的是“上下文怎么被组织、定位、解释和复
 → 命中 Resource / Memory / Skill
 → 写入 viking_context 和 viking_context_hits
 → 记录 Trace: viking_context_retrieval
-→ legal_consult_agent_node 注入系统提示词
+→ build_model_context() 归入 Relevant Memory 层
+→ Specialist Agent 的系统提示词（legal_consult / case_analysis / statute_retrieval）
 → Agent 根据上下文决定追问、检索和回答
 ```
 
@@ -167,18 +176,21 @@ OpenViking 主要提升的是“上下文怎么被组织、定位、解释和复
 3. 可解释性提升
    Trace 中能看到本轮命中的 `viking://` 路径，便于排查回答为什么走某个法律流程。
 
-4. 后续可替换真实 OpenViking
-   当前实现是本地确定性版本，接口已经围绕 `viking://` URI 和 L0/L1 设计。后续可将 `retrieve_viking_context()` 替换为 OpenViking SDK/MCP 的 `find/search/read`。
+4. 已接入真实 OpenViking
+   `services/openviking_context.py::retrieve_agent_context` 先走真实 OpenViking HTTP `find`
+   （`services/openviking_client.py::OpenVikingHTTPClient`），失败或未启用时才回退本地确定性实现
+   `services/viking_context.py::retrieve_viking_context`，回退开关是 `OPENVIKING_CONTEXT_FALLBACK_LOCAL`
+   （默认 `true`）。接口围绕 `viking://` URI 和 L0/L1 设计，因此两条实现对上层完全同构。
 
 ## 验证方式
 
 当前新增和回归测试：
 
 ```bash
-/Users/didi/Desktop/Legal/.venv/bin/pytest tests/test_viking_context.py -q
-/Users/didi/Desktop/Legal/.venv/bin/pytest tests/test_context_ab_eval.py tests/test_viking_context.py -q
-/Users/didi/Desktop/Legal/.venv/bin/pytest tests/test_openviking_client.py tests/test_openviking_ingest.py tests/test_openviking_ab_eval.py -q
-/Users/didi/Desktop/Legal/.venv/bin/pytest tests -q
+python -m pytest tests/test_viking_context.py -q
+python -m pytest tests/test_context_ab_eval.py tests/test_viking_context.py -q
+python -m pytest tests/test_openviking_client.py tests/test_openviking_ingest.py tests/test_openviking_ab_eval.py -q
+python -m pytest tests -q
 ```
 
 覆盖内容：
@@ -194,32 +206,34 @@ OpenViking 主要提升的是“上下文怎么被组织、定位、解释和复
 - 法律流程 Skill 能生成 OpenViking 支持的结构化 skill dict。
 - `openviking_ab` 能用真实 OpenViking Resource 命中结果对 HybridRetriever 候选做 scope/rerank boost。
 
-最近一次全量测试结果：
+本阶段当时的全量测试结果：
 
 ```text
 70 passed, 6 skipped, 3 warnings
 ```
 
-跳过项来自现有 RAG 初始化条件，warnings 来自现有 `pytest.mark.slow` 未注册标记，不是本次 OpenViking Context Layer 新增失败。
+当时的跳过项来自 RAG 初始化条件，warnings 来自 `pytest.mark.slow` 未注册标记，不是 OpenViking Context Layer 新增失败。
+仓库当前的全量测试基线已经变成 `382 passed, 9 skipped`、零 warning，口径见
+[测试结果](./report/test-results.md)。
 
 ## A/B 评测入口
 
 已新增离线 A/B 评测模式：
 
 ```bash
-/Users/didi/Desktop/Legal/.venv/bin/python eval/run_eval.py --mode context_ab
+python eval/run_eval.py --mode context_ab
 ```
 
 快速 smoke test：
 
 ```bash
-/Users/didi/Desktop/Legal/.venv/bin/python eval/run_eval.py --mode context_ab --limit 10
+python eval/run_eval.py --mode context_ab --limit 10
 ```
 
 更快的框架 smoke test：
 
 ```bash
-/Users/didi/Desktop/Legal/.venv/bin/python eval/run_eval.py --mode context_ab --limit 10 --fast
+python eval/run_eval.py --mode context_ab --limit 10 --fast
 ```
 
 `--fast` 会临时关闭 HyDE/rewrite，只用于快速确认评测框架和上下文路由；正式对比不建议使用。
@@ -242,7 +256,7 @@ OpenViking 主要提升的是“上下文怎么被组织、定位、解释和复
 本轮正式命令：
 
 ```bash
-/Users/didi/Desktop/Legal/.venv/bin/python eval/run_eval.py --mode context_ab --limit 10 --top-k 5
+python eval/run_eval.py --mode context_ab --limit 10 --top-k 5
 ```
 
 结果文件：
@@ -369,7 +383,7 @@ Vector count: 27
 
 ```bash
 OPENVIKING_BASE_URL=http://localhost:1933 OPENVIKING_TIMEOUT=120 \
-/Users/didi/Desktop/Legal/.venv/bin/python eval/run_eval.py \
+python eval/run_eval.py \
   --mode openviking_ab --limit 10 --top-k 5 --openviking-limit 5
 ```
 
@@ -417,13 +431,13 @@ OPENVIKING_API_KEY=your-openviking-key
 导入法律法规 Resource：
 
 ```bash
-/Users/didi/Desktop/Legal/.venv/bin/python scripts/import_openviking_corpus.py --laws --wait
+python scripts/import_openviking_corpus.py --laws --wait
 ```
 
 导入法条级 Resource 卡片：
 
 ```bash
-/Users/didi/Desktop/Legal/.venv/bin/python scripts/import_openviking_corpus.py --article-cards --wait --write-mode replace
+python scripts/import_openviking_corpus.py --article-cards --wait --write-mode replace
 ```
 
 默认会在写入后触发一次 `viking://resources/laws` 的 `vectors_only` 重建；只想写入不重建时加 `--no-build-index`。
@@ -431,25 +445,25 @@ OPENVIKING_API_KEY=your-openviking-key
 只导入部分领域用于 smoke test：
 
 ```bash
-/Users/didi/Desktop/Legal/.venv/bin/python scripts/import_openviking_corpus.py --laws --domains labor,consumer_protection --wait
+python scripts/import_openviking_corpus.py --laws --domains labor,consumer_protection --wait
 ```
 
 导入法律流程 Skill：
 
 ```bash
-/Users/didi/Desktop/Legal/.venv/bin/python scripts/import_openviking_corpus.py --skills --wait
+python scripts/import_openviking_corpus.py --skills --wait
 ```
 
 真实 OpenViking A/B：
 
 ```bash
-/Users/didi/Desktop/Legal/.venv/bin/python eval/run_eval.py --mode openviking_ab --limit 10 --top-k 5
+python eval/run_eval.py --mode openviking_ab --limit 10 --top-k 5
 ```
 
 全量 fast A/B：
 
 ```bash
-/Users/didi/Desktop/Legal/.venv/bin/python eval/run_eval.py --mode openviking_ab --top-k 5 --fast
+python eval/run_eval.py --mode openviking_ab --top-k 5 --fast
 ```
 
 `--fast` 会临时关闭 HyDE/rewrite。它适合看 OpenViking Resource rerank 对检索排序的净影响；不能等同于带 HyDE/rewrite 的正式慢链路。
@@ -493,7 +507,7 @@ Vector count: 1667
 
 ```bash
 OPENVIKING_BASE_URL=http://localhost:1933 OPENVIKING_TIMEOUT=120 \
-/Users/didi/Desktop/Legal/.venv/bin/python eval/run_eval.py \
+python eval/run_eval.py \
   --mode openviking_ab --limit 10 --top-k 5
 ```
 
@@ -556,7 +570,7 @@ Embedding queue: 7677 processed, 0 pending, 0 errors
 
 ```bash
 OPENVIKING_BASE_URL=http://127.0.0.1:1933 OPENVIKING_TIMEOUT=120 \
-/Users/didi/Desktop/Legal/.venv/bin/python eval/run_eval.py \
+python eval/run_eval.py \
   --mode openviking_ab --top-k 5 --fast
 ```
 
@@ -630,13 +644,13 @@ OpenViking boost 后 top1: 合同法_历史版本_第九十四条
 
 ```bash
 # 生成 GLM-4.7 OpenViking 配置，输出到 .runtime/openviking/ov_glm47.conf
-/Users/didi/Desktop/Legal/.venv/bin/python scripts/render_openviking_config.py --show
+python scripts/render_openviking_config.py --show
 
 # 启动本地 embedding endpoint 和 OpenViking server
-/Users/didi/Desktop/Legal/.venv/bin/python scripts/start_openviking_glm47.py
+python scripts/start_openviking_glm47.py
 
 # 完整语义层导入：article Resource + Skill + semantic_and_vectors reindex
-/Users/didi/Desktop/Legal/.venv/bin/python scripts/import_openviking_corpus.py \
+python scripts/import_openviking_corpus.py \
   --article-cards --skills --write-mode upsert --no-write-wait \
   --reindex-mode semantic_and_vectors --wait-after-import --wait-timeout 600
 ```
@@ -696,7 +710,7 @@ memory_node
 启动验证：
 
 ```bash
-/Users/didi/Desktop/Legal/.venv/bin/python scripts/start_openviking_glm47.py --startup-timeout 240
+python scripts/start_openviking_glm47.py --startup-timeout 240
 ```
 
 结果：

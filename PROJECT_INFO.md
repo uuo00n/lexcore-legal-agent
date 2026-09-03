@@ -1,6 +1,6 @@
 # 法智项目完整信息档案
 
-> 最后更新：2026-09-02
+> 最后更新：2026-09-03
 > 用途：供 AI 助手快速了解项目全貌，避免每次重新读取全部代码
 > 说明：本文是当前代码地图，不替代源码。若本文与源码冲突，以源码和测试为准。
 
@@ -28,15 +28,15 @@
 | Agent 编排 | LangGraph StateGraph | Router + Planner + Supervisor + 三类 Specialist + Verifier + Answer Generator |
 | 工具协议 | 进程内 Service Layer + MCP | 主链工具直接调用服务；FastMCP 独立暴露同一服务能力 |
 | LLM 网关 | `services.gateway.GatewayChatModel` | 记录调用、fallback、token 使用、延迟和失败 |
-| 默认主模型 | 智谱 `glm-4.7` | `LLM_PROVIDER=zhipu`，OpenAI 兼容接口 |
+| 默认主模型 | DeepSeek `deepseek-v4-pro` | `LLM_PROVIDER=deepseek`，OpenAI 兼容接口；可切 `zhipu` / `qwen` / `ollama` |
 | 路由模型 | fast/strong/long | `services.model_routing` 根据复杂度、文档长度、工具轮次选择路由 |
-| 查询增强 | HyDE + query rewrite | 默认可走智谱 `glm-4.6v`；也支持 HF + LoRA HyDE 后端 |
-| 向量存储 | Qdrant + ChromaDB | Qdrant 为部署配置；Chroma 保留本地法条 fallback 与长期记忆 |
-| Embedding | `bge-small-zh-v1.5` | 本地 sentence-transformers，384 维 |
+| 查询增强 | HyDE + query rewrite | 默认 `deepseek-v4-flash`（`HYDE_BACKEND=openai`）；也支持 HF + LoRA 后端 |
+| 向量存储 | Qdrant | `legal_knowledge` 法律索引与 `legal_memory` 长期记忆双 collection |
+| Embedding | `bge-small-zh-v1.5` | 本地 sentence-transformers，512 维 |
 | Reranker | `bge-reranker-base` | CrossEncoder 精排 |
 | 关键词检索 | BM25 | 中文 unigram + bigram 分词 |
 | Context Layer | OpenViking + 本地 fallback | Resource / Memory / Skill，`viking://` URI，L0/L1/L2 分层上下文 |
-| 持久化 | PostgreSQL + SQLite + ChromaDB | PostgreSQL 存核心业务数据与 LangGraph checkpoint，SQLite 保留辅助数据，Chroma 存向量 |
+| 持久化 | PostgreSQL + Redis + Qdrant | PostgreSQL 存权威关系数据与 checkpoint，Redis 存热缓存，Qdrant 存向量 |
 | 缓存/限流 | Redis | 检索缓存、得理响应缓存、突发限流、会话元数据、幂等标记；挂掉时全部降级，不是主数据库 |
 | 评测 | 自研 retrieval metrics + RAGAS | 100 条法律场景数据集 |
 
@@ -46,20 +46,18 @@
 
 ```text
 main.lifespan
-  -> init_database()                     # PostgreSQL 核心持久化
-  -> init_meta_db()
-  -> init_redis()
-  -> init_observability_tables()
-  -> init_quota_tables()
-  -> init_cache_tables()
-  -> init_memory_tables()
-  -> init_memory_store()                  # ChromaDB memory collection
-  -> initialize_rag()                     # 进程内加载向量库、BM25 与混合检索器
-  -> checkpoint_scope()                   # PostgreSQL；开发/测试可用 MemorySaver
-      -> build_graph()
+  -> init_database()                      # PostgreSQL 核心持久化；ping 失败直接抛错拒绝启动
+  -> init_operational_store()             # 只绑定连接池并校验 Alembic 迁移结果，从不建表
+  -> init_redis()                          # 探活失败只告警，缓存/限流降级运行
+  -> init_memory_store()                  # Qdrant legal_memory collection
+  -> initialize_rag()                      # 进程内加载向量库、BM25 与混合检索器
+  -> checkpoint_scope()                   # PostgreSQL AsyncPostgresSaver；测试可用 MemorySaver
+      -> build_graph(checkpointer)
 ```
 
-MCP Server 启动时：
+所有 SQL DDL 只由 Alembic 负责，应用启动时只校验、不迁移。lifespan **不会**拉起 MCP 进程。
+
+FastMCP 是与 Web 链路平行的独立进程，需要单独启动：
 
 ```text
 run_mcp.py
@@ -72,21 +70,27 @@ run_mcp.py
 
 ### LangGraph 拓扑
 
+19 个节点、15 条静态边、5 组条件边，定义在 `agent/graph.py`：
+
 ```text
-context_compaction
+START
+  -> context_compaction
   -> memory
   -> inject_doc
   -> query_rewrite
   -> intent_router
   -> planner
-  -> supervisor
-       -> case_analysis_agent <-> case_analysis_tools
-       -> statute_retrieval_agent <-> statute_retrieval_tools
-       -> legal_consult_agent <-> legal_consult_tools
-       -> result_verifier
-            -> planner             # 最多一次 replan
-            -> answer_generator
-                 -> END
+  -> supervisor                          # should_execute_next
+       -> case_analysis_agent            # should_continue
+            -> case_analysis_tools -> collect_case_evidence -> case_analysis_agent
+            -> tool_limit_exceeded -> supervisor
+            -> supervisor
+       -> statute_retrieval_agent        # 同构：statute_retrieval_tools -> collect_statute_evidence
+       -> legal_consult_agent            # 同构：legal_consult_tools -> collect_consult_evidence
+       -> result_verifier                # should_after_verifier
+            -> planner                   # 最多一次 replan
+            -> answer_generator -> END
+       -> END                            # 计划终止
 ```
 
 关键点：
@@ -95,41 +99,54 @@ context_compaction
 - `case_analysis_agent` 负责案件结构化与事实缺口，不再保留旧 `fact_agent` 节点名。
 - `contract_agent` 暂未接入默认 Graph，但合同报告 API 和独立 workflow 仍保留。
 - `result_verifier` 只做核验，最终用户回答由 `answer_generator` 生成。
-- `MAX_TOOL_CALLS` 默认 5，防止 Specialist ReAct 循环失控。
+- 三个预算：`MAX_PLAN_STEPS=6`（`agent/nodes/planner.py`）、`MAX_TOOL_CALLS=5`（`agent/tool_loop.py`，
+  可用环境变量覆盖）、`MAX_AGENT_REPLAN_RETRIES=1`（`agent/replan.py`）。工具超限走
+  `tool_limit_exceeded` 写入观察后回到 `supervisor`，不是直接报错。
 
 ### 聊天请求链路
 
 ```text
 POST /api/chat
-  -> consume_request(thread_id)
-  -> upsert_thread()
-  -> create_trace()
+  -> check_rate_limit(thread_id)          # Redis 固定窗口，不可用时放行
+  -> consume_request(thread_id)           # PostgreSQL 每日配额
+  -> claim_idempotency(token)             # Redis SET NX EX
+  -> upsert_thread() / create_trace() / touch_session()
   -> load_doc(doc_id?)
-  -> 从 MemorySaver 或 messages_archive 恢复历史
-  -> get_cached_answer()
-  -> graph.astream(...)
-  -> SSE: thought / tool_start / tool_end / token / error / done
+  -> checkpoint 有历史则直接续跑，否则从 messages 表回放
+  -> get_cached_answer()                  # 命中则完全跳过 Graph
+  -> graph.astream(state_input, config, stream_mode="updates")
+  -> SSE: thought / context_status / tool_start / tool_end / token / error / done
   -> set_cached_answer()
   -> complete_trace()
   -> BackgroundTasks: extract_and_save_memory()
 ```
 
+`token` 事件按 4 字符切片发送，中间 `asyncio.sleep(0.02)`；`SELF_TRACED_TOOLS` 里的工具自己记
+trace，SSE 层不重复记。
+
 ### RAG 检索链路
 
 ```text
-legal_search MCP tool
-  -> HybridRetriever.retrieve()
-      -> normalize_query()                 # 第10条 -> 第十条
-      -> rewrite_query()                   # 面向 BM25
-      -> generate_hypothetical_doc()       # 面向语义检索
-      -> SemanticRetriever(hyde_doc + 原始 query)
-      -> KeywordRetriever(原始 query + 重写 query)
-      -> RRF fusion
-      -> Reranker(original query)
-      -> score threshold filter
+Specialist -> retrieve_local_law_tool     # 进程内直调，不经过 MCP Client
+  -> services.search.search_local_law_service()
+      -> Redis 检索缓存（命中即返回）
+      -> HybridRetriever.retrieve()
+          -> normalize_query()                 # 第10条 -> 第十条
+          -> rewrite_query()                   # 面向 BM25
+          -> generate_hypothetical_doc()       # 面向语义检索
+          -> SemanticRetriever(hyde_doc + 原始 query + 重写 query)
+          -> KeywordRetriever(原始 query + 重写 query)
+          -> _drop_superseded()                # RETRIEVAL_INCLUDE_SUPERSEDED=false 时过滤旧法
+          -> reciprocal_rank_fusion_scored(k=RRF_K)
+          -> Reranker(original query)
+          -> score threshold + RETRIEVAL_MIN_RESULTS 兜底
+      -> SearchServiceResult(status=found|no_relevant_result|low_quality|error)
 ```
 
-注意：OpenViking Context Layer 是上下文路由和处理流程辅助，不是法条引用来源。最终明确法条引用必须来自本轮 MCP 法律检索工具结果。
+融合层有 `rrf` / `vector_fallback` / `bm25_fallback` / `empty` 四种模式；Reranker 不可用时退回融合
+序。trace 事件依次为 `vector_hits`、`bm25_hits`、`fused_hits`、`reranker_hits`、`rag_summary`。
+
+注意：OpenViking Context Layer 是上下文路由和处理流程辅助，不是法条引用来源。最终明确法条引用必须来自本轮法律检索工具（`retrieve_local_law_tool` / `search_law_tool`）的结果。
 
 ## 目录结构
 
@@ -144,46 +161,75 @@ Legal/
 ├── api/
 │   ├── chat.py                     # POST /api/chat，SSE 流式、trace、quota、cache、memory
 │   ├── upload.py                   # POST /api/upload，PDF/DOCX/TXT 解析
-│   ├── threads.py                  # 会话列表、历史、删除
+│   ├── threads.py                  # 会话列表、历史、上下文快照、手动压缩、删除
 │   ├── reports.py                  # 合同报告与异步任务
+│   ├── evidence.py                 # 视频证据抽帧与产物下载
 │   └── admin.py                    # 后台 trace/LLM/eval/quota API
 ├── agent/
-│   ├── graph.py                    # LangGraph 多智能体拓扑
-│   ├── nodes.py                    # memory、supervisor、fact、contract、legal_consult、collect_laws
-│   ├── state.py                    # AgentState TypedDict
+│   ├── graph.py                    # LangGraph 19 节点拓扑与条件边
+│   ├── graph_runtime.py            # 节点观测包装（trace / 事件）
+│   ├── nodes/                      # context、memory、document、query、routing、planner、supervisor、verifier、answer
+│   ├── agents/                     # case_analysis / statute_retrieval / legal_consult / contract
+│   ├── tools/                      # 3 个 Agent 工具，直调进程内 Service Layer
+│   ├── tool_loop.py                # 单任务 ReAct 次数预算（MAX_TOOL_CALLS）
+│   ├── replan.py                   # replan 次数预算（MAX_AGENT_REPLAN_RETRIES）
+│   ├── node_utils.py               # 节点公共工具
+│   ├── reports.py                  # 合同审查报告组装
+│   ├── state.py                    # AgentState TypedDict 与 reducer
 │   ├── prompts.py                  # 系统提示词、记忆模板、OpenViking 上下文模板
-│   └── tools/                      # Agent 侧 MCP 客户端代理工具
+│   └── skills/                     # 可复用技能包（文书起草、PDF、视频截图、欠薪工作流）
 ├── mcp_server/
 │   ├── server.py                   # FastMCP 实例和工具注册
 │   ├── startup.py                  # RAG 初始化
-│   ├── tools/                      # MCP 工具实现
-│   └── knowledge/                  # 诉讼时效规则和文书模板
+│   └── tools/                      # 10 个 MCP 工具，薄封装 services/
 ├── services/
-│   ├── llm.py                      # provider 工厂，zhipu/deepseek/qwen/ollama
+│   ├── llm.py                      # provider 工厂，deepseek/zhipu/qwen/ollama
 │   ├── gateway.py                  # LLM Gateway，观测和 fallback
 │   ├── model_routing.py            # fast/strong/long 路由策略
 │   ├── supervisor.py               # Supervisor 路由决策
+│   ├── search.py                   # 检索 Service Layer 统一入口，返回结构化质量标记
+│   ├── legal_tools.py              # 法律对比、风险、时效、文书模板实现
+│   ├── local_legal_retriever.py    # 本地法库检索适配
+│   ├── jurisdiction.py             # 管辖判定规则
+│   ├── limitations_rules.py        # 诉讼时效规则表
 │   ├── legal_analysis.py           # 法律意图、事实、风险、引用、回答质量评分
 │   ├── answer_format.py            # 回答展示格式清理
-│   ├── mcp_client.py               # MCP stdio client，工具超时和串行锁
-│   ├── checkpoint.py               # MemorySaver + SQLite 元数据库
-│   ├── memory.py                   # messages_archive、summaries、user_profiles
+│   ├── context_builder.py          # 分层 token 预算构造模型输入
+│   ├── context_compaction.py       # 长会话压缩与 context_status
+│   ├── checkpoint.py               # PostgreSQL/MemorySaver checkpoint + 文档入口
+│   ├── memory.py                   # PostgreSQL conversation_summaries、user_profiles
 │   ├── memory_extractor.py         # 后台摘要、长期记忆、画像、OpenViking 案件工作区
-│   ├── memory_store.py             # ChromaDB 长期语义记忆
-│   ├── cache/                      # 缓存与限流：response(SQLite) + retrieval/delilegal/rate_limit/session/idempotency(Redis)
+│   ├── memory_store.py             # Qdrant 长期语义记忆
+│   ├── cache/                      # Redis response/retrieval/delilegal/rate_limit/session/idempotency
 │   ├── quota.py                    # thread_id 级每日请求/token 配额
+│   ├── auth.py                     # 可选 admin API key 校验
 │   ├── observability.py            # trace、event、LLM call、eval run 存储
 │   ├── metrics.py                  # 轻量 Prometheus text format
 │   ├── task_queue.py               # 进程内异步任务队列
+│   ├── retry.py                    # 统一重试策略
+│   ├── errors.py                   # 领域异常
+│   ├── doc_parser.py               # PDF/DOCX/TXT 解析
+│   ├── evidence_video.py           # 视频证据抽帧
 │   ├── contract_report.py          # 合同审查 Markdown 报告
+│   ├── contract_agent/             # 合同审查确定性工作流（分类、清单、打分）
 │   ├── case_retrieval.py           # 内置相似法律场景库
+│   ├── persistence.py              # 消息归档读写
 │   ├── viking_context.py           # 本地 OpenViking-style Context Layer
 │   ├── openviking_client.py        # 真实 OpenViking HTTP API adapter
 │   ├── openviking_context.py       # 真实 OpenViking 优先，本地 fallback
 │   ├── openviking_ingest.py        # 法律 Resource / Skill 导入
+│   ├── delilegal/                  # 得理开放平台客户端、schema 与响应归一
 │   ├── indexer/                    # 法条分块和索引构建
-│   ├── retriever/                  # semantic、keyword、hybrid、hyde、reranker
-│   └── vectorstore/                # Chroma/Milvus 向量存储抽象
+│   ├── retriever/hyde.py           # HyDE 与问题重写（openai / hf_lora 两种后端）
+│   └── rag/                        # retriever、qdrant_store、bm25、fusion、reranker、interfaces、startup
+├── infrastructure/
+│   ├── database.py                 # 异步引擎与会话工厂
+│   ├── operational_store.py        # 运行表读写与迁移校验
+│   ├── redis.py                    # Redis 连接、熔断与统一降级入口
+│   ├── sanitize.py                 # 日志脱敏 formatter
+│   ├── models/                     # SQLAlchemy ORM
+│   ├── repositories/               # 仓储层
+│   └── migrations/                 # Alembic 版本
 ├── static/
 │   ├── index.html                  # 对话页面
 │   ├── app.js
@@ -213,14 +259,15 @@ Legal/
 ├── docs/
 │   ├── guide/                      # VitePress 技术文档
 │   ├── api/
+│   ├── architecture/
 │   ├── sequences/
+│   ├── report/                     # 项目报告与测试结果
+│   ├── refactor/                   # 重构期快照（历史记录，勿改写成现状）
 │   ├── openviking-context-layer.md # OpenViking 优化与评测记录
 │   └── finetune-qwen-law-sft.md    # HyDE/法律问答 LoRA 文档
-├── tests/                          # 32 个 test_*.py
+├── tests/                          # 82 个 test_*.py（含 unit/integration/services 子目录）
 ├── data/
 │   ├── laws/                       # 70 个法律/补充文本，含 2026-06-17 校验报告
-│   ├── chroma_db/                  # ChromaDB 持久化目录
-│   ├── docs.sqlite                 # 元数据/trace/quota/cache/memory
 │   ├── uploads/                    # 用户上传文件
 │   ├── reports/                    # 合同审查报告
 │   ├── viking_context/             # 本地 OpenViking-style 案件工作区
@@ -242,12 +289,17 @@ Legal/
 | POST | `/api/upload` | 上传 PDF/DOCX/TXT，默认最大 10MB |
 | GET | `/api/threads` | 会话列表 |
 | GET | `/api/threads/{thread_id}/history` | 会话历史 |
+| GET | `/api/threads/{thread_id}/context` | 上下文快照与 token 占用 |
+| POST | `/api/threads/{thread_id}/compact` | 手动触发上下文压缩 |
 | DELETE | `/api/threads/{thread_id}` | 删除会话 |
 | POST | `/api/reports/contract` | 同步生成合同审查报告 |
 | POST | `/api/reports/contract/tasks` | 异步生成合同审查报告 |
 | GET | `/api/reports/{report_id}` | 下载 Markdown 报告 |
 | GET | `/api/tasks` | 最近异步任务 |
 | GET | `/api/tasks/{task_id}` | 任务状态 |
+| POST | `/api/evidence/video/extract` | 视频证据抽帧 |
+| GET | `/api/evidence/{evidence_id}` | 证据元数据 |
+| GET | `/api/evidence/{evidence_id}/files/{relative_path}` | 下载抽帧产物 |
 | GET | `/api/admin/summary` | 后台汇总指标，需要可选 admin 鉴权 |
 | GET | `/api/admin/traces` | 最近 Agent trace |
 | GET | `/api/admin/traces/{trace_id}` | trace 详情 |
@@ -259,45 +311,79 @@ Legal/
 
 Admin API 鉴权：如果设置 `ADMIN_API_KEY`，请求需要 Header `X-Admin-Key`。
 
-## MCP 工具
+## 工具清单
 
-MCP Server 注册 7 个工具：
+工具逻辑只写在 `services/`。Agent 侧和 FastMCP 侧是两套彼此独立的薄封装，**Web 请求链路不经过
+MCP Client**，所以 MCP 是否运行不影响问答可用性。
 
-| 工具 | Agent 代理 | 说明 |
+### Agent 工具（3 个，`agent/tools/`）
+
+| 工具 | 实现 | 可用于 |
 | --- | --- | --- |
-| `legal_search` | `legal_search_tool` | 混合法条检索 |
-| `law_compare` | `law_compare_tool` | 法律/条文对比 |
-| `risk_assess` | `risk_assess_tool` | 法律风险评估 |
-| `contract_review` | `contract_review_tool` | 合同文本审查 |
-| `statute_of_limitations` | `statute_of_limitations_tool` | 诉讼时效计算 |
-| `legal_document_draft` | `legal_document_draft_tool` | 法律文书起草 |
-| `legal_search` | `retrieve_local_law_tool` | 本地 DOC 法律 RAG |
-| — | `search_law_tool` / `search_case_tool` | 经统一 Service Layer 查询得理 OpenAPI |
+| `retrieve_local_law_tool` | `services.search.search_local_law_service` → HybridRetriever | 三个 Specialist |
+| `search_law_tool` | 得理开放平台正式法规检索 | 三个 Specialist |
+| `search_case_tool` | 得理开放平台类案检索 | 仅 `case_analysis_agent` |
+
+绑定关系见 `agent/tools/__init__.py`：
+
+```python
+LEGAL_CONSULT_TOOLS     = [search_law_tool, retrieve_local_law_tool]
+STATUTE_RETRIEVAL_TOOLS = [search_law_tool, retrieve_local_law_tool]
+CASE_ANALYSIS_TOOLS     = [search_case_tool, search_law_tool, retrieve_local_law_tool]
+```
+
+### MCP 工具（10 个，`mcp_server/tools/`）
+
+面向 Claude Desktop 之类的外部 MCP 客户端，`python run_mcp.py` 单独启动。
+
+| 工具 | 说明 |
+| --- | --- |
+| `legal_search` | 混合法条检索（本地语料） |
+| `search_local_law` | 本地法库检索，返回结构化结果与质量标记 |
+| `search_law` | 得理正式法规检索 |
+| `search_case` | 得理类案检索 |
+| `law_compare` | 法律/条文对比 |
+| `risk_assess` | 法律风险评估 |
+| `contract_review` | 合同文本审查 |
+| `statute_of_limitations` | 诉讼时效计算 |
+| `jurisdiction_route` | 管辖法院与立案路径判定 |
+| `legal_document_draft` | 法律文书起草 |
 
 ## 记忆与上下文系统
 
 当前记忆系统分为几层：
 
-1. **运行时状态**：LangGraph `MemorySaver`，只负责当前进程内 checkpoint。
-2. **消息归档**：SQLite `messages_archive`，保存完整可恢复对话。
-3. **短期摘要**：SQLite `summaries`，超过滑动窗口或 token 上限后增量摘要。
-4. **用户画像**：SQLite `user_profiles`，记录身份、关注领域和偏好。
-5. **长期语义记忆**：ChromaDB `memory` collection，检索 top 3 相关记忆。
-6. **OpenViking Context**：真实 OpenViking `find()` 优先；失败时回退 `services.viking_context` 本地 Resource / Memory / Skill 目录。
+1. **运行时状态**：生产使用 PostgreSQL `AsyncPostgresSaver`；单测可显式使用 `MemorySaver`。
+2. **消息归档**：PostgreSQL `messages`，保存完整可恢复对话。
+3. **短期摘要**：PostgreSQL `conversation_summaries`，超过滑动窗口或 token 上限后增量摘要。
+4. **用户画像**：PostgreSQL `user_profiles`，记录身份、关注领域和偏好。
+5. **长期语义记忆**：Qdrant `legal_memory` collection，检索 top 3 相关记忆。
+6. **OpenViking Context**：`memory` 节点内 best-effort 调用，真实 OpenViking `find()` 优先；失败时回退 `services.viking_context` 本地 Resource / Memory / Skill 目录，异常只降级不阻断。
 7. **案件工作区**：对话结束后写入 `data/viking_context/memory/cases/{thread_id}/`，包含 `.abstract.md`、`.overview.md`、`conversation.md`。
 
-OpenViking 上下文只做定位和流程提示，不可作为法条依据。法条依据必须来自本轮 `legal_search` 等 MCP 工具返回。
+两个容易混淆的窗口常量（`services/memory.py`）：
+
+- `SLIDING_WINDOW_SIZE=8` 与 `MAX_WINDOW_TOKENS=3000` 是**摘要与压缩的边界**，决定保留多少条近期消息不做摘要。
+- 真正注入模型的近期消息条数是 `CONTEXT_RECENT_MESSAGE_COUNT=12`（`services/context_builder.py`），
+  并另受 recent-message token 预算限制。
+
+每次模型调用由 `services.context_builder.build_model_context` 按 system、relevant memory
+（含用户画像与 `viking_context`）、conversation summary、current plan、retrieved evidence、
+current task、recent messages 分层分配 token。
+
+OpenViking 上下文只做定位和流程提示，不可作为法条依据。法条依据必须来自本轮 `retrieve_local_law_tool` / `search_law_tool` 的返回。
 
 ## 可观测与治理
 
-SQLite 表：
+PostgreSQL 运行表：
 
 - `agent_traces`：一次用户请求的输入、最终回答、状态、耗时、法律分析。
 - `agent_events`：图节点、工具、模型路由、OpenViking 命中、引用校验等事件。
 - `llm_call_logs`：provider、model、base_url、status、latency、fallback、token usage。
 - `eval_runs`：评测运行历史和聚合指标。
 - `quota_usage`：每日请求数和 token 数。
-- `response_cache`：精确问题缓存。
+
+精确问题缓存存入 Redis，并设置强制 TTL。
 
 Prometheus 指标：
 
@@ -316,34 +402,48 @@ payload 只有命名空间、摘要 key 与 `degraded` 标记，不含缓存值�
 
 ## 环境变量
 
+完整可复制清单见 `.env.example`；下面只列关键项与默认值。
+
 ### LLM 与模型路由
 
 ```bash
-LLM_PROVIDER=zhipu
-LLM_MODEL=glm-4.7
-ZHIPU_API_KEY=sk-xxx
+LLM_PROVIDER=deepseek
+LLM_MODEL=deepseek-v4-pro
+DEEPSEEK_API_KEY=sk-xxx
 
 # 可选 provider
-DEEPSEEK_API_KEY=sk-xxx
+ZHIPU_API_KEY=sk-xxx
 DASHSCOPE_API_KEY=sk-xxx
 LLM_BASE_URL_OVERRIDE=
-LLM_FALLBACK_PROVIDERS=deepseek,qwen
+LLM_FALLBACK_PROVIDERS=zhipu,qwen
 
 # 动态模型路由，可只配部分项
-LLM_ROUTE_FAST_PROVIDER=zhipu
-LLM_ROUTE_FAST_MODEL=glm-4.7
-LLM_ROUTE_STRONG_PROVIDER=zhipu
-LLM_ROUTE_STRONG_MODEL=glm-4.7
-LLM_ROUTE_LONG_PROVIDER=zhipu
-LLM_ROUTE_LONG_MODEL=glm-4.7
+LLM_ROUTE_FAST_PROVIDER=deepseek
+LLM_ROUTE_FAST_MODEL=deepseek-v4-flash
+LLM_ROUTE_STRONG_PROVIDER=deepseek
+LLM_ROUTE_STRONG_MODEL=deepseek-v4-pro
+LLM_ROUTE_LONG_PROVIDER=deepseek
+LLM_ROUTE_LONG_MODEL=deepseek-v4-pro
 
-# 业务 Agent 专用模型
-SUPERVISOR_PROVIDER=zhipu
-SUPERVISOR_MODEL=GLM-4.6V
-CASE_ANALYSIS_AGENT_PROVIDER=zhipu
-CASE_ANALYSIS_AGENT_MODEL=GLM-4.6V
-CONTRACT_AGENT_PROVIDER=zhipu
-CONTRACT_AGENT_MODEL=glm-4.7
+# 节点/Agent 专用模型；未设置时按注释里的回退链取值
+SUPERVISOR_PROVIDER=deepseek
+SUPERVISOR_MODEL=deepseek-v4-flash-vision-exp
+PLANNER_PROVIDER=deepseek                     # 回退 SUPERVISOR_PROVIDER
+PLANNER_MODEL=deepseek-v4-flash-vision-exp    # 回退 SUPERVISOR_MODEL
+VERIFIER_PROVIDER=deepseek                    # 回退 SUPERVISOR_PROVIDER
+VERIFIER_MODEL=deepseek-v4-flash-vision-exp   # 回退 SUPERVISOR_MODEL
+ANSWER_GENERATOR_PROVIDER=deepseek            # 回退 VERIFIER_PROVIDER
+ANSWER_GENERATOR_MODEL=deepseek-v4-flash-vision-exp
+CASE_ANALYSIS_AGENT_PROVIDER=deepseek         # 回退旧名 FACT_AGENT_PROVIDER
+CASE_ANALYSIS_AGENT_MODEL=deepseek-v4-flash-vision-exp
+STATUTE_RETRIEVAL_AGENT_PROVIDER=deepseek
+STATUTE_RETRIEVAL_AGENT_MODEL=deepseek-v4-flash-vision-exp
+CONTRACT_AGENT_PROVIDER=deepseek
+CONTRACT_AGENT_MODEL=deepseek-v4-pro
+
+# 后台摘要 / 长期记忆 / 画像提取用轻量模型，避免抢主问答模型限额
+MEMORY_EXTRACTOR_MODEL=deepseek-v4-flash
+CONTEXT_COMPACTION_MODEL=deepseek-v4-flash
 ```
 
 ### RAG 与向量存储
@@ -353,14 +453,26 @@ LAWS_DIR=data/laws
 VECTOR_STORE=qdrant
 QDRANT_URL=http://localhost:6333
 QDRANT_COLLECTION=legal_knowledge
-CHROMA_DB_PATH=data/chroma_db
+QDRANT_MEMORY_COLLECTION=legal_memory
+QDRANT_VECTOR_SIZE=512
+QDRANT_MEMORY_VECTOR_SIZE=512
+QDRANT_TIMEOUT=5
 EMBEDDING_MODEL=models/bge-small-zh-v1.5
 RERANKER_MODEL=models/bge-reranker-base
-RETRIEVER_TOP_K=20
+MODEL_DEVICE=cpu
+
+# 三路召回各自的 top_k 与最终条数
+RETRIEVAL_VECTOR_TOP_K=10
+RETRIEVAL_BM25_TOP_K=10
+RETRIEVAL_FINAL_TOP_K=5
 RERANKER_TOP_N=5
 RERANKER_SCORE_THRESHOLD=0.3
+# 精排分全低于阈值时至少保留几条，避免空结果无从归因
+RETRIEVAL_MIN_RESULTS=1
+# 历史版本/已废止条文是否参与召回；默认关闭
+RETRIEVAL_INCLUDE_SUPERSEDED=false
 RRF_K=60
-MAX_TOOL_CALLS=4
+MAX_TOOL_CALLS=5
 ```
 
 ### 查询增强与 LoRA
@@ -368,16 +480,40 @@ MAX_TOOL_CALLS=4
 ```bash
 HYDE_ENABLED=true
 HYDE_REWRITE_ENABLED=true
-HYDE_MODEL=glm-4.6v
-HYDE_LLM_BASE_URL=https://open.bigmodel.cn/api/paas/v4
+HYDE_BACKEND=openai
+HYDE_MODEL=deepseek-v4-flash
+HYDE_LLM_BASE_URL=https://api.deepseek.com
+# 默认复用 DEEPSEEK_API_KEY；需要单独 key 时才配 HYDE_API_KEY
 HYDE_API_KEY=
 
-# 可选：使用本地 HuggingFace + LoRA 生成 HyDE
+# 可选：改用本地 HuggingFace + LoRA 生成 HyDE
 HYDE_BACKEND=hf_lora
-HYDE_HF_MODEL_PATH=/Users/didi/Desktop/Legal/models/Qwen2.5-7B-Instruct
-HYDE_LORA_PATH=/Users/didi/Desktop/Legal/models/qwen2_5_hyde_lora
+HYDE_HF_MODEL_PATH=models/Qwen2.5-7B-Instruct
+HYDE_LORA_PATH=models/qwen2_5_hyde_lora
 HYDE_HF_MAX_NEW_TOKENS=220
 HYDE_HF_TEMPERATURE=0.2
+```
+
+### Context Engineering 与 Memory
+
+```bash
+CONTEXT_INPUT_TOKEN_BUDGET=12000
+CONTEXT_OUTPUT_TOKEN_RESERVE=2000
+CONTEXT_SYSTEM_TOKEN_BUDGET=1800
+CONTEXT_MEMORY_TOKEN_BUDGET=900
+CONTEXT_SUMMARY_TOKEN_BUDGET=700
+CONTEXT_RECENT_MESSAGES_TOKEN_BUDGET=2600
+CONTEXT_PLAN_TOKEN_BUDGET=700
+CONTEXT_EVIDENCE_TOKEN_BUDGET=2400
+CONTEXT_CURRENT_TASK_TOKEN_BUDGET=900
+CONTEXT_RECENT_MESSAGE_COUNT=12
+CONTEXT_TOOL_RESULT_TOKEN_BUDGET=500
+CONTEXT_RETRIEVED_LAW_TOP_N=6
+CONTEXT_RETRIEVED_CASE_TOP_N=4
+# 长会话 checkpoint 压缩阈值
+CONTEXT_WINDOW_TOKEN_BUDGET=12000
+CONTEXT_AUTO_COMPACT_RATIO=0.75
+CONTEXT_AUTO_COMPACT_MESSAGES=16
 ```
 
 ### OpenViking
@@ -391,19 +527,24 @@ OPENVIKING_RESOURCE_TARGET_URI=viking://resources/laws
 OPENVIKING_SKILL_TARGET_URI=
 OPENVIKING_CONTEXT_RESOURCE_LIMIT=4
 OPENVIKING_CONTEXT_SKILL_LIMIT=3
-OPENVIKING_CONTEXT_TIMEOUT=3.0
-OPENVIKING_CONTEXT_SCORE_THRESHOLD=
+OPENVIKING_CONTEXT_TIMEOUT=3
+OPENVIKING_CONTEXT_SCORE_THRESHOLD=0.45
 OPENVIKING_CONTEXT_FALLBACK_LOCAL=true
 OPENVIKING_CONTEXT_SKILL_DOMAIN_FILTER=true
+OPENVIKING_WORKSPACE=.runtime/openviking/workspace
 VIKING_CONTEXT_ROOT=data/viking_context
 ```
 
 ### API、存储、治理
 
 ```bash
-DOCS_DB=data/docs.sqlite
 UPLOAD_DIR=data/uploads
 MAX_UPLOAD_MB=10
+
+# PostgreSQL 是硬依赖；不可用或未迁移时应用拒绝启动
+DATABASE_URL=postgresql+asyncpg://legal:change-me@localhost:5432/legal
+CHECKPOINT_BACKEND=postgres
+LANGGRAPH_STRICT_MSGPACK=true
 
 RESPONSE_CACHE_ENABLED=true
 RESPONSE_CACHE_TTL_SECONDS=3600
@@ -434,21 +575,37 @@ DELILEGAL_CASE_SEARCH_PATH=/api/v1/generice/case/list
 - 最新语料校验：`data/laws/latest_update_report_2026-06-17.md`，来源为国家法律法规数据库。
 - 当前分块：`chunk_all_laws("data/laws")` 可生成 8941 个 `LawChunk`。
 - 评测数据集：`eval/dataset.json` 共 100 条法律场景。
-- 测试文件：`tests/` 下 32 个 `test_*.py`。
-- 元数据库：`data/docs.sqlite` 包含 threads、docs、messages_archive、summaries、user_profiles、agent_traces、agent_events、llm_call_logs、eval_runs、quota_usage、response_cache 等表。
+- 测试文件：`tests/` 下 82 个 `test_*.py`（含 `unit/`、`integration/`、`services/` 子目录）。
+- PostgreSQL：Alembic 管理业务、文档、摘要、画像、配额和可观测性表。
+- Qdrant：首次初始化后包含 `legal_knowledge` 与 `legal_memory` 两个 collection。
 - 本地模型：`models/bge-small-zh-v1.5` 和 `models/bge-reranker-base` 已作为默认 embedding/reranker 路径。
 
 OpenViking 评测阶段性结论见 `docs/openviking-context-layer.md`：法条级 Resource 粒度是正确方向，但全量 OpenViking boost 尚未稳定证明检索提升；后续重点是领域过滤、历史版本降权、score 融合和阈值控制。
 
 ## 启动命令
 
+以下命令都在仓库根目录执行；示例使用 Windows PowerShell，macOS/Linux 把
+`.venv\Scripts\Activate.ps1` 换成 `source .venv/bin/activate` 即可。
+
+### 依赖服务
+
+```powershell
+docker compose up -d postgres redis qdrant
+alembic upgrade head
+```
+
+PostgreSQL 是硬依赖：DSN 不通或迁移未执行时应用会直接拒绝启动。Redis 缺省不影响启动。
+
 ### Web 服务
 
-```bash
-cd /Users/didi/Desktop/Legal
-source .venv/bin/activate
-uvicorn main:app --host 0.0.0.0 --port 8000
+```powershell
+.venv\Scripts\Activate.ps1
+uvicorn main:app --host 0.0.0.0 --port 8000 --reload `
+  --loop services.checkpoint:selector_event_loop_factory
 ```
+
+`--loop` 是 Windows 上的必需项：`AsyncPostgresSaver` 依赖 psycopg 的 async 连接，
+默认的 ProactorEventLoop 不兼容，必须切到 SelectorEventLoop。
 
 访问：
 
@@ -460,25 +617,23 @@ http://localhost:8000/metrics
 
 ### MCP Server
 
-通常由 FastAPI lifespan 自动启动。单独调试：
+**不会**被 FastAPI lifespan 自动拉起，需要单独启动：
 
-```bash
-cd /Users/didi/Desktop/Legal
-source .venv/bin/activate
+```powershell
+.venv\Scripts\Activate.ps1
 python run_mcp.py
 ```
 
 SSE 模式：
 
-```bash
-MCP_TRANSPORT=sse MCP_SSE_PORT=8001 python run_mcp.py
+```powershell
+$env:MCP_TRANSPORT="sse"; $env:MCP_SSE_PORT="8001"; python run_mcp.py
 ```
 
 ### 评测
 
-```bash
-cd /Users/didi/Desktop/Legal
-source .venv/bin/activate
+```powershell
+.venv\Scripts\Activate.ps1
 
 python eval/run_eval.py --mode retrieval
 python eval/run_eval.py --mode context_ab --limit 10 --fast
@@ -487,11 +642,13 @@ python eval/run_eval.py --mode e2e
 python eval/run_eval.py --mode all
 ```
 
+`e2e` 在进程内调用 `initialize_rag()` 与 `build_graph(checkpointer=None)`，不需要启动 FastAPI，
+也不需要 MCP Server 或 PostgreSQL——只要 Qdrant 里已有 `legal_knowledge` 索引即可。
+
 ### OpenViking 语料导入
 
-```bash
-cd /Users/didi/Desktop/Legal
-source .venv/bin/activate
+```powershell
+.venv\Scripts\Activate.ps1
 
 python scripts/import_openviking_corpus.py --laws --skills --wait
 python scripts/import_openviking_corpus.py --article-cards --skills --wait-after-import
@@ -499,23 +656,21 @@ python scripts/import_openviking_corpus.py --article-cards --skills --wait-after
 
 ### 法律语料刷新
 
-```bash
-cd /Users/didi/Desktop/Legal
-source .venv/bin/activate
+```powershell
+.venv\Scripts\Activate.ps1
 python scripts/update_laws_from_flk.py
 ```
 
 ### 测试
 
-```bash
-cd /Users/didi/Desktop/Legal
-source .venv/bin/activate
+```powershell
+.venv\Scripts\Activate.ps1
 pytest -q
 ```
 
 针对关键模块：
 
-```bash
+```powershell
 pytest tests/test_supervisor.py tests/test_supervisor_nodes.py -q
 pytest tests/test_openviking_context.py tests/test_openviking_ab_eval.py -q
 pytest tests/test_gateway.py tests/test_model_routing.py tests/test_observability.py -q
@@ -524,24 +679,38 @@ pytest tests/test_cache.py tests/test_quota.py tests/test_reports_api.py -q
 
 ## 关键设计决策
 
-1. **MCP 解耦工具实现**：Agent 只看到 LangChain tools，真实法律工具在 MCP Server 内，便于独立扩展和调试。
-2. **Supervisor 多智能体路由**：先判断事实不足、合同审查或普通咨询，避免所有请求都进入同一条 ReAct 路径。
-3. **事实不足先追问**：短且缺核心事实的法律问题先补事实，降低错误法律结论风险。
-4. **OpenViking 是 Context Layer**：用于 Resource / Memory / Skill 定位和 trace 可解释，不替代 LangGraph、ChromaDB 或法条检索工具。
-5. **法条引用必须可校验**：最终回答中的明确法条引用会与本轮检索结果比对，不支持的引用会被移除或提示。
-6. **LLM Gateway 统一治理**：所有模型调用经 `GatewayChatModel` 记录延迟、错误、fallback 和 token usage。
-7. **精确响应缓存**：只缓存完全归一化后的问题 + doc_id，避免法律场景中模糊缓存误复用。带 doc_id 的回答用独立短 TTL，不长期缓存合同相关正文。
-8. **Redis 只放可丢弃的热数据**：检索缓存、得理响应缓存、限流、会话元数据、幂等标记全部经统一降级入口（`infrastructure/redis.py`），Redis 挂掉时限流与幂等 fail-open、缓存退化为重算，Agent 主链照常运行；key 只放摘要，不含提问、合同正文与凭据。
-9. **配额先按 thread_id 做 subject**：当前没有登录系统，后续可替换为 user_id。
-10. **异步任务队列是进程内版本**：适合第一版合同报告任务；服务重启会丢失任务状态，生产级需替换 SQLite/RQ/Celery。
-11. **MemorySaver 与 SQLite 分工**：MemorySaver 用于运行时 LangGraph 状态，SQLite 用于可恢复归档和治理数据。
-12. **评测驱动迭代**：检索、上下文路由、真实 OpenViking 和端到端回答都应进入 eval，而不是只靠手测。
+1. **Service Layer 单一实现**：检索与法律工具的逻辑只写在 `services/`，`agent/tools/` 与
+   `mcp_server/tools/` 都是薄封装。Web 链路进程内直调，不经过 MCP Client，因此 MCP 是否运行不影响问答。
+2. **Plan-and-Execute 而非单层 ReAct**：Router 判意图、Planner 拆计划、Supervisor 逐步分派、
+   Verifier 校验、Answer Generator 成稿；Router/Planner/Verifier 与格式化步骤保持确定性节点。
+3. **有界执行**：计划步数（6）、单任务工具调用次数（5）、replan 次数（1）、上下文 token 都有显式预算，
+   超限走 `tool_limit_exceeded` 记录观察后继续，而不是抛错终止。
+4. **事实不足先追问**：短且缺核心事实的法律问题先补事实，降低错误法律结论风险。
+5. **OpenViking 是 Context Layer**：用于 Resource / Memory / Skill 定位和 trace 可解释，不替代
+   LangGraph、Qdrant 或法条检索工具；`memory` 节点里 best-effort 调用，失败只降级。
+6. **法条引用必须可校验**：最终回答中的明确法条引用会与本轮检索结果比对，不支持的引用会被移除或提示。
+7. **LLM Gateway 统一治理**：所有模型调用经 `GatewayChatModel` 记录延迟、错误、fallback 和 token usage。
+8. **精确响应缓存**：只缓存完全归一化后的问题 + doc_id，避免法律场景中模糊缓存误复用。带 doc_id 的回答用独立短 TTL，不长期缓存合同相关正文。
+9. **Redis 只放可丢弃的热数据**：检索缓存、得理响应缓存、限流、会话元数据、幂等标记全部经统一降级入口（`infrastructure/redis.py`），Redis 挂掉时限流与幂等 fail-open、缓存退化为重算，Agent 主链照常运行；key 只放摘要，不含提问、合同正文与凭据。
+10. **权威记录在 PostgreSQL**：配额、trace、消息归档以关系库为准；所有 DDL 只由 Alembic 负责，
+    应用启动只校验迁移结果、从不建表。
+11. **配额先按 thread_id 做 subject**：当前没有登录系统，后续可替换为 user_id。
+12. **异步任务队列是进程内版本**：适合第一版合同报告任务；服务重启会丢失任务状态，生产级需替换 PostgreSQL/RQ/Celery。
+13. **Checkpoint 与长期 Memory 分工**：AsyncPostgresSaver 只解决中断恢复与线程连续性，可被压缩、
+    过期或删除；长期 Memory 存在 Qdrant `legal_memory`，按 `user_id` 隔离。两者不能互相替代。
+14. **评测驱动迭代**：检索、上下文路由、真实 OpenViking 和端到端回答都应进入 eval，而不是只靠手测。
 
 ## 给后续 AI 的注意事项
 
-- 不要把项目描述成旧版单 Agent ReAct 系统；当前是 Supervisor + 多业务 Agent。
+- 不要把项目描述成旧版单 Agent ReAct 系统；当前是 Router + Planner + Supervisor + 三类 Specialist。
+- 不要说 Web 请求会经过 MCP，或说 MCP Server 由 FastAPI lifespan 启动；`main.py` 从不拉起 MCP 进程，
+  `agent/tools/` 是进程内直调。
+- 不要把默认模型写成智谱；默认 provider 是 `deepseek`，HyDE 默认 `deepseek-v4-flash`。
+- 不要提 `services/mcp_client.py`、`agent/nodes.py`、`services/vectorstore/`、ChromaDB 或 SQLite——
+  这些都已不存在；向量存储只有 Qdrant，关系库只有 PostgreSQL。
+- 不要把 `SLIDING_WINDOW_SIZE`（8）当成模型输入窗口；模型窗口是 `CONTEXT_RECENT_MESSAGE_COUNT`（12）。
 - 不要把 OpenViking 简化成“数据库替代品”；它在本项目里主要是上下文组织、检索前路由和决策辅助。
-- 不要把 OpenViking 命中当成法条来源；法条依据必须来自 MCP 检索工具。
+- 不要把 OpenViking 命中当成法条来源；法条依据必须来自 `retrieve_local_law_tool` / `search_law_tool`。
 - 不要声称已有完整生产级认证；当前只有可选 admin API key，普通用户身份仍以 thread_id 近似。
 - 不要声称异步任务持久可靠；`services.task_queue` 是进程内队列。
 - 修改 RAG、OpenViking、模型路由或引用校验时，优先补充或更新 eval 和 trace 字段。

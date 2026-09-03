@@ -41,16 +41,61 @@
 | Web/API | FastAPI、SSE、Vanilla JS SPA |
 | Agent 编排 | LangGraph StateGraph |
 | 工具协议 | MCP / FastMCP |
-| 检索 | ChromaDB、BM25、RRF、bge-small-zh-v1.5、bge-reranker-base |
+| 检索 | Qdrant、BM25、RRF、bge-small-zh-v1.5、bge-reranker-base |
 | LLM 接入 | OpenAI-compatible provider abstraction：Zhipu、DeepSeek、Qwen、Ollama |
-| 存储 | PostgreSQL、SQLite、ChromaDB |
+| 存储 | PostgreSQL、Redis、Qdrant |
 | 缓存/限流 | Redis（可降级，非主数据库） |
 | 文档 | VitePress、Mermaid |
 | 测试 | pytest |
 
 ## 快速开始
 
-### 1. 安装依赖
+### Docker Compose 一键启动（推荐）
+
+Docker Compose 会同时启动 Legal Agent、PostgreSQL、Redis 和 Qdrant，并在 API
+启动前自动执行 Alembic 数据库迁移：
+
+```bash
+cp .env.example .env
+# 编辑 .env，至少填写一个可用的 LLM API Key
+docker compose up --build -d
+docker compose ps
+```
+
+Windows PowerShell 中复制配置可使用 `Copy-Item .env.example .env`。首次启动时如果
+Qdrant 尚无法律索引，应用会生成 embedding 并写入 Qdrant，耗时取决于机器性能。
+本地 `data/laws/` 与 `models/` 会只读挂载进应用容器；应用运行数据、PostgreSQL、
+Redis、Qdrant 与 Hugging Face 缓存使用 Docker 命名卷持久化。若本地没有
+`models/bge-small-zh-v1.5` 或 `models/bge-reranker-base`，容器会在首次使用时从
+Hugging Face 下载对应的 `BAAI` 模型并复用缓存卷。
+
+镜像安装 CPU 版 PyTorch，embedding 与 reranker 全程跑在 CPU 上，不需要 NVIDIA 驱动或
+Container Toolkit。默认精排 20 个候选，耗时随可用核数变化，详见
+[部署文档](docs/guide/deployment.md)。
+
+启动后访问：
+
+- 应用：<http://localhost:8000/>
+- 健康检查：<http://localhost:8000/api/health>
+- Qdrant 控制台：<http://localhost:6333/dashboard>
+
+常用运维命令：
+
+```bash
+docker compose logs -f app
+docker compose down
+# 同时清空应用运行数据、PostgreSQL、Redis、Qdrant 和模型缓存（不可恢复）
+docker compose down -v
+```
+
+默认只把 PostgreSQL、Redis 和 Qdrant 端口绑定到宿主机 `127.0.0.1`。端口、数据库
+账户和绑定地址可通过 `.env` 中的 Docker Compose 变量覆盖，示例见
+[`.env.example`](.env.example)。生产环境请务必修改默认数据库密码，并为外部访问配置
+反向代理、TLS 和服务鉴权。
+
+### 本地 Python 启动
+
+#### 1. 安装依赖
 
 ```bash
 git clone https://github.com/2249619829/Legal.git
@@ -62,7 +107,7 @@ pip install -r requirements.txt
 pip install -r requirements-dev.txt
 ```
 
-### 2. 配置环境变量
+#### 2. 配置环境变量
 
 ```bash
 cp .env.example .env
@@ -77,15 +122,16 @@ DEEPSEEK_API_KEY=sk-xxx
 
 也可以切换到 `zhipu`、`qwen` 或 `ollama`。更多配置见 [开发指南](docs/guide/development.md)。
 
-### 3. 构建法条索引
+#### 3. 构建法条索引
 
 ```bash
 python -m services.indexer.builder
 ```
 
-索引会写入 `data/chroma_db/`。该目录是运行产物，不进入 Git。
+索引会写入 Qdrant 的 `legal_knowledge` collection；长期记忆使用独立的
+`legal_memory` collection。
 
-### 4. 启动服务
+#### 4. 启动服务
 
 ```bash
 uvicorn main:app --host 0.0.0.0 --port 8000 --reload \
@@ -93,9 +139,7 @@ uvicorn main:app --host 0.0.0.0 --port 8000 --reload \
   --reload-exclude 'data/*' \
   --reload-exclude 'data/**' \
   --reload-exclude 'models/*' \
-  --reload-exclude 'models/**' \
-  --reload-exclude '*.sqlite' \
-  --reload-exclude '*.sqlite-*'
+  --reload-exclude 'models/**'
 ```
 
 自定义 loop 在 Windows 上确保 PostgreSQL checkpointer 使用 psycopg 支持的
@@ -139,5 +183,5 @@ Legal/
 - 根目录 README：已补齐项目简介、截图、运行方式、测试方式和目录说明。
 - Pages：文档站使用 GitHub Actions 部署到 `https://2249619829.github.io/Legal/`。
 - 截图：保存在 `docs/public/screenshots/`，README 和文档站可直接引用。
-- 运行数据：`data/chroma_db/`、SQLite checkpoint、上传文件、模型权重等均通过 `.gitignore` 排除。
+- 运行数据：PostgreSQL、Redis、Qdrant 命名卷及上传文件不进入 Git；模型权重通过 `.gitignore` 排除。
 - 密钥：仓库只保留 `.env.example` 占位配置，不提交 `.env`。
