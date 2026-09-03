@@ -2,7 +2,7 @@
 
 职责：
 1. 摘要生成：当消息数超过滑动窗口时，压缩溢出部分为增量摘要
-2. 长期记忆提取：从交互中提取独立记忆条目（语义/情节/程序），存入 ChromaDB
+2. 长期记忆提取：从交互中提取独立记忆条目（语义/情节/程序），存入 Qdrant
 3. 实体记忆更新：从对话中提取用户画像变化
 
 设计原则：
@@ -296,7 +296,7 @@ async def extract_and_save_memory(
     except Exception as e:
         log.warning("摘要生成失败: %s", e)
 
-    # 3. 长期记忆提取（存入 ChromaDB）
+    # 3. 长期记忆提取（存入 Qdrant）
     try:
         conversation_text = _format_messages_text(_user_messages(new_msg_dicts or msg_dicts))
         if conversation_text:

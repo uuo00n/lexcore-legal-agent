@@ -8,7 +8,7 @@ from services.rag.retriever import get_retriever
 
 
 class LocalLegalRetriever:
-    """隔离工具层与 Chroma/BM25/RRF/Reranker 的具体实现。"""
+    """隔离工具层与 Qdrant/BM25/RRF/Reranker 的具体实现。"""
 
     def __init__(self, retriever: Any | None = None) -> None:
         self._retriever = retriever or get_retriever()

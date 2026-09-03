@@ -1,4 +1,4 @@
-"""RAG 组件入口与向量存储工厂。"""
+"""RAG 组件入口；向量存储固定使用 Qdrant。"""
 from __future__ import annotations
 
 import os
@@ -26,29 +26,22 @@ _store: Optional[VectorStore] = None
 
 
 def _configured_backend() -> str:
-    """读取向量存储后端配置。"""
-    return os.getenv("VECTOR_STORE", "chroma").strip().lower()
+    """兼容读取配置，但只允许 Qdrant。"""
+    return os.getenv("VECTOR_STORE", "qdrant").strip().lower()
 
 
 def get_vector_store() -> VectorStore:
-    """返回按 VECTOR_STORE 配置创建的向量存储单例。"""
+    """返回 Qdrant 向量存储单例。"""
     global _store
     if _store is not None:
         return _store
 
     backend = _configured_backend()
-    if backend == "chroma":
-        from services.rag.chroma_store import ChromaVectorStore
+    if backend != "qdrant":
+        raise ValueError(f"不支持的 VECTOR_STORE: {backend!r}；当前架构仅允许 qdrant")
+    from services.rag.qdrant_store import QdrantVectorStore
 
-        _store = ChromaVectorStore()
-    elif backend == "qdrant":
-        from services.rag.qdrant_store import QdrantVectorStore
-
-        _store = QdrantVectorStore()
-    else:
-        raise ValueError(
-            f"不支持的 VECTOR_STORE: {backend!r}，可选值: chroma, qdrant"
-        )
+    _store = QdrantVectorStore()
     return _store
 
 

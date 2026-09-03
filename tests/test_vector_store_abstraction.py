@@ -42,74 +42,6 @@ def _document(
     )
 
 
-class _FakeChromaCollection:
-    def __init__(self) -> None:
-        self.rows: dict[str, tuple[list[float], str, dict]] = {}
-        self.last_query = None
-
-    def upsert(self, *, ids, embeddings, documents, metadatas) -> None:
-        for values in zip(ids, embeddings, documents, metadatas):
-            chunk_id, embedding, document, metadata = values
-            self.rows[chunk_id] = (embedding, document, metadata)
-
-    def query(self, **kwargs):
-        self.last_query = kwargs
-        chunk_id, (_, document, metadata) = next(iter(self.rows.items()))
-        return {
-            "ids": [[chunk_id]],
-            "documents": [[document]],
-            "metadatas": [[metadata]],
-            "distances": [[0.1]],
-        }
-
-    def delete(self, *, ids) -> None:
-        for chunk_id in ids:
-            self.rows.pop(chunk_id, None)
-
-    def count(self) -> int:
-        return len(self.rows)
-
-
-class _FakeChromaClient:
-    def __init__(self) -> None:
-        self.collection = _FakeChromaCollection()
-
-    def get_or_create_collection(self, **_kwargs):
-        return self.collection
-
-    def delete_collection(self, **_kwargs) -> None:
-        self.collection = _FakeChromaCollection()
-
-    def heartbeat(self) -> int:
-        return 1
-
-
-def test_chroma_implements_vector_store_contract() -> None:
-    from services.rag.chroma_store import ChromaVectorStore
-
-    store = ChromaVectorStore(client=_FakeChromaClient())
-    document = _document()
-
-    assert isinstance(store, VectorStore)
-    store.add_documents([document], [[1.0, 0.0]])
-    matches = store.search(
-        [1.0, 0.0],
-        top_k=1,
-        metadata_filter={"law_type": "法律"},
-    )
-
-    assert isinstance(matches[0], DocumentResult)
-    assert matches[0].document.chunk_id == document.chunk_id
-    assert matches[0].document.metadata["law_type"] == "法律"
-    assert matches[0].score == pytest.approx(0.9)
-    assert store._collection.last_query["where"] == {"law_type": "法律"}
-    assert store.health_check() is True
-    store.delete([])
-    assert store.count() == 1
-    store.delete([document.chunk_id])
-    assert store.count() == 0
-
-
 class _FakeQdrantModels:
     class Distance:
         COSINE = "cosine"
@@ -325,19 +257,12 @@ def test_qdrant_in_memory_round_trip() -> None:
     assert store.count() == 0
 
 
-def test_factory_defaults_to_chroma_and_supports_qdrant(monkeypatch) -> None:
+def test_factory_defaults_to_qdrant(monkeypatch) -> None:
     import services.rag as rag
-    import services.rag.chroma_store as chroma_module
     import services.rag.qdrant_store as qdrant_module
 
-    chroma = object()
     qdrant = object()
     monkeypatch.delenv("VECTOR_STORE", raising=False)
-    monkeypatch.setattr(chroma_module, "ChromaVectorStore", lambda: chroma)
-    rag.reset_vector_store()
-    assert rag.get_vector_store() is chroma
-
-    monkeypatch.setenv("VECTOR_STORE", "qdrant")
     monkeypatch.setattr(qdrant_module, "QdrantVectorStore", lambda: qdrant)
     rag.reset_vector_store()
     assert rag.get_vector_store() is qdrant
@@ -348,5 +273,5 @@ def test_factory_rejects_unknown_backend(monkeypatch) -> None:
 
     monkeypatch.setenv("VECTOR_STORE", "unknown")
     rag.reset_vector_store()
-    with pytest.raises(ValueError, match="chroma, qdrant"):
+    with pytest.raises(ValueError, match="仅允许 qdrant"):
         rag.get_vector_store()

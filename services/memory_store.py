@@ -1,104 +1,144 @@
-"""长期记忆向量存储 —— 基于 ChromaDB 的语义记忆检索。
+"""Qdrant 长期记忆向量存储。
 
-职责：
-- 将结构化记忆条目（语义记忆/情节记忆/程序记忆）存入 ChromaDB
-- 支持语义检索 + 新鲜度权重的综合排序
-- 复用现有 ChromaDB 实例（data/chroma_db/），使用独立 collection "memory"
-
-存储粒度：一次完整交互 或 一个独立知识点（不是逐条消息）。
+长期记忆与法律知识分别使用独立 collection；两者共享 Qdrant 服务但不会混查。
+owner/thread 过滤是强制边界，禁止无作用域的全局语义检索。
 """
 from __future__ import annotations
 
+import logging
 import math
 import os
 import time
-import logging
+import uuid
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
 log = logging.getLogger(__name__)
 
-# ─── 新鲜度衰减配置 ──────────────────────────────────────────────────────
-FRESHNESS_WEIGHT = 0.3       # 新鲜度在最终得分中的权重
-SEMANTIC_WEIGHT = 0.7        # 语义相似度在最终得分中的权重
-DECAY_RATE = 0.05            # 时间衰减系数（越大衰减越快）
+FRESHNESS_WEIGHT = 0.3
+SEMANTIC_WEIGHT = 0.7
+DECAY_RATE = 0.05
+DEFAULT_MEMORY_COLLECTION = "legal_memory"
+DEFAULT_VECTOR_SIZE = 512
+_MEMORY_NAMESPACE = uuid.UUID("0b28bd33-d783-4b20-a8fd-8eae57255eae")
+_PAYLOAD_INDEX_FIELDS = ("owner_id", "thread_id", "memory_type")
 
 
 @dataclass
 class MemoryItem:
     """长期记忆条目。"""
-    content: str                          # 记忆内容
-    memory_type: str                      # 类型：semantic / episodic / procedural
-    thread_id: str                        # 来源对话
-    created_at: int                       # 创建时间戳
-    metadata: dict = field(default_factory=dict)  # 附加元数据
-    score: float = 0.0                    # 检索得分（综合语义 + 新鲜度）
+
+    content: str
+    memory_type: str
+    thread_id: str
+    created_at: int
+    metadata: dict = field(default_factory=dict)
+    score: float = 0.0
 
 
 class MemoryStore:
-    """长期记忆向量存储，基于 ChromaDB memory collection。
+    """独立 Qdrant collection 上的长期记忆存储。"""
 
-    使用与法条索引相同的 ChromaDB 实例，但独立 collection。
-    embedding 模型复用 bge-small-zh-v1.5。
-    """
+    def __init__(
+        self,
+        *,
+        client: Any | None = None,
+        models: Any | None = None,
+        collection_name: str | None = None,
+    ) -> None:
+        if client is None:
+            from qdrant_client import QdrantClient
 
-    def __init__(self):
-        """
-        函数作用：
-            初始化 ChromaDB memory collection 和 embedding 模型。
-        输入参数：
-            - 无
-        输出参数：
-            - 未标注
-        """
-        import chromadb
-        from chromadb.config import Settings
+            local_path = (os.getenv("QDRANT_PATH") or "").strip()
+            if local_path:
+                client = QdrantClient(":memory:" if local_path == ":memory:" else local_path)
+            else:
+                client = QdrantClient(
+                    url=os.getenv("QDRANT_URL") or "http://localhost:6333",
+                    api_key=os.getenv("QDRANT_API_KEY") or None,
+                    timeout=int(os.getenv("QDRANT_TIMEOUT", "5")),
+                )
+        if models is None:
+            from qdrant_client import models as qdrant_models
 
-        db_path = os.getenv("CHROMA_DB_PATH", "data/chroma_db")
-        self._client = chromadb.PersistentClient(
-            path=db_path,
-            settings=Settings(anonymized_telemetry=False),
-        )
-        self._collection = self._client.get_or_create_collection(
-            name="memory",
-            metadata={"hnsw:space": "cosine"},
+            models = qdrant_models
+        self._client = client
+        self._models = models
+        self._collection_name = (
+            collection_name
+            or os.getenv("QDRANT_MEMORY_COLLECTION")
+            or DEFAULT_MEMORY_COLLECTION
         )
         self._model = None
-        log.info(
-            "长期记忆向量存储初始化完成，当前记忆条目数: %d",
-            self._collection.count(),
+        self._initialized = False
+
+    def _collection_exists(self) -> bool:
+        if hasattr(self._client, "collection_exists"):
+            return bool(self._client.collection_exists(self._collection_name))
+        try:
+            self._client.get_collection(self._collection_name)
+        except Exception:
+            return False
+        return True
+
+    def initialize(self, vector_size: int | None = None) -> None:
+        """幂等创建长期记忆 collection 与作用域索引。"""
+        size = vector_size or int(
+            os.getenv("QDRANT_MEMORY_VECTOR_SIZE")
+            or os.getenv("QDRANT_VECTOR_SIZE")
+            or str(DEFAULT_VECTOR_SIZE)
         )
+        if size <= 0:
+            raise ValueError("QDRANT_MEMORY_VECTOR_SIZE 必须大于 0")
+        if self._initialized and self._collection_exists():
+            return
+        if not self._collection_exists():
+            try:
+                self._client.create_collection(
+                    collection_name=self._collection_name,
+                    vectors_config=self._models.VectorParams(
+                        size=size,
+                        distance=self._models.Distance.COSINE,
+                    ),
+                )
+            except Exception:
+                if not self._collection_exists():
+                    raise
+        self._create_payload_indexes()
+        self._initialized = True
+        log.info("Qdrant 长期记忆 collection 已就绪: %s", self._collection_name)
+
+    def _create_payload_indexes(self) -> None:
+        if not hasattr(self._client, "create_payload_index"):
+            return
+        backend = getattr(self._client, "_client", None)
+        if backend is not None and backend.__class__.__module__.startswith("qdrant_client.local"):
+            return
+        for field_name in _PAYLOAD_INDEX_FIELDS:
+            self._client.create_payload_index(
+                collection_name=self._collection_name,
+                field_name=field_name,
+                field_schema=self._models.PayloadSchemaType.KEYWORD,
+                wait=True,
+            )
 
     def _get_model(self):
-        """
-        函数作用：
-            延迟加载 embedding 模型（复用 bge-small-zh-v1.5）。
-        输入参数：
-            - 无
-        输出参数：
-            - 未标注
-        """
         if self._model is None:
             from sentence_transformers import SentenceTransformer
+
             model_name = os.getenv("EMBEDDING_MODEL", "models/bge-small-zh-v1.5")
             model_path = Path(model_name)
             if model_path.exists():
                 model_name = str(model_path.resolve())
-            self._model = SentenceTransformer(model_name)
+            self._model = SentenceTransformer(
+                model_name,
+                device=os.getenv("MODEL_DEVICE") or None,
+            )
         return self._model
 
     def _embed(self, text: str) -> list[float]:
-        """
-        函数作用：
-            将文本编码为向量。
-        输入参数：
-            - text: str
-        输出参数：
-            - list[float]
-        """
-        model = self._get_model()
-        return model.encode(text, normalize_embeddings=True).tolist()
+        return self._get_model().encode(text, normalize_embeddings=True).tolist()
 
     def add_memory(
         self,
@@ -108,37 +148,31 @@ class MemoryStore:
         metadata: Optional[dict] = None,
         owner_id: Optional[str] = None,
     ) -> str:
-        """
-        函数作用：
-            添加一条长期记忆。
-        输入参数：
-            - thread_id: str
-            - content: str
-            - memory_type: str
-            - metadata: Optional[dict]，默认值 None
-            - owner_id: Optional[str]，长期记忆 namespace；缺省时使用 thread_id
-        输出参数：
-            - str
-        """
+        if not thread_id or not content.strip():
+            raise ValueError("thread_id 和 content 不能为空")
         now = int(time.time())
-        memory_id = f"mem_{thread_id}_{now}_{hash(content) % 10000:04d}"
+        effective_owner = owner_id or thread_id
+        memory_id = str(
+            uuid.uuid5(
+                _MEMORY_NAMESPACE,
+                f"{effective_owner}\0{thread_id}\0{memory_type}\0{content}",
+            )
+        )
         embedding = self._embed(content)
-
-        meta = {
+        self.initialize(len(embedding))
+        payload = {
             **(metadata or {}),
+            "content": content,
             "thread_id": thread_id,
-            "owner_id": owner_id or thread_id,
+            "owner_id": effective_owner,
             "memory_type": memory_type,
             "created_at": now,
         }
-
-        self._collection.upsert(
-            ids=[memory_id],
-            embeddings=[embedding],
-            documents=[content],
-            metadatas=[meta],
+        self._client.upsert(
+            collection_name=self._collection_name,
+            points=[self._models.PointStruct(id=memory_id, vector=embedding, payload=payload)],
+            wait=True,
         )
-        log.debug("长期记忆已存储: type=%s, id=%s", memory_type, memory_id)
         return memory_id
 
     def search_memories(
@@ -148,115 +182,90 @@ class MemoryStore:
         top_k: int = 5,
         owner_id: Optional[str] = None,
     ) -> list[MemoryItem]:
-        """
-        函数作用：
-            检索相关长期记忆，应用新鲜度权重重排序。
-        输入参数：
-            - query: str
-            - thread_id: Optional[str]，默认值 None
-            - top_k: int，默认值 5
-            - owner_id: Optional[str]，认证用户 namespace；优先于 thread_id
-        输出参数：
-            - list[MemoryItem]
-        """
-        if self._collection.count() == 0:
+        if top_k <= 0 or not query.strip() or not (owner_id or thread_id):
             return []
-
-        query_embedding = self._embed(query)
-
-        # ChromaDB 检索（取 top_k * 3 候选，留余量给新鲜度重排）
-        # Long-term memory is user-scoped when an authenticated owner is known.
-        # Otherwise it is deliberately restricted to the current thread; an
-        # unscoped global similarity search could leak another user's memory.
-        where_filter = (
-            {"owner_id": owner_id}
-            if owner_id
-            else ({"thread_id": thread_id} if thread_id else None)
-        )
-        n_results = min(top_k * 3, self._collection.count())
-
-        results = self._collection.query(
-            query_embeddings=[query_embedding],
-            n_results=n_results,
-            where=where_filter,
-            include=["documents", "metadatas", "distances"],
-        )
-
-        if not results["ids"][0]:
+        if not self._collection_exists() or self.count() == 0:
             return []
-
-        # 组装结果并应用新鲜度权重
+        scope_key = "owner_id" if owner_id else "thread_id"
+        scope_value = owner_id or thread_id
+        query_filter = self._models.Filter(
+            must=[
+                self._models.FieldCondition(
+                    key=scope_key,
+                    match=self._models.MatchValue(value=scope_value),
+                )
+            ]
+        )
+        response = self._client.query_points(
+            collection_name=self._collection_name,
+            query=self._embed(query),
+            query_filter=query_filter,
+            limit=top_k * 3,
+            with_payload=True,
+            with_vectors=False,
+        )
+        points = getattr(response, "points", response)
         now = time.time()
         items: list[MemoryItem] = []
-
-        for i, doc_id in enumerate(results["ids"][0]):
-            content = results["documents"][0][i]
-            meta = results["metadatas"][0][i]
-            distance = results["distances"][0][i]
-
-            # ChromaDB cosine distance → similarity
-            semantic_score = 1.0 - distance
-
-            # 新鲜度得分：指数衰减
-            created_at = meta.get("created_at", 0)
-            days_elapsed = (now - created_at) / 86400.0
+        for point in points:
+            payload = dict(point.payload or {})
+            created_at = int(payload.get("created_at") or 0)
+            days_elapsed = max(0.0, (now - created_at) / 86400.0)
             freshness_score = math.exp(-DECAY_RATE * days_elapsed)
-
-            # 综合得分
-            final_score = SEMANTIC_WEIGHT * semantic_score + FRESHNESS_WEIGHT * freshness_score
-
-            items.append(MemoryItem(
-                content=content,
-                memory_type=meta.get("memory_type", "unknown"),
-                thread_id=meta.get("thread_id", ""),
-                created_at=created_at,
-                metadata=meta,
-                score=final_score,
-            ))
-
-        # 按综合得分降序排列，取 top_k
-        items.sort(key=lambda x: x.score, reverse=True)
+            score = SEMANTIC_WEIGHT * float(point.score) + FRESHNESS_WEIGHT * freshness_score
+            items.append(
+                MemoryItem(
+                    content=str(payload.get("content") or ""),
+                    memory_type=str(payload.get("memory_type") or "unknown"),
+                    thread_id=str(payload.get("thread_id") or ""),
+                    created_at=created_at,
+                    metadata=payload,
+                    score=score,
+                )
+            )
+        items.sort(key=lambda item: item.score, reverse=True)
         return items[:top_k]
 
     def count(self) -> int:
-        """
-        函数作用：
-            返回当前记忆条目总数。
-        输入参数：
-            - 无
-        输出参数：
-            - int
-        """
-        return self._collection.count()
+        if not self._collection_exists():
+            return 0
+        return int(self._client.count(self._collection_name, exact=True).count)
+
+    def health_check(self) -> bool:
+        try:
+            self._client.get_collections()
+        except Exception:
+            return False
+        return True
 
 
-# ─── 模块级单例 ──────────────────────────────────────────────────────────
 _memory_store: Optional[MemoryStore] = None
 
 
 def init_memory_store() -> MemoryStore:
-    """
-    函数作用：
-        初始化长期记忆向量存储（单例）。
-    输入参数：
-        - 无
-    输出参数：
-        - MemoryStore
-    """
     global _memory_store
-    _memory_store = MemoryStore()
+    if _memory_store is None:
+        _memory_store = MemoryStore()
+    _memory_store.initialize()
     return _memory_store
 
 
 def get_memory_store() -> MemoryStore:
-    """
-    函数作用：
-        获取长期记忆向量存储实例。
-    输入参数：
-        - 无
-    输出参数：
-        - MemoryStore
-    """
     if _memory_store is None:
         raise RuntimeError("memory store not initialized; call init_memory_store() first")
     return _memory_store
+
+
+def reset_memory_store() -> None:
+    global _memory_store
+    _memory_store = None
+
+
+__all__ = [
+    "DEFAULT_MEMORY_COLLECTION",
+    "MemoryItem",
+    "MemoryStore",
+    "get_memory_store",
+    "init_memory_store",
+    "reset_memory_store",
+]

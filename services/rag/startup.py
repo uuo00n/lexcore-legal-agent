@@ -15,9 +15,16 @@ def initialize_rag() -> None:
     load_dotenv()
     from services.indexer.builder import load_or_build_index
     from services.indexer.chunker import chunk_all_laws
+    from services.rag import get_vector_store
     from services.rag.retriever import init_retriever
 
     laws_dir = os.getenv("LAWS_DIR", "data/laws")
+    vector_size = int(os.getenv("QDRANT_VECTOR_SIZE", "512"))
+    store = get_vector_store()
+    initializer = getattr(store, "initialize", None)
+    if initializer is None:
+        raise RuntimeError("configured vector store does not support collection initialization")
+    initializer(vector_size)
     load_or_build_index(laws_dir)
     chunks = chunk_all_laws(laws_dir)
     init_retriever(chunks=chunks)
