@@ -3,12 +3,7 @@ __pycache__/
 *.pyc
 *.pyo
 .env
-data/*.sqlite
-data/*.sqlite-journal
-data/*.sqlite-shm
-data/*.sqlite-wal
 data/*.db
-data/chroma_db/
 data/finetune/
 data/DISC-Law-SFT-*.jsonl
 data/uploads/*
@@ -25,17 +20,15 @@ htmlcov/
 .DS_Store
 .idea/
 .vscode/
-models/
-chroma_db/
+# 只忽略仓库根目录的模型权重目录；infrastructure/models/ 是 ORM 源码，必须入库。
+/models/
 venv/
 __pycache__/
 
-models/
 *.safetensors
 *.bin
 *.pt
 *.pth
-chromadb/
 __pycache__/
 .venv/
 
