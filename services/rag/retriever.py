@@ -23,6 +23,7 @@ from services.rag.interfaces import (
     LawChunk,
     MetadataFilter,
     VectorStore,
+    is_superseded,
 )
 from services.rag.reranker import Reranker
 
@@ -53,7 +54,8 @@ def _get_model():
         model_path = Path(model_name)
         if model_path.exists():
             model_name = str(model_path.resolve())
-        _embedding_model = SentenceTransformer(model_name)
+        model_device = os.getenv("MODEL_DEVICE") or None
+        _embedding_model = SentenceTransformer(model_name, device=model_device)
     return _embedding_model
 
 
@@ -149,6 +151,13 @@ def _positive_int_env(name: str, default: int) -> int:
     return value
 
 
+def _bool_env(name: str, default: bool) -> bool:
+    raw_value = os.getenv(name)
+    if raw_value is None:
+        return default
+    return raw_value.strip().lower() in {"1", "true", "yes", "on"}
+
+
 def _serialize_hits(results: list[DocumentResult]) -> list[dict[str, Any]]:
     return [
         {
@@ -216,6 +225,8 @@ class HybridRetriever:
         # 兼容旧构造参数；设置后同时覆盖两路召回 TopK。
         top_k: Optional[int] = None,
         score_threshold: Optional[float] = None,
+        min_results: Optional[int] = None,
+        include_superseded: Optional[bool] = None,
     ) -> None:
         # init_retriever 会注入正式向量检索器；延迟创建便于独立测试 RRF。
         self._semantic = semantic
@@ -255,10 +266,33 @@ class HybridRetriever:
             if score_threshold is not None
             else float(os.getenv("RERANKER_SCORE_THRESHOLD", "0.3"))
         )
+        # 阈值只用于「削掉尾部弱相关」，不允许把结果削成空。低于阈值时至少
+        # 保留最高分的若干条，由上层的 low_quality / evidence_insufficient
+        # 标记去表达「不可信」，否则调用方无法区分「库里没有」和「分数不够」。
+        self._min_results = (
+            min_results
+            if min_results is not None
+            else _positive_int_env("RETRIEVAL_MIN_RESULTS", 1)
+        )
+        # 历史版本 / 已废止条文默认不参与召回：本地语料里它们与现行法条几乎
+        # 逐字重合，会直接抢占 TopK 名额。需要查旧法时显式打开。
+        self._include_superseded = (
+            include_superseded
+            if include_superseded is not None
+            else _bool_env("RETRIEVAL_INCLUDE_SUPERSEDED", False)
+        )
 
     @property
     def score_threshold(self) -> float:
         return self._score_threshold
+
+    @property
+    def min_results(self) -> int:
+        return self._min_results
+
+    @property
+    def include_superseded(self) -> bool:
+        return self._include_superseded
 
     def set_keyword_retriever(self, keyword: BM25Retriever) -> None:
         self._keyword = keyword
@@ -338,6 +372,25 @@ class HybridRetriever:
             append_unique_results(combined, results)
         return combined[:top_k], error_type
 
+    def _drop_superseded(
+        self,
+        results: list[DocumentResult],
+    ) -> tuple[list[DocumentResult], int]:
+        """
+        函数作用：
+            剔除历史版本 / 已废止条文。两路召回统一在这里过滤，因为 BM25
+            是内存索引、拿不到向量库的 payload filter，只有后置过滤能保证
+            两条链路口径一致。
+        输入参数：
+            - results: list[DocumentResult]
+        输出参数：
+            - tuple[list[DocumentResult], int]，(保留结果, 丢弃条数)
+        """
+        if self._include_superseded:
+            return results, 0
+        kept = [item for item in results if not is_superseded(item.document)]
+        return kept, len(results) - len(kept)
+
     def _run_pipeline(
         self,
         query: str,
@@ -414,6 +467,8 @@ class HybridRetriever:
             error_type=bm25_error,
         )
 
+        semantic_results, superseded_vector = self._drop_superseded(semantic_results)
+        keyword_results, superseded_bm25 = self._drop_superseded(keyword_results)
         if semantic_results and keyword_results:
             fused_results = reciprocal_rank_fusion_scored(
                 [semantic_results, keyword_results],
@@ -434,6 +489,7 @@ class HybridRetriever:
             score_type="rrf" if fusion_mode == "rrf" else fusion_mode,
             vector_error=vector_error,
             bm25_error=bm25_error,
+            superseded_dropped=superseded_vector + superseded_bm25,
         )
 
         final_limit = top_k if top_k is not None else self._final_top_k
@@ -500,6 +556,7 @@ class HybridRetriever:
             "rrf_k": self._rrf_k,
             "reranker": self._reranker is not None,
             "keyword": self._keyword is not None,
+            "include_superseded": self._include_superseded,
         }
 
     def _run_pipeline_cached(
@@ -574,16 +631,34 @@ class HybridRetriever:
         top_k: int | None = None,
         trace_id: str | None = None,
     ) -> list[LawChunk]:
+        """
+        函数作用：
+            返回不带分数的法条列表，并按阈值削掉尾部弱相关结果。
+            与 ``retrieve_with_scores`` 的区别只在这一层过滤：调用方拿不到
+            分数、无法自行判断可信度，所以这里替它裁掉尾部；但至少保留
+            ``min_results`` 条，避免「候选存在却返回空」这种无法归因的结果。
+        输入参数：
+            - query: str
+            - top_k: int | None，默认值 None
+            - trace_id: str | None，默认值 None
+        输出参数：
+            - list[LawChunk]
+        """
         results, reranked = self._run_pipeline_cached(
             query,
             top_k=top_k,
             trace_id=trace_id,
         )
-        return [
+        if not reranked:
+            return [document for document, _score in results]
+        kept = [
             document
             for document, score in results
-            if not reranked or score >= self._score_threshold
+            if score >= self._score_threshold
         ]
+        if len(kept) >= self._min_results:
+            return kept
+        return [document for document, _score in results[: self._min_results]]
 
 
 def init_retriever(chunks: Optional[list[LawChunk]] = None) -> HybridRetriever:

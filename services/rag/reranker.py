@@ -5,7 +5,7 @@ import os
 from pathlib import Path
 from typing import Optional
 
-from services.rag.interfaces import DocumentResult, LawChunk
+from services.rag.interfaces import DocumentResult, LawChunk, chunk_search_text
 
 _reranker_model = None
 
@@ -20,7 +20,8 @@ def _get_reranker():
         model_path = Path(model_name)
         if model_path.exists():
             model_name = str(model_path.resolve())
-        _reranker_model = CrossEncoder(model_name)
+        model_device = os.getenv("MODEL_DEVICE") or None
+        _reranker_model = CrossEncoder(model_name, device=model_device)
     return _reranker_model
 
 
@@ -39,7 +40,7 @@ class Reranker:
         if not chunks:
             return []
         scores = _get_reranker().predict(
-            [(query, chunk.content) for chunk in chunks]
+            [(query, chunk_search_text(chunk)) for chunk in chunks]
         )
         ranked = sorted(
             zip(chunks, scores),

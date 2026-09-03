@@ -45,13 +45,52 @@ class DocumentResult(NamedTuple):
     score: float
 
 
+# 判定「历史版本 / 已废止」的标记词。语料头部的「效力标记」与得理的
+# timelinessName 都会落到 metadata["status"]，本地历史版本文件的 law_name
+# 里也带同样的后缀，两处都要看。
+SUPERSEDED_STATUS_MARKERS = ("历史版本", "废止", "失效")
+
+
 def compute_content_hash(content: str) -> str:
     """生成稳定的 SHA-256 内容指纹。"""
     return hashlib.sha256(content.encode("utf-8")).hexdigest()
 
 
+def chunk_search_text(document: LawChunk) -> str:
+    """
+    函数作用：
+        生成索引、BM25 与精排共用的检索文本。
+        ``content`` 只有「第X条 正文」，同一条号在不同法律里几乎无法区分
+        （劳动法第四十一条 vs 劳动合同法第四十一条），因此这里补上法名与
+        层级路径。三处检索必须共用本函数，否则召回与精排会打在不同文本上。
+    输入参数：
+        - document: LawChunk
+    输出参数：
+        - str，用于编码/分词/精排的文本；不改动对外展示的 ``content``
+    """
+    prefix = " ".join(part for part in (document.law_name, document.hierarchy) if part)
+    return f"{prefix} {document.content}".strip() if prefix else document.content
+
+
+def is_superseded(document: LawChunk) -> bool:
+    """
+    函数作用：
+        判断法条是否属于历史版本或已废止条文。
+    输入参数：
+        - document: LawChunk
+    输出参数：
+        - bool
+    """
+    status = str((document.metadata or {}).get("status") or "")
+    return any(
+        marker in text
+        for text in (status, document.law_name)
+        for marker in SUPERSEDED_STATUS_MARKERS
+    )
+
+
 def document_payload(document: LawChunk) -> dict[str, Any]:
-    """把内部法律文档展开为 Chroma/Qdrant 共用 payload。"""
+    """把内部法律文档展开为 Qdrant payload。"""
     metadata = dict(document.metadata)
     payload = {
         "document_id": metadata.get("document_id") or document.chunk_id,

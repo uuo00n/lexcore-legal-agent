@@ -6,7 +6,7 @@ from typing import Optional
 
 from rank_bm25 import BM25Okapi
 
-from services.rag.interfaces import DocumentResult, LawChunk
+from services.rag.interfaces import DocumentResult, LawChunk, chunk_search_text
 
 
 def _tokenize(text: str) -> list[str]:
@@ -36,7 +36,9 @@ class BM25Retriever:
 
     def build_index(self, chunks: list[LawChunk]) -> None:
         self._chunks = chunks
-        self._bm25 = BM25Okapi([_tokenize(chunk.content) for chunk in chunks])
+        self._bm25 = BM25Okapi(
+            [_tokenize(chunk_search_text(chunk)) for chunk in chunks]
+        )
 
     def retrieve(
         self,

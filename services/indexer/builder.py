@@ -15,6 +15,7 @@ from dotenv import load_dotenv
 
 from services.indexer.chunker import chunk_all_laws
 from services.rag import get_vector_store
+from services.rag.interfaces import chunk_search_text
 
 load_dotenv()
 
@@ -37,7 +38,8 @@ def _get_embedding_model():
     if model_path.exists():
         model_name = str(model_path.resolve())
     log.info("加载 embedding 模型: %s", model_name)
-    return SentenceTransformer(model_name)
+    model_device = os.getenv("MODEL_DEVICE") or None
+    return SentenceTransformer(model_name, device=model_device)
 
 
 def build_index(
@@ -79,8 +81,8 @@ def build_index(
     log.info("开始生成 embedding...")
     start = time.time()
 
-    # 批量编码，显示进度
-    texts = [c.content for c in chunks]
+    # 批量编码，显示进度。编码文本带上法名与层级，必须与 BM25、精排保持一致。
+    texts = [chunk_search_text(c) for c in chunks]
     embeddings = model.encode(
         texts,
         batch_size=64,
