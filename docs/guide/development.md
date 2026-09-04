@@ -79,7 +79,11 @@ cp .env.example .env
 | `RETRIEVAL_MIN_RESULTS` | `1` | 全部低于阈值时至少保留的条数 |
 | `RETRIEVAL_INCLUDE_SUPERSEDED` | `false` | 已废止 / 历史版本条文是否参与召回 |
 | `RRF_K` | `60` | RRF 融合常数 |
-| `MAX_TOOL_CALLS` | `5` | 每个 Specialist 任务的最大工具调用次数 |
+| `MAX_TOOL_CALLS_PER_AGENT` | `2` | 每个 Agent 任务的最大工具调用次数（旧名 `MAX_TOOL_CALLS` 仍作兜底） |
+| `MAX_TOOL_CALLS_PER_REQUEST` | `3` | 一次请求内所有 Agent / 计划步骤 / 修复轮累计的工具调用上限 |
+| `EVIDENCE_LAW_TARGET` | `5` | 法条证据达到该条数即停止继续检索 |
+| `EVIDENCE_CASE_TARGET` | `3` | 案例证据达到该条数即停止继续检索 |
+| `EVIDENCE_GAIN_STOP_THRESHOLD` | `0` | 上一轮新增证据 ≤ 该值即停止工具循环 |
 | `MAX_UPLOAD_MB` | `10` | 上传文件大小限制 |
 | `CHECKPOINT_BACKEND` | `postgres` | 无数据库的纯单测环境可设为 `memory` |
 | `REDIS_URL` | — | 留空即缓存、限流、幂等全部降级运行 |
