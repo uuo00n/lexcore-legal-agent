@@ -71,7 +71,7 @@ function renderLlmCalls(items) {
       <div class="meta ${item.status === "success" ? "" : "status-error"}">
         ${item.status} · route ${item.model_route || "-"} · ${item.latency_ms} ms · tokens ${item.total_tokens || "-"} · ${fmtTime(item.created_at)}
       </div>
-      ${item.error ? `<div class="meta">${item.error}</div>` : ""}
+      ${item.error ? `<div class="meta">${escapeHtml(item.error)}</div>` : ""}
     </div>
   `).join("") || "<div class='row'>暂无 LLM 调用</div>";
 }

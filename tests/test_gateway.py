@@ -139,3 +139,30 @@ async def test_gateway_retries_timeout_but_not_permanent_error(monkeypatch):
         await gateway.ainvoke("hello")
     assert error.value.retryable is False
     assert permanent.calls == 1
+
+
+@pytest.mark.asyncio
+async def test_gateway_error_event_keeps_provider_message_and_status_code():
+    create_trace("trace-1", "thread-1", "hello")
+
+    class BadRequest(Exception):
+        status_code = 400
+
+    provider_message = (
+        "Error code: 400 - {'error': {'message': 'This response_format type is unavailable now', "
+        "'type': 'invalid_request_error'}}"
+    )
+    gateway = GatewayChatModel([
+        LLMClientConfig("deepseek", "deepseek-v4-pro", "https://api.deepseek.com", "planner",
+                        FakeClient(error=BadRequest(provider_message)))
+    ], trace_id="trace-1", thread_id="thread-1")
+
+    with pytest.raises(LLMError):
+        await gateway.ainvoke("hello")
+
+    payload = get_trace("trace-1")["events"][0]["payload"]
+    # 自家兜底文案会把所有失败压成同一句，provider 原文与状态码必须留在事件里。
+    assert payload["status_code"] == 400
+    assert "This response_format type is unavailable now" in payload["provider_error"]
+    assert payload["provider_error_type"] == "BadRequest"
+    assert "This response_format type is unavailable now" in list_llm_calls()[0]["error"]

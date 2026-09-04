@@ -44,6 +44,15 @@ def _extract_usage(response: Any) -> dict[str, Any]:
     return dict(usage) if isinstance(usage, dict) else {}
 
 
+PROVIDER_ERROR_MAX_CHARS = 400
+
+
+def _provider_error_text(exc: BaseException) -> str:
+    """取 provider 原始报错文本，截断后用于 trace 与 llm_calls 记录。"""
+    text = " ".join(str(exc).split())
+    return text[:PROVIDER_ERROR_MAX_CHARS]
+
+
 class GatewayChatModel:
     """带观测和 fallback 的 ChatModel 轻量代理。"""
 
@@ -135,6 +144,7 @@ class GatewayChatModel:
                     response = await item.client.ainvoke(input, **kwargs)
                 except Exception as exc:
                     latency_ms = int((time.perf_counter() - started) * 1000)
+                    provider_error = _provider_error_text(exc)
                     error = exc if isinstance(exc, LLMError) else LLMError(
                         "LLM provider request failed.",
                         retryable=is_retryable_exception(exc),
@@ -148,7 +158,7 @@ class GatewayChatModel:
                         latency_ms=latency_ms,
                         trace_id=self._trace_id,
                         thread_id=self._thread_id,
-                        error=str(error),
+                        error=provider_error or str(error),
                         fallback_from=fallback_from,
                         model_route=item.model_route,
                     )
@@ -169,6 +179,11 @@ class GatewayChatModel:
                             "retryable": error.retryable,
                             "error": str(error),
                             "error_type": type(error).__name__,
+                            # 自家兜底文案会把参数不合法、鉴权失败、超时压成同一句话，
+                            # 排障必须能在面板上看到 provider 原文与状态码。
+                            "status_code": error.status_code,
+                            "provider_error": provider_error,
+                            "provider_error_type": type(exc).__name__,
                             "fallback_from": fallback_from,
                         },
                     )
