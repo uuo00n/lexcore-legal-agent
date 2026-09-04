@@ -13,6 +13,7 @@ from agent.replan import replan_retry_count
 from agent.state import AgentState
 from agent.tool_loop import tool_error_observation
 from services.observability import record_event, trace_context
+from services.workflow_metrics import record_node_execution
 
 
 def _retrieval_count(output: Any) -> int:
@@ -61,23 +62,29 @@ def observed_node(
                     if inspect.isawaitable(output):
                         output = await output
             except Exception as exc:
+                latency_ms = int((time.perf_counter() - started) * 1000)
+                # 指标与 Trace 分开上报：record_event 在没有 trace_id 时直接返回，
+                # 而 §二十五 的节点时延不该因为某次调用没带 trace 就丢失。
+                record_node_execution(node_name, latency_ms=latency_ms, success=False)
                 record_event(
                     trace_id,
                     "graph_node",
                     name=node_name,
                     payload={
-                        "latency_ms": int((time.perf_counter() - started) * 1000),
+                        "latency_ms": latency_ms,
                         "success": False,
                         "error": str(exc),
                     },
                 )
                 raise
+            latency_ms = int((time.perf_counter() - started) * 1000)
+            record_node_execution(node_name, latency_ms=latency_ms, success=True)
             record_event(
                 trace_id,
                 "graph_node",
                 name=node_name,
                 payload={
-                    "latency_ms": int((time.perf_counter() - started) * 1000),
+                    "latency_ms": latency_ms,
                     "success": True,
                     "retrieval_count": _retrieval_count(output),
                     "output_keys": (

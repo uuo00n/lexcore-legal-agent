@@ -430,6 +430,69 @@ def list_eval_runs(limit: int = 20) -> list[dict[str, Any]]:
     ]
 
 
+_TIMELINE_LABELS = {
+    # 请求边界与既有节点
+    "chat_start": "用户提交问题",
+    "supervisor_route": "中控智能体路由",
+    "fact_check": "事实完整性检查",
+    "contract_agent": "合同审查智能体",
+    "case_analysis_agent": "案件分析智能体",
+    "statute_retrieval_agent": "法规检索智能体",
+    "case_retrieval_agent": "类案检索智能体",
+    "legal_consult_agent": "法律咨询智能体",
+    "graph_node": "LangGraph 节点执行",
+    "model_route": "模型路由决策",
+    "case_retrieval": "相似法律场景检索",
+    "agent_tool_request": "Agent 请求工具",
+    "agent_report": "专家智能体报告",
+    "tool_start": "工具调用开始",
+    "tool_end": "工具调用完成",
+    "retrieval_collect": "法条检索收集",
+    "vector_hits": "向量检索命中",
+    "bm25_hits": "BM25 检索命中",
+    "fused_hits": "RRF 融合命中",
+    "reranker_hits": "Reranker 精排命中",
+    "rag_retrieval": "RAG 检索完成",
+    "cache_hit": "缓存命中",
+    "cache_miss": "缓存未命中",
+    "citation_guard": "法条引用校验",
+    "llm_call": "LLM 调用完成",
+    "llm_error": "LLM 调用失败",
+    "llm_fallback": "LLM Fallback",
+    "final_answer": "生成最终回答",
+    "chat_done": "请求完成",
+    # 重构后的工作流节点（§二十四：每个决策点都要能在时间线上看到）
+    "query_rewrite": "查询改写",
+    "fact_analysis": "事实充分性分析",
+    "clarification_required": "发起澄清补问",
+    "clarification_resumed": "澄清回复合并",
+    "complexity_route": "复杂度路由决策",
+    "plan_created": "生成执行计划",
+    "planner_degraded": "Planner 降级兜底",
+    "plan_step_started": "计划步骤开始",
+    "plan_step_completed": "计划步骤完成",
+    "plan_step_retry": "计划步骤重试",
+    "plan_step_failed": "计划步骤失败",
+    "tool_loop_stopped": "工具循环提前停止",
+    "evidence_normalized": "证据归一化完成",
+    "evidence_deduplicated": "证据去重",
+    "verification_complete": "结果核验完成",
+    "verification_issue": "核验问题",
+    "verification_degraded": "核验降级",
+    "verifier_llm_skipped": "语义核验跳过",
+    "repair_started": "局部修复开始",
+    "repair_skipped": "局部修复跳过",
+    "replan_skipped": "整体重排跳过",
+    "answer_citation_rejected": "答复引用未通过",
+    "agent_fallback": "Agent 降级兜底",
+    "context_build": "模型上下文装配",
+    "context_status": "上下文预算状态",
+    "context_compaction": "上下文压缩",
+    "viking_context_retrieval": "OpenViking 上下文检索",
+    "rate_limited": "触发限流",
+}
+
+
 def get_trace_timeline(trace_id: str) -> Optional[dict[str, Any]]:
     """
     函数作用：
@@ -442,36 +505,7 @@ def get_trace_timeline(trace_id: str) -> Optional[dict[str, Any]]:
     trace = get_trace(trace_id)
     if trace is None:
         return None
-    labels = {
-        "chat_start": "用户提交问题",
-        "supervisor_route": "中控智能体路由",
-        "fact_check": "事实完整性检查",
-        "contract_agent": "合同审查智能体",
-        "case_analysis_agent": "案件分析智能体",
-        "statute_retrieval_agent": "法规检索智能体",
-        "legal_consult_agent": "法律咨询智能体",
-        "graph_node": "LangGraph 节点执行",
-        "model_route": "模型路由决策",
-        "case_retrieval": "相似法律场景检索",
-        "agent_tool_request": "Agent 请求工具",
-        "agent_report": "专家智能体报告",
-        "tool_start": "工具调用开始",
-        "tool_end": "工具调用完成",
-        "retrieval_collect": "法条检索收集",
-        "vector_hits": "向量检索命中",
-        "bm25_hits": "BM25 检索命中",
-        "fused_hits": "RRF 融合命中",
-        "reranker_hits": "Reranker 精排命中",
-        "rag_retrieval": "RAG 检索完成",
-        "cache_hit": "缓存命中",
-        "cache_miss": "缓存未命中",
-        "citation_guard": "法条引用校验",
-        "llm_call": "LLM 调用完成",
-        "llm_error": "LLM 调用失败",
-        "llm_fallback": "LLM Fallback",
-        "final_answer": "生成最终回答",
-        "chat_done": "请求完成",
-    }
+    labels = _TIMELINE_LABELS
     timeline = []
     for event in trace.get("events", []):
         payload = event.get("payload", {})
@@ -536,6 +570,121 @@ def _summarize_event(event_type: str, payload: dict[str, Any]) -> str:
         return f"{payload.get('model', '')} · {payload.get('latency_ms', 0)} ms · {total} tokens"
     if event_type == "llm_error":
         return payload.get("error", "")
+    if event_type == "rate_limited":
+        return (
+            f"{payload.get('scope', '')} · {payload.get('count', 0)}/{payload.get('limit', 0)} · "
+            f"retry_after={payload.get('retry_after', 0)}s"
+        )
+    return _summarize_workflow_event(event_type, payload)
+
+
+def _summarize_workflow_event(event_type: str, payload: dict[str, Any]) -> str:
+    """为重构后的工作流事件生成摘要（§二十四）。
+
+    与 ``_summarize_event`` 分开只是为了让两段 if 链都保持可读：这里只覆盖
+    Query Rewrite → Fact Analysis → Complexity → Plan → Evidence → Verify →
+    Repair → Answer 这条链路上的事件。
+    """
+    if event_type == "query_rewrite":
+        if not payload.get("changed"):
+            return f"未改写 · {payload.get('input_chars', 0)} 字"
+        return f"{payload.get('input_chars', 0)} → {payload.get('output_chars', 0)} 字"
+    if event_type == "fact_analysis":
+        return (
+            f"事实充分={payload.get('facts_sufficient')} · "
+            f"需补问={payload.get('needs_clarification')} · "
+            f"事实缺口 {len(payload.get('missing_facts') or [])} 项"
+        )
+    if event_type == "clarification_required":
+        return (
+            f"第 {payload.get('clarification_round', 0)}/{payload.get('max_rounds', 0)} 轮 · "
+            f"{len(payload.get('questions') or [])} 个问题"
+        )
+    if event_type == "clarification_resumed":
+        return f"第 {payload.get('clarification_round', 0)} 轮回复 · {payload.get('reply_chars', 0)} 字"
+    if event_type == "complexity_route":
+        return (
+            f"{payload.get('complexity_level', '')} · {payload.get('execution_mode', '')} · "
+            f"类案检索={payload.get('needs_case_retrieval')}"
+        )
+    if event_type == "plan_created":
+        degraded = " · 已降级" if payload.get("planner_degraded") else ""
+        return f"{payload.get('intent', '')} · {payload.get('step_count', 0)} 个步骤{degraded}"
+    if event_type in {"planner_degraded", "verification_degraded", "repair_skipped"}:
+        return payload.get("reason", "")
+    if event_type in {"agent_fallback", "verifier_llm_skipped"}:
+        return payload.get("error", "")
+    return _summarize_execution_event(event_type, payload)
+
+
+def _summarize_execution_event(event_type: str, payload: dict[str, Any]) -> str:
+    """计划执行、证据归一化、核验与修复阶段的事件摘要。"""
+    if event_type == "plan_step_started":
+        return f"{payload.get('step_id', '')} → {payload.get('assigned_agent', '')}"
+    if event_type == "plan_step_completed":
+        return (
+            f"{payload.get('step_id', '')} → {payload.get('assigned_agent', '')} · "
+            f"{payload.get('report_id', '')}"
+        )
+    if event_type == "plan_step_retry":
+        return (
+            f"{payload.get('step_id', '')} → {payload.get('assigned_agent', '')} · "
+            f"第 {payload.get('retry_count', 0)} 次重试"
+        )
+    if event_type == "plan_step_failed":
+        reason = payload.get("reason") or ""
+        suffix = f" · {reason}" if reason else ""
+        return f"{payload.get('step_id', '')} → {payload.get('assigned_agent', '')}{suffix}"
+    if event_type == "tool_loop_stopped":
+        return f"{payload.get('reason', '')} · 已调用 {payload.get('tool_call_count', 0)} 次"
+    if event_type == "evidence_normalized":
+        return (
+            f"法条 {payload.get('unique_law_count', 0)} 条 / 案例 "
+            f"{payload.get('unique_case_count', 0)} 条 · 增益 {payload.get('evidence_gain', 0)} · "
+            f"丢弃 {payload.get('dropped_count', 0)}"
+        )
+    if event_type == "evidence_deduplicated":
+        return f"去重丢弃 {payload.get('dropped_count', 0)} 条"
+    if event_type == "verification_complete":
+        report = payload.get("citation_report") or {}
+        return (
+            f"passed={payload.get('passed')} · score={payload.get('score')} · "
+            f"引用 {report.get('citation_verified', 0)}/{report.get('citation_total', 0)}"
+        )
+    if event_type == "verification_issue":
+        return (
+            f"{payload.get('type', '')} · {payload.get('severity', '')} · "
+            f"{payload.get('message', '')}"
+        )
+    if event_type == "repair_started":
+        targets = payload.get("targets") or []
+        return (
+            f"{'、'.join(str(item) for item in targets)} · "
+            f"重开 {len(payload.get('reopened_steps') or [])} 步 · "
+            f"第 {payload.get('repair_count', 0)} 轮"
+        )
+    if event_type == "replan_skipped":
+        return f"{payload.get('execution_mode', '')} · {payload.get('retry_reason') or ''}"
+    if event_type == "answer_citation_rejected":
+        return (
+            f"第 {payload.get('attempt', 0)} 稿 · "
+            f"越界引用 {len(payload.get('ungrounded') or [])} 处"
+        )
+    if event_type == "context_build":
+        return (
+            f"{payload.get('context_tier', '-')} 档 · prompt "
+            f"{payload.get('estimated_prompt_tokens', 0)}/"
+            f"{payload.get('prompt_token_budget', 0)} tokens · 法条 "
+            f"{payload.get('selected_law_count', 0)} 条 / 案例 {payload.get('selected_case_count', 0)} 条"
+        )
+    if event_type in {"context_status", "context_compaction"}:
+        return (
+            f"{payload.get('message_count', 0)} 条消息 · "
+            f"{payload.get('estimated_tokens', 0)}/{payload.get('token_budget', 0)} tokens · "
+            f"should_compact={payload.get('should_compact')}"
+        )
+    if event_type == "viking_context_retrieval":
+        return f"命中 {payload.get('total', 0)} 条"
     return ""
 
 
