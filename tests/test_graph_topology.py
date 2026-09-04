@@ -24,11 +24,17 @@ def test_main_graph_exposes_the_final_pipeline_nodes_and_edges():
         "memory",
         "inject_doc",
         "query_rewrite",
+        "fact_merge",
         "intent_router",
+        "fact_analysis",
+        "clarification",
+        "complexity_router",
         "planner",
         "supervisor",
         "case_analysis_agent",
         "statute_retrieval_agent",
+        # §五：类案检索是独立执行单元，不再挂在事实分析 Agent 上。
+        "case_retrieval_agent",
         "legal_consult_agent",
         "result_verifier",
         "answer_generator",
@@ -38,8 +44,16 @@ def test_main_graph_exposes_the_final_pipeline_nodes_and_edges():
         ("context_compaction", "memory"),
         ("memory", "inject_doc"),
         ("inject_doc", "query_rewrite"),
-        ("query_rewrite", "intent_router"),
-        ("intent_router", "planner"),
+        # Fact Merge 先跑，Intent Router 才能看到「原始问题 + 用户补充」（§八）。
+        ("query_rewrite", "fact_merge"),
+        ("fact_merge", "intent_router"),
+        ("intent_router", "fact_analysis"),
+        ("fact_analysis", "complexity_router"),
+        ("fact_analysis", "clarification"),
+        ("clarification", "__end__"),
+        # §P1-1：简单问题从 Complexity Router 直达 Supervisor，不经过 Planner。
+        ("complexity_router", "planner"),
+        ("complexity_router", "supervisor"),
         ("planner", "supervisor"),
         ("supervisor", "result_verifier"),
         ("result_verifier", "answer_generator"),
@@ -54,6 +68,7 @@ def test_specialists_return_to_supervisor_after_their_tool_loops():
     for agent_name, tools_name, collector_name in (
         ("case_analysis_agent", "case_analysis_tools", "collect_case_evidence"),
         ("statute_retrieval_agent", "statute_retrieval_tools", "collect_statute_evidence"),
+        ("case_retrieval_agent", "case_retrieval_tools", "collect_case_retrieval_evidence"),
         ("legal_consult_agent", "legal_consult_tools", "collect_consult_evidence"),
     ):
         assert ("supervisor", agent_name) in edges

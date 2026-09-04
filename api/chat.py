@@ -36,6 +36,7 @@ from services.persistence import (
     start_agent_run,
     update_agent_run,
 )
+from services.workflow_metrics import record_workflow_latency
 
 
 log = logging.getLogger(__name__)
@@ -227,6 +228,8 @@ def _build_state_input(
         "retry_count": 0,
         "replan_retry_count": 0,
         "verifier_retry_count": 0,
+        # 修复预算按请求重置：上一轮用掉的局部修复次数不得让本轮失去修复机会（P0-5）。
+        "repair_count": 0,
         "intent": "",
         "intent_confidence": 0.0,
         "intent_routed": False,
@@ -238,11 +241,19 @@ def _build_state_input(
         "agent_reports": [],
         "supervisor_finalized": False,
         "verification_result": None,
+        "verified_evidence": None,
         "citations": [],
+        # 上一轮的最终评分不得延用到本轮（§P2 answer_score 单一产出口）。
+        "answer_score": {},
         "viking_context": "",
         "viking_context_hits": [],
         "tool_call_count": 0,
+        # 全请求工具预算只在这里重置：计划步骤与修复轮归零的是 tool_call_count。
+        "tool_call_total": 0,
         "tool_loop_failure": None,
+        # 检索签名与刷新许可按请求重置：上一轮查过的关键词不该拦住新问题的检索（§二十二）。
+        "tool_query_signatures": [],
+        "tool_refresh_allowed": False,
     }
 
 
@@ -280,6 +291,10 @@ async def _run_event_stream(
     trace_completed = False
     run_completed = False
     emit_done = True
+    # §二十五：工作流时延要按执行模式分桶，并区分成功/出错/取消——只有这样
+    # 「简单问答 P95」才不会被失败请求和缓存命中稀释（§二十六）。
+    stream_status = "cancelled"
+    execution_mode = ""
     create_trace(trace_id, req.thread_id, req.message)
     record_event(trace_id, "chat_start", name="chat", payload={"doc_id": req.doc_id, "evidence_id": req.evidence_id})
     # 会话元数据热层：只记活跃时间、请求计数与是否带文档，不写标题与正文。
@@ -324,9 +339,15 @@ async def _run_event_stream(
         ))
         final_content = ""
         retrieved_laws: list[dict] = []
+        verified_laws: list[dict] = []
+        # §P2：最终评分由生成答复的节点算一次并写进 State，这里只负责取回复用。
+        answer_score: dict = {}
+        clarification_pending = False
         cached = get_cached_answer(req.message, doc_id=req.doc_id, trace_id=trace_id)
         if cached:
             inc_counter("legal_response_cache_hits_total")
+            # 缓存命中没有跑工作流：单独标一档，避免把它算进简单路径的时延分布。
+            execution_mode = "cached"
             final_content = cached
             chunk_size = 4
             for i in range(0, len(final_content), chunk_size):
@@ -342,11 +363,15 @@ async def _run_event_stream(
             await finish_agent_run(trace_id, status="success")
             run_completed = True
             trace_completed = True
+            stream_status = "success"
             return
         inc_counter("legal_response_cache_misses_total")
 
         async for chunk in graph.astream(state_input, config, stream_mode="updates"):
             for node_name, node_output in chunk.items():
+                if isinstance(node_output, dict) and node_output.get("execution_mode"):
+                    # Complexity Router 定的档位，用于给端到端时延分桶（§P1-1、§二十五）。
+                    execution_mode = str(node_output["execution_mode"])
                 if isinstance(node_output, dict) and (
                     node_output.get("plan") is not None or node_output.get("intent")
                 ):
@@ -360,9 +385,25 @@ async def _run_event_stream(
                         node_output["context_status"],
                         ensure_ascii=False,
                     ))
+                if isinstance(node_output, dict) and isinstance(
+                    node_output.get("verified_evidence"), dict
+                ):
+                    # P0-1：顶层 legal_analysis 的引用校验必须与 Verifier 用同一份核验证据，
+                    # 不能再拿未核验的原始检索结果自行判断。
+                    verified_laws = [
+                        item
+                        for item in node_output["verified_evidence"].get("laws", []) or []
+                        if isinstance(item, dict)
+                    ]
+                if isinstance(node_output, dict) and isinstance(
+                    node_output.get("answer_score"), dict
+                ) and node_output["answer_score"]:
+                    # §P2：复用节点算好的评分，顶层不再重算第二套（§二 问题 12）。
+                    answer_score = dict(node_output["answer_score"])
                 if node_name in {
                     "case_analysis_tools",
                     "statute_retrieval_tools",
+                    "case_retrieval_tools",
                     "legal_consult_tools",
                     "tool_limit_exceeded",
                 }:
@@ -419,9 +460,9 @@ async def _run_event_stream(
                             {"content": "已压缩较早对话并更新实体记忆，保留最近上下文继续处理。"},
                             ensure_ascii=False,
                         ))
-                elif node_name in {"collect_case_evidence", "collect_statute_evidence", "collect_consult_evidence"}:
+                elif node_name in {"collect_case_evidence", "collect_statute_evidence", "collect_case_retrieval_evidence", "collect_consult_evidence"}:
                     retrieved_laws = node_output.get("retrieved_laws", []) or retrieved_laws
-                elif node_name in {"case_analysis_agent", "statute_retrieval_agent", "contract_agent", "legal_consult_agent", "intent_router", "supervisor", "result_verifier", "answer_generator"}:
+                elif node_name in {"case_analysis_agent", "statute_retrieval_agent", "case_retrieval_agent", "contract_agent", "legal_consult_agent", "intent_router", "supervisor", "result_verifier", "answer_generator", "clarification"}:
                     msgs = node_output.get("messages", [])
                     for m in msgs:
                         if isinstance(m, AIMessage):
@@ -455,9 +496,13 @@ async def _run_event_stream(
                                     {"content": _build_process_message(tc_names)},
                                     ensure_ascii=False,
                                 ))
-                            elif m.content and node_name in {"request_router", "supervisor_agent", "verifier", "intent_router", "supervisor", "result_verifier", "answer_generator"}:
+                            elif m.content and node_name in {"request_router", "supervisor_agent", "verifier", "intent_router", "supervisor", "result_verifier", "answer_generator", "clarification"}:
                                 # 纯文字、无工具调用 → 最终回答
                                 final_content = m.content
+                                if node_name == "clarification":
+                                    # 补问是一次待续的追问，不是可复用的答案：缓存到原始
+                                    # 提问上会被另一条没有澄清状态的会话直接replay（§八）。
+                                    clarification_pending = True
 
         # 将最终回复按块流式发送
         if final_content:
@@ -465,8 +510,14 @@ async def _run_event_stream(
             for i in range(0, len(final_content), chunk_size):
                 yield _sse("token", final_content[i:i + chunk_size])
                 await asyncio.sleep(0.02)
-        analysis = analyze_legal_message(req.message, final_content, retrieved_laws)
-        set_cached_answer(req.message, final_content, doc_id=req.doc_id)
+        analysis = analyze_legal_message(
+            req.message,
+            final_content,
+            verified_laws or retrieved_laws,
+            answer_score=answer_score,
+        )
+        if not clarification_pending:
+            set_cached_answer(req.message, final_content, doc_id=req.doc_id)
         complete_trace(
             trace_id,
             final_answer=final_content,
@@ -476,6 +527,7 @@ async def _run_event_stream(
         await finish_agent_run(trace_id, status="success")
         run_completed = True
         trace_completed = True
+        stream_status = "success"
 
     except (asyncio.CancelledError, GeneratorExit):
         emit_done = False
@@ -486,11 +538,19 @@ async def _run_event_stream(
         await finish_agent_run(trace_id, status="error", error=str(exc))
         run_completed = True
         trace_completed = True
+        stream_status = "error"
         yield _sse("error", json.dumps({"message": str(exc)}))
     finally:
         elapsed_ms = int((time.perf_counter() - trace_started) * 1000)
-        observe("legal_chat_latency_ms", elapsed_ms, {"status": "success" if trace_completed else "error"})
+        # 失败请求以前被标成 success（``trace_completed`` 在错误分支也会置真），
+        # 时延分布因此看不出故障；改用显式的 stream_status 作为唯一状态口径。
+        observe("legal_chat_latency_ms", elapsed_ms, {"status": stream_status})
         inc_counter("legal_chat_requests_total")
+        record_workflow_latency(
+            elapsed_ms,
+            execution_mode=execution_mode,
+            status=stream_status,
+        )
         if not trace_completed:
             complete_trace(trace_id, status="cancelled")
         if not run_completed:

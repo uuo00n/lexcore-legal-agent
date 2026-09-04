@@ -12,6 +12,8 @@ from services.supervisor import route_user_request_with_llm
 
 from agent.agents.contract_agent import contract_agent_node
 from agent.agents.case_analysis_agent import case_analysis_agent_node
+from agent.agents.case_retrieval_agent import case_retrieval_agent_node
+from agent.agents.fact_analysis_agent import case_facts_payload, fact_analysis_agent_node
 from agent.agents.statute_retrieval_agent import statute_retrieval_agent_node
 from agent.agents.legal_consult_agent import (
     _build_legal_agent_report,
@@ -32,12 +34,20 @@ from agent.nodes.context import (
     record_trace_event as _record_trace_event,
 )
 from agent.nodes.query import query_rewrite_node
+from agent.nodes.clarification import clarification_node, fact_merge_node
+from agent.nodes.complexity import complexity_router_node
 from agent.nodes.document import DOC_PREFIX, inject_doc_node
 from agent.nodes.memory import memory_node
 from agent.nodes.planner import planner_node
+from agent.nodes.repair import repair_router_node
 from agent.nodes.routing import (
     MAX_TOOL_CALLS,
+    MAX_TOOL_CALLS_PER_AGENT,
+    MAX_TOOL_CALLS_PER_REQUEST,
     collect_retrieved_laws,
+    should_after_complexity,
+    should_after_fact_analysis,
+    should_after_repair,
     should_after_verifier,
     should_continue,
     should_execute_next,
@@ -52,11 +62,19 @@ from agent.tool_loop import tool_limit_observation_node
 
 __all__ = [
     "MAX_TOOL_CALLS",
+    "MAX_TOOL_CALLS_PER_AGENT",
+    "MAX_TOOL_CALLS_PER_REQUEST",
     "answer_generator_node",
+    "case_facts_payload",
+    "clarification_node",
     "collect_retrieved_laws",
+    "complexity_router_node",
     "contract_agent_node",
     "case_analysis_agent_node",
+    "case_retrieval_agent_node",
     "context_compaction_node",
+    "fact_analysis_agent_node",
+    "fact_merge_node",
     "inject_doc_node",
     "intent_router_node",
     "legal_consult_agent_node",
@@ -64,6 +82,10 @@ __all__ = [
     "memory_node",
     "planner_node",
     "query_rewrite_node",
+    "repair_router_node",
+    "should_after_complexity",
+    "should_after_fact_analysis",
+    "should_after_repair",
     "should_after_verifier",
     "should_continue",
     "should_execute_next",

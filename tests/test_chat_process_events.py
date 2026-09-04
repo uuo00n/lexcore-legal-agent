@@ -176,6 +176,25 @@ def test_build_state_input_uses_checkpoint_when_available():
     assert [m.content for m in state_input["messages"]] == ["继续刚才的问题"]
 
 
+def test_build_state_input_resets_per_request_budgets_and_verified_evidence():
+    """修复／重排预算与已核验证据按请求重置：上一轮的用量不得影响本轮（P0-1、P0-5）。"""
+    from api import chat as chat_api
+
+    req = ChatRequest(thread_id="thread-with-checkpoint", message="换一个问题")
+    state_input = chat_api._build_state_input(
+        _GraphWithState({"messages": [HumanMessage(content="上一轮问题")]}),
+        req,
+        doc_text=None,
+        doc_name=None,
+        trace_id="trace-3",
+    )
+
+    assert state_input["repair_count"] == 0
+    assert state_input["replan_retry_count"] == 0
+    assert state_input["verification_result"] is None
+    assert state_input["verified_evidence"] is None
+
+
 @pytest.mark.asyncio
 async def test_process_event_hides_model_internal_text_when_tool_call_has_content(monkeypatch):
     monkeypatch.setattr("api.chat.create_trace", lambda *args, **kwargs: None)
