@@ -4,12 +4,13 @@ from __future__ import annotations
 import json
 import logging
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage, ToolMessage
 from langchain_core.messages.modifier import RemoveMessage
 
+from services.context_builder import base_input_tokens, max_tier_recent_messages
 from services.llm import get_llm
 from services.memory import (
     CHARS_PER_TOKEN,
@@ -26,14 +27,47 @@ log = logging.getLogger(__name__)
 
 DOC_PREFIX = "[USER_DOCUMENT]"
 DEFAULT_COMPACTION_MODEL = "deepseek-v4-flash"
+DEFAULT_AUTO_COMPACT_RATIO = 0.75
+DEFAULT_AUTO_COMPACT_MESSAGES = 40
+
+
+def _env_int(name: str, default: int) -> int:
+    try:
+        return max(1, int(os.getenv(name, str(default))))
+    except (TypeError, ValueError):
+        return default
+
+
+def _env_float(name: str, default: float) -> float:
+    try:
+        return float(os.getenv(name, str(default)))
+    except (TypeError, ValueError):
+        return default
+
+
+def _default_keep_recent() -> int:
+    """压缩后留下的消息就是各档位能注入的上限。
+
+    若保留条数低于最大档位的近期消息条数，长上下文档想读的对话会在压缩阶段
+    先被删掉，窗口再大也补不回来，所以默认对齐 context_builder 的最大档位。
+    """
+    return max(SLIDING_WINDOW_SIZE, _env_int("CONTEXT_COMPACT_KEEP_RECENT", max_tier_recent_messages()))
 
 
 @dataclass(frozen=True)
 class ContextCompactionConfig:
-    keep_recent: int = SLIDING_WINDOW_SIZE
-    token_budget: int = int(os.getenv("CONTEXT_WINDOW_TOKEN_BUDGET", "12000"))
-    auto_compact_ratio: float = float(os.getenv("CONTEXT_AUTO_COMPACT_RATIO", "0.75"))
-    auto_compact_messages: int = int(os.getenv("CONTEXT_AUTO_COMPACT_MESSAGES", "16"))
+    """压缩阈值；默认值随 CONTEXT_* 环境变量在实例化时读取，便于覆盖与测试。"""
+
+    keep_recent: int = field(default_factory=_default_keep_recent)
+    token_budget: int = field(
+        default_factory=lambda: _env_int("CONTEXT_WINDOW_TOKEN_BUDGET", base_input_tokens())
+    )
+    auto_compact_ratio: float = field(
+        default_factory=lambda: _env_float("CONTEXT_AUTO_COMPACT_RATIO", DEFAULT_AUTO_COMPACT_RATIO)
+    )
+    auto_compact_messages: int = field(
+        default_factory=lambda: _env_int("CONTEXT_AUTO_COMPACT_MESSAGES", DEFAULT_AUTO_COMPACT_MESSAGES)
+    )
 
 
 _COMPACTION_PROMPT = """你是法律咨询智能体的上下文压缩器。请把旧对话压缩成可恢复上下文的 JSON。

@@ -7,6 +7,27 @@ from langchain_core.messages import AIMessage, HumanMessage
 from langchain_core.messages.modifier import RemoveMessage
 
 
+def test_compaction_defaults_track_context_window_tiers(monkeypatch):
+    from services.context_builder import max_tier_recent_messages
+    from services.context_compaction import ContextCompactionConfig
+
+    monkeypatch.setenv("CONTEXT_MODEL_MAX_TOKENS", "128000")
+    monkeypatch.setenv("CONTEXT_INPUT_TOKEN_BUDGET", "64000")
+    monkeypatch.setenv("CONTEXT_RECENT_MESSAGE_COUNT", "12")
+    for name in ("CONTEXT_WINDOW_TOKEN_BUDGET", "CONTEXT_COMPACT_KEEP_RECENT",
+                 "CONTEXT_AUTO_COMPACT_MESSAGES", "CONTEXT_AUTO_COMPACT_RATIO"):
+        monkeypatch.delenv(name, raising=False)
+
+    config = ContextCompactionConfig()
+
+    # 压缩预算跟单次任务输入预算同口径，否则窗口调大后压缩仍按旧阈值触发。
+    assert config.token_budget == 64000
+    # 保留条数不能低于最大档位要读的近期消息，否则长上下文档的对话先被删掉。
+    assert config.keep_recent == max_tier_recent_messages() == 30
+    assert config.auto_compact_messages > config.keep_recent
+    assert config.auto_compact_ratio == 0.75
+
+
 def test_context_status_reports_budget_pressure():
     from services.context_compaction import ContextCompactionConfig, build_context_status
 

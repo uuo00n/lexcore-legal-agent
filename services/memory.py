@@ -21,7 +21,8 @@ log = logging.getLogger(__name__)
 # 这两个常量决定「保留多少条近期消息不做摘要」，即摘要与压缩的边界：
 # context_compaction 用作 keep_recent，memory_extractor 用作溢出切分点。
 # 注意它们不是模型输入窗口——真正注入模型的近期消息条数由
-# services/context_builder.py 的 CONTEXT_RECENT_MESSAGE_COUNT（默认 12）控制。
+# services/context_builder.py 的 CONTEXT_RECENT_MESSAGE_COUNT（基准 12）控制，
+# 并按上下文档位放大（standard 12 / complex 19 / long 30）。
 SLIDING_WINDOW_SIZE = 8   # 摘要/压缩时保留的最近消息条数
 MAX_WINDOW_TOKENS = 3000  # 滑动窗口 token 上限（超过则提前触发摘要）
 CHARS_PER_TOKEN = 1.5     # 中文场景下字符/token 近似比（中文1字≈1.5token，取保守值）
