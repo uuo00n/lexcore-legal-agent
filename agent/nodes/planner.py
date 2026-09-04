@@ -2,30 +2,40 @@
 from __future__ import annotations
 
 import json
-import os
 from typing import Any, Literal
 
 from langchain_core.messages import HumanMessage, SystemMessage
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from agent.agent_names import same_agent
+from agent.agents.fact_analysis_agent import case_facts_payload
 from agent.node_utils import compatibility_dependency, latest_human_message, record_trace_event
 from agent.prompts import PLANNER_SYSTEM_PROMPT
 from agent.state import AgentState, PlanStep, TaskType
 from services.legal_analysis import classify_legal_intent, is_legal_information_query
 from services.llm import get_llm
+from services.model_defaults import FAST, resolve_model, resolve_provider
+from services.workflow_metrics import record_planner_degraded
 
 
 MAX_PLAN_STEPS = 6
+# 图内节点名与 §四 的规范职责名都允许出现在模型输出里；写进计划的取值由
+# ``_normalize_steps`` 统一成 ``TASK_AGENT_MAP`` 的节点名。
 AssignedAgent = Literal[
     "case_analysis_agent",
     "statute_retrieval_agent",
+    "case_retrieval_agent",
     "legal_consult_agent",
+    "fact_analysis_agent",
+    "law_retrieval_agent",
+    "legal_reasoning_agent",
 ]
 
 TASK_AGENT_MAP: dict[TaskType, AssignedAgent] = {
     TaskType.CASE_ANALYSIS: "case_analysis_agent",
     TaskType.STATUTE_RETRIEVAL: "statute_retrieval_agent",
-    TaskType.CASE_RETRIEVAL: "case_analysis_agent",
+    # §五：类案检索有独立执行单元，不再挂在事实分析 Agent 上。
+    TaskType.CASE_RETRIEVAL: "case_retrieval_agent",
     TaskType.LEGAL_CONSULTATION: "legal_consult_agent",
 }
 
@@ -55,7 +65,9 @@ class PlannerStep(BaseModel):
     @model_validator(mode="after")
     def validate_assignment(self) -> "PlannerStep":
         expected = TASK_AGENT_MAP[self.task_type]
-        if self.assigned_agent != expected:
+        # 只要指向同一个执行单元就接受：模型可能写 law_retrieval_agent，也可能写
+        # statute_retrieval_agent，两者是同一个节点（§四 兼容别名）。
+        if not same_agent(self.assigned_agent, expected):
             raise ValueError(
                 f"{self.task_type.value} must be assigned to {expected}"
             )
@@ -122,7 +134,8 @@ def _fallback_steps(state: AgentState) -> list[PlannerStep]:
             (TaskType.CASE_ANALYSIS, "提取关键事实、法律关系、争议焦点和证据缺口"),
             (TaskType.STATUTE_RETRIEVAL, "检索争议焦点对应的现行法律依据"),
         ]
-        if complexity == "high":
+        # §五：类案检索只在 Complexity Router 判定需要时才安排，不作为默认步骤。
+        if complexity == "high" and state.get("needs_case_retrieval"):
             tasks.append((TaskType.CASE_RETRIEVAL, "检索争议焦点和事实结构相近的裁判案例"))
         tasks.append((TaskType.LEGAL_CONSULTATION, "综合事实与法律依据形成可执行建议"))
 
@@ -157,8 +170,12 @@ def _normalize_steps(
 
     normalized: list[PlanStep] = []
     seen_task_types: set[TaskType] = set()
+    allow_case_retrieval = bool(state.get("needs_case_retrieval"))
     for step in steps[:MAX_PLAN_STEPS]:
         if step.task_type in seen_task_types:
+            continue
+        if step.task_type == TaskType.CASE_RETRIEVAL and not allow_case_retrieval:
+            # §五：类案检索只在明确需要时执行；这条约束由代码保证，不依赖模型自觉。
             continue
         seen_task_types.add(step.task_type)
         normalized.append({
@@ -188,18 +205,25 @@ async def planner_node(state: AgentState) -> dict[str, Any]:
         "intent": intent,
         "intent_confidence": intent_confidence,
         "complexity": state.get("task_complexity") or "low",
+        "complexity_level": state.get("complexity_level") or "",
+        # §五：类案检索按需执行，Complexity Router 说不需要时不得规划案例检索步骤。
+        "needs_case_retrieval": bool(state.get("needs_case_retrieval")),
         "supervisor_route": state.get("supervisor_route") or "",
         "has_uploaded_document": bool(state.get("uploaded_doc_text")),
+        # Fact Analysis Agent 已经整理过事实，Planner 不必再规划重复的事实收集步骤（§四）。
+        "case_facts": case_facts_payload(state),
         "previous_plan": state.get("plan", []) or [],
         "verification_result": state.get("verification_result"),
         "replan_retry_count": int(state.get("replan_retry_count", 0) or 0),
     }
 
+    degraded = False
     try:
         llm_factory = compatibility_dependency("get_llm", get_llm)
         llm = llm_factory(
-            provider=os.getenv("PLANNER_PROVIDER", os.getenv("SUPERVISOR_PROVIDER", "deepseek")),
-            model=os.getenv("PLANNER_MODEL", os.getenv("SUPERVISOR_MODEL", "deepseek-v4-flash-vision-exp")),
+            # 计划本身只是结构化的步骤清单，不需要最强模型；走 fast 档省 token（§P1-5 兜底仍在）。
+            provider=resolve_provider("PLANNER_PROVIDER", "SUPERVISOR_PROVIDER", tier=FAST),
+            model=resolve_model("PLANNER_MODEL", "SUPERVISOR_MODEL", tier=FAST),
             model_route="planner",
             trace_id=state.get("trace_id"),
             thread_id=state.get("thread_id"),
@@ -214,13 +238,23 @@ async def planner_node(state: AgentState) -> dict[str, Any]:
         output = raw_output if isinstance(raw_output, PlannerOutput) else PlannerOutput.model_validate(raw_output)
         steps = output.steps
     except Exception as exc:
+        # §P1-5：兜底计划保留，但必须标记降级——Provider 报错不能变成一条静默的
+        # 「看起来正常」的计划。两个事件分别给通用兜底监控与 planner 专属看板用。
         record_trace_event(
             state.get("trace_id"),
             "agent_fallback",
             name="planner",
             payload={"error": str(exc)},
         )
+        record_trace_event(
+            state.get("trace_id"),
+            "planner_degraded",
+            name="planner",
+            payload={"reason": "planner_llm_unavailable", "error": str(exc)[:300]},
+        )
         steps = _fallback_steps(state)
+        degraded = True
+        record_planner_degraded()
 
     plan = _normalize_steps(steps, state=state, query=query)
     if not plan:
@@ -229,9 +263,11 @@ async def planner_node(state: AgentState) -> dict[str, Any]:
         state.get("trace_id"),
         "plan_created",
         name="planner",
-        payload={"intent": intent, "step_count": len(plan)},
+        payload={"intent": intent, "step_count": len(plan), "planner_degraded": degraded},
     )
     return {
         "plan": plan,
         "remaining_steps": [dict(step) for step in plan],
+        # 成功规划显式写回 False：一次降级不该让后续重排也一直挂着降级标记。
+        "planner_degraded": degraded,
     }

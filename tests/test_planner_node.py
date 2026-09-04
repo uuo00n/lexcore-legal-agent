@@ -160,7 +160,7 @@ def test_planner_schema_rejects_invalid_enum_assignment_and_duplicate_step():
     duplicate = {
         "task_type": "case_retrieval",
         "description": "检索相似案例",
-        "assigned_agent": "case_analysis_agent",
+        "assigned_agent": "case_retrieval_agent",
         "status": "pending",
     }
     with pytest.raises(ValidationError):
