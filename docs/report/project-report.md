@@ -57,7 +57,7 @@ title: 法智项目介绍报告
 
 ### 2.1 法律回答必须可追溯
 
-系统提示词明确要求：法律问题不得凭空引用法条，引用的法条必须来自本轮检索结果。`result_verifier` 节点还会在生成最终回答之前校验证据与引用，移除未被本轮检索结果支撑的法条引用，必要时触发一次重新规划。
+系统提示词明确要求：法律问题不得凭空引用法条，引用的法条必须来自本轮检索结果。`result_verifier` 节点在生成最终回答之前用 Python 确定性核验引用（按 `canonical_law_id + article_no` 与本轮证据比对），核验结果写入 `verified_evidence`；`answer_generator` 只从已核验证据重新生成答案，而不是生成后再删除引用。核验失败时优先由 `repair_router` 只重跑受影响的 Agent 步骤，必要时才触发一次重新规划。
 
 相关代码：
 
@@ -281,12 +281,19 @@ graph LR
     CC --> M[memory]
     M --> ID[inject_doc]
     ID --> QR[query_rewrite]
-    QR --> IR[intent_router]
-    IR --> P[planner]
-    P --> S{supervisor}
+    QR --> FM[fact_merge]
+    FM --> IR[intent_router]
+    IR --> FA[fact_analysis]
+    FA -->|事实不足| CL[clarification]
+    CL --> E0([END])
+    FA --> CR[complexity_router]
+    CR -->|simple| S{supervisor}
+    CR -->|medium / complex| P[planner]
+    P --> S
 
     S -->|案情| CA[case_analysis_agent]
     S -->|法条| SR[statute_retrieval_agent]
+    S -->|类案·按需| CSA[case_retrieval_agent]
     S -->|咨询| LC[legal_consult_agent]
     S -->|计划完成| RV[result_verifier]
     S -->|终止| E1([END])
@@ -301,6 +308,11 @@ graph LR
     CSE --> SR
     SR -->|done| S
 
+    CSA -->|tools| CST[case_retrieval_tools]
+    CST --> CRE[collect_case_retrieval_evidence]
+    CRE --> CSA
+    CSA -->|done| S
+
     LC -->|tools| LCT[legal_consult_tools]
     LCT --> CVE[collect_consult_evidence]
     CVE --> LC
@@ -308,15 +320,19 @@ graph LR
 
     CA -->|超限| TLE[tool_limit_exceeded]
     SR -->|超限| TLE
+    CSA -->|超限| TLE
     LC -->|超限| TLE
     TLE --> S
 
+    RV -->|repair ×1| RR[repair_router]
+    RR --> S
+    RR --> AG[answer_generator]
     RV -->|replan ×1| P
-    RV --> AG[answer_generator]
+    RV --> AG
     AG --> E2([END])
 ```
 
-图由 19 个节点、15 条静态边和 5 组条件边组成，编译时绑定 `AsyncPostgresSaver`。三个条件函数分别是 `should_execute_next`（supervisor 分派）、`should_continue`（Specialist 决定继续调工具、超限还是交回 supervisor）、`should_after_verifier`（决定 replan 还是生成回答）。
+图由 27 个业务节点、19 条静态边和 9 组条件边组成，编译时绑定 `AsyncPostgresSaver`。条件函数包括 `should_after_fact_analysis`（事实不足是否中断补问）、`should_after_complexity`（simple 直达 supervisor 还是进 planner）、`should_execute_next`（supervisor 分派）、`should_continue`（每个 Specialist 一组，决定继续调工具、超限还是交回 supervisor）、`should_after_verifier`（局部修复、replan 还是生成回答）、`should_after_repair`（修复后回 supervisor 还是只重写答案）。完整拓扑见 [Agent 工作流](../architecture/agent-workflow.md)。
 
 ### 6.2 节点职责
 
@@ -326,24 +342,30 @@ graph LR
 | `memory` | 确定性 | 装载画像、摘要、相关长期记忆与可选 OpenViking 上下文 |
 | `inject_doc` | 确定性 | 注入上传文档或视频证据摘要 |
 | `query_rewrite` | LLM | 生成检索友好的 `rewritten_query` |
+| `fact_merge` | 确定性 | 澄清续跑时把用户补充的事实合并进 `case_facts`，不用空值覆盖已确认事实 |
 | `intent_router` | 确定性 | 判定意图与复杂度，写 `intent_routed` |
-| `planner` | LLM | 生成最多 `MAX_PLAN_STEPS` 步结构化计划 |
+| `fact_analysis` | LLM | 抽取法律关系、事实、争点与缺失事实，输出 `facts_sufficient` / `needs_clarification` |
+| `clarification` | 确定性 | 个案结论且事实不足时输出补问并中断本轮 |
+| `complexity_router` | 确定性 | 定档 simple / medium / complex；simple 直接写入两步固定计划 |
+| `planner` | LLM | 生成最多 `MAX_PLAN_STEPS` 步结构化计划；模型不可用时兜底并标记 `planner_degraded` |
 | `supervisor` | 确定性 | 取下一个 pending 步骤并分派 |
 | `*_agent` | LLM + 工具 | 有界 ReAct 小环，产出 `AgentReport` |
-| `collect_*_evidence` | 确定性 | 从工具结果提取并限制 Top-N 证据 |
+| `collect_*_evidence` | 确定性 | Evidence Normalizer：清洗、规范化、去重、有效性 / 相关性过滤、TopK，计算 `evidence_gain` |
 | `tool_limit_exceeded` | 确定性 | 写入超限观察后回到 supervisor |
-| `result_verifier` | LLM + 确定性校验 | 校验证据与引用，最多触发一次 replan |
-| `answer_generator` | LLM | 生成最终回答与引用列表 |
+| `result_verifier` | 确定性校验 + LLM | Python 引用核验写 `verified_evidence`，LLM 补充结构化 issue，失败优先局部修复 |
+| `repair_router` | 确定性 | 按 issue 类型只重开受影响步骤（最多一轮），保留已核验证据 |
+| `answer_generator` | LLM | 只从已核验证据生成最终回答与引用列表；`answer_score` 由 `services/final_quality.py` 唯一产出 |
 
 Router、Planner、Verifier 与格式化步骤都保持确定性节点，不额外套一层 Agent。
 
-### 6.3 三个 Specialist
+### 6.3 四个 Specialist
 
-| Specialist | 负责任务 | 可用工具 |
-| --- | --- | --- |
-| `case_analysis_agent` | 案情梳理、争议焦点、类案参考 | `retrieve_local_law_tool`、`search_law_tool`、`search_case_tool` |
-| `statute_retrieval_agent` | 法条定位与条文比对 | `retrieve_local_law_tool`、`search_law_tool` |
-| `legal_consult_agent` | 通俗解释、风险与行动建议 | `retrieve_local_law_tool`、`search_law_tool` |
+| Specialist | 规范职责名 | 负责任务 | 可用工具 |
+| --- | --- | --- | --- |
+| `case_analysis_agent` | `fact_analysis_agent` | 案情梳理、争议焦点、缺失事实 | `retrieve_local_law_tool`、`search_law_tool`、`search_case_tool` |
+| `statute_retrieval_agent` | `law_retrieval_agent` | 法条定位与条文比对 | `retrieve_local_law_tool`、`search_law_tool` |
+| `case_retrieval_agent` | `case_retrieval_agent` | 按需类案检索，只提交可核验案号 | `search_case_tool` |
+| `legal_consult_agent` | `legal_reasoning_agent` | 通俗解释、风险与行动建议，只引用已核验证据 | `retrieve_local_law_tool`、`search_law_tool` |
 
 `contract_agent` 不在问答主图上，服务于 `/api/reports/contract` 的确定性合同审查工作流。
 
@@ -352,7 +374,8 @@ Router、Planner、Verifier 与格式化步骤都保持确定性节点，不额�
 | 预算 | 默认值 | 位置 |
 | --- | --- | --- |
 | 计划步数 | `MAX_PLAN_STEPS = 6` | `agent/nodes/planner.py` |
-| 单任务工具调用次数 | `MAX_TOOL_CALLS = 5`（环境变量可调） | `agent/tool_loop.py` |
+| 单任务工具调用次数 | `MAX_TOOL_CALLS_PER_AGENT = 2`（环境变量可调） | `agent/tool_loop.py` |
+| 全请求工具调用次数 | `MAX_TOOL_CALLS_PER_REQUEST = 3`（跨步骤与修复轮累计，环境变量可调） | `agent/tool_loop.py` |
 | replan 次数 | `MAX_AGENT_REPLAN_RETRIES = 1` | `agent/replan.py` |
 | 模型输入 token | 分层预算 | `services/context_builder.py` |
 
@@ -499,9 +522,11 @@ graph TB
 这里有两个容易混淆的常量：
 
 - `SLIDING_WINDOW_SIZE = 8` 与 `MAX_WINDOW_TOKENS = 3000`（`services/memory.py`）是**摘要与压缩的边界**，决定保留多少条近期消息不做摘要，溢出部分由 LLM 压缩成滚动摘要写入 `conversation_summaries`。
-- 真正注入模型的近期消息条数是 `CONTEXT_RECENT_MESSAGE_COUNT = 12`（`services/context_builder.py`），并另受 recent-message token 预算限制。
+- 真正注入模型的近期消息条数由上下文档位决定：基准 `CONTEXT_RECENT_MESSAGE_COUNT = 12`（`services/context_builder.py`）按档位放大为 12 / 19 / 30 条，并另受 recent-message token 预算限制。
 
-长会话还有一层自动压缩：`CONTEXT_WINDOW_TOKEN_BUDGET=12000`、`CONTEXT_AUTO_COMPACT_RATIO=0.75`、`CONTEXT_AUTO_COMPACT_MESSAGES=16`，由 `context_compaction` 节点在入图第一步执行，并把结果写入 `context_status` 通过 SSE 告知前端。
+单次模型调用的输入预算同样分档：`standard` 32K（普通法律问答，目标使用量 16K～32K）、`complex` 64K（复杂案件分析，32K～64K，默认档）、`long` 128K（长合同 / 多份证据 / 大量类案，64K～128K），最终回答预留 8K～16K，全部由 `CONTEXT_INPUT_TOKEN_BUDGET=64000` 与 `CONTEXT_OUTPUT_TOKEN_RESERVE=8000` 按比例推导并被 `CONTEXT_MODEL_MAX_TOKENS=128000` 夹住。定档是确定性判断（材料 token 数、类案条数、Complexity Router 结论），结果随 `context_build` trace 落盘。
+
+长会话还有一层自动压缩：`CONTEXT_WINDOW_TOKEN_BUDGET=64000`、`CONTEXT_AUTO_COMPACT_RATIO=0.75`、`CONTEXT_AUTO_COMPACT_MESSAGES=40`、`CONTEXT_COMPACT_KEEP_RECENT=30`（对齐最大档位的近期消息上限），由 `context_compaction` 节点在入图第一步执行，并把结果写入 `context_status` 通过 SSE 告知前端。
 
 ### 9.3 长期记忆
 
@@ -546,17 +571,23 @@ Gateway 支持通过 `LLM_FALLBACK_PROVIDERS` 配置备用 provider。主模型�
 
 路由模型通过 `LLM_ROUTE_FAST_PROVIDER`、`LLM_ROUTE_STRONG_PROVIDER`、`LLM_ROUTE_LONG_PROVIDER` 以及对应 `*_MODEL` 配置。每次路由决策写入 `model_route` trace 事件，LLM 调用日志同时记录 `model_route` 字段。
 
-除全局路由外，各节点还可以单独指定模型，且带明确的回退链：
+模型与 Provider 的解析口径统一收敛在 `services/model_defaults.py`（`resolve_model` / `resolve_provider`），节点自身不再硬编码模型名，优先级从高到低为：节点专属变量 → 档位变量 `LLM_ROUTE_{FAST,STRONG,LONG}_*` → 全局 `LLM_MODEL` / `LLM_PROVIDER` → 档位内置默认模型（`fast=deepseek-v4-flash`，`strong`/`long=deepseek-v4-pro`）；空字符串视为未配置。每个节点声明自己的默认档位：Supervisor、Planner、Fact Analysis、Case Analysis 追问分支、Contract 未上传文档时的提示为 `fast`，其余主链节点为 `strong`。Planner 的产出只是一份结构化步骤清单，走 `fast` 档省 token；`with_structured_output` 失败时已有降级兜底计划并记 `planner_degraded`。
+
+主链节点全部是纯文本推理，配置视觉 / 多模态模型（名字含 `vision`、`-vl`、`vl-`）属于配置错误，`resolve_model` 会打 WARNING 提示；视觉模型只用于识别用户上传的图片与扫描件。`tests/test_model_defaults.py` 锁住这套口径：节点不得直接 `os.getenv` 读取 `*_MODEL` / `*_PROVIDER`，档位默认模型不得命中视觉特征，视觉模型名不得写回源码。
+
+除全局路由外，各节点还可以单独指定模型，且带明确的回退链（下表最后一级统一是档位默认模型）：
 
 | 环境变量 | 回退链 |
 | --- | --- |
-| `SUPERVISOR_PROVIDER` / `SUPERVISOR_MODEL` | 默认 `deepseek` / `deepseek-v4-flash-vision-exp` |
-| `PLANNER_*` | → `SUPERVISOR_*` |
-| `VERIFIER_*` | → `SUPERVISOR_*` |
-| `ANSWER_GENERATOR_*` | → `VERIFIER_*` → `SUPERVISOR_*` |
-| `CASE_ANALYSIS_AGENT_*` | → 旧名 `FACT_AGENT_*` → `deepseek` |
-| `STATUTE_RETRIEVAL_AGENT_*` | → `deepseek` |
-| `CONTRACT_AGENT_*` | 默认 `deepseek` / `deepseek-v4-pro` |
+| `SUPERVISOR_PROVIDER` / `SUPERVISOR_MODEL` | → `fast` 档位（`deepseek-v4-flash`） |
+| `PLANNER_*` | → `SUPERVISOR_*` → `fast` 档位（`deepseek-v4-flash`） |
+| `VERIFIER_*` | → `SUPERVISOR_*` → `strong` 档位 |
+| `ANSWER_GENERATOR_*` | → `VERIFIER_*` → `SUPERVISOR_*` → `strong` 档位 |
+| `CASE_ANALYSIS_AGENT_*` | → 旧名 `FACT_AGENT_*` → `strong` 档位（追问分支为 `fast`） |
+| `FACT_ANALYSIS_AGENT_*` | → 旧名 `FACT_AGENT_*` → `fast` 档位 |
+| `STATUTE_RETRIEVAL_AGENT_*` | → `strong` 档位 |
+| `CASE_RETRIEVAL_AGENT_*` | → `strong` 档位 |
+| `CONTRACT_AGENT_*` | → `strong` 档位（未上传文档的提示分支为 `fast`） |
 
 ### 10.3 Agent Trace
 
@@ -901,7 +932,10 @@ docker compose up -d postgres redis qdrant
 | `QDRANT_COLLECTION` | `legal_knowledge` | 法条 collection |
 | `QDRANT_MEMORY_COLLECTION` | `legal_memory` | 长期记忆 collection |
 | `REDIS_URL` | 空 | 未配置即视为未启用 Redis |
-| `MAX_TOOL_CALLS` | `5` | 单任务工具调用上限 |
+| `MAX_TOOL_CALLS_PER_AGENT` | `2` | 单个 Agent 任务的工具调用上限 |
+| `MAX_TOOL_CALLS_PER_REQUEST` | `3` | 一次请求累计的工具调用上限，跨步骤与修复轮不重置 |
+| `EVIDENCE_LAW_TARGET` / `EVIDENCE_CASE_TARGET` | `5` / `3` | 证据到量即停止检索 |
+| `EVIDENCE_GAIN_STOP_THRESHOLD` | `0` | 零增益即停止工具循环 |
 | `MAX_STEP_RETRIES` | `1` | Supervisor 判定步骤失败后的重试次数 |
 | `RRF_K` | `60` | RRF 融合常数 |
 | `RETRIEVAL_FINAL_TOP_K` | `5` | 最终返回法条数 |

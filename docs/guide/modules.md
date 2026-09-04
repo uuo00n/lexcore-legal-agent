@@ -82,7 +82,7 @@ graph TD
 - **Protocol 抽象**：检索器和向量存储通过 Python Protocol 定义接口，便于替换实现
 - **依赖注入**：HybridRetriever 通过构造函数注入各组件，不硬编码
 - **确定性优先**：Router、Planner、Verifier 与格式化步骤保持确定性节点，不无故转成 Agent
-- **有界执行**：计划步数、单任务工具调用次数、replan 次数、上下文 token 都有显式预算
+- **有界执行**：计划步数、单任务工具调用次数、局部修复轮次、replan 次数、上下文 token 都有显式预算
 - **缓存可降级**：Redis 只放可丢弃的热数据，所有访问经统一降级入口，挂掉时主链照常运行
 - **权威记录在 PostgreSQL**：配额、trace、消息归档以关系库为准，Redis 与 checkpoint 都不是唯一副本
 - **环境变量驱动**：所有可配置项通过 `.env` 管理，支持不同部署环境

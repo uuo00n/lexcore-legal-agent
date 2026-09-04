@@ -82,13 +82,15 @@ flowchart LR
     Reserve --> Prompt[Final model messages]
 ```
 
-`build_model_context` 是专业 Agent 模型输入的统一入口。各层有独立软预算，整体受
-`CONTEXT_INPUT_TOKEN_BUDGET - CONTEXT_OUTPUT_TOKEN_RESERVE` 硬上限约束。当前 task 与近期
-消息具有保底空间，防止大型上传文档或记忆片段挤掉正在执行的任务。
+`build_model_context` 是专业 Agent 模型输入的统一入口。预算按本轮需要分档（`standard` 32K /
+`complex` 64K / `long` 128K，见
+[Context Engineering 与 Memory](./context-engineering-memory.md#上下文档位)），各层有独立软预算，
+整体受该档位 `输入预算 - 输出预留` 的硬上限约束，并被 `CONTEXT_MODEL_MAX_TOKENS` 夹住。当前 task
+与近期消息具有保底空间，防止大型上传文档或记忆片段挤掉正在执行的任务。
 
 大型 Tool observation 会先转换为确定性的结构化摘要；原始 observation 仍留在图状态中供
-collector 提取证据。法规和案例只注入按分数稳定排序后的 Top-N。构建结果写入
-`context_build_status`，包含各层估算 token、注入消息数和证据数量。
+collector 提取证据。法规和案例只注入按分数稳定排序后的 Top-N，条数随档位放大。构建结果写入
+`context_build_status`，包含档位、各层估算 token、注入消息数和证据数量。
 
 ## 写入路径
 

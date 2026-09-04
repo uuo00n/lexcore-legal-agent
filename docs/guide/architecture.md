@@ -72,12 +72,19 @@ graph LR
     CC --> M[memory]
     M --> ID[inject_doc]
     ID --> QR[query_rewrite]
-    QR --> IR[intent_router]
-    IR --> P[planner]
-    P --> S{supervisor}
+    QR --> FM[fact_merge]
+    FM --> IR[intent_router]
+    IR --> FA[fact_analysis]
+    FA -->|事实不足| CL[clarification]
+    CL --> E0([END])
+    FA --> CR[complexity_router]
+    CR -->|simple| S{supervisor}
+    CR -->|medium / complex| P[planner]
+    P --> S
 
     S -->|案情| CA[case_analysis_agent]
     S -->|法条| SR[statute_retrieval_agent]
+    S -->|类案·按需| CSA[case_retrieval_agent]
     S -->|咨询| LC[legal_consult_agent]
     S -->|计划完成| RV[result_verifier]
     S -->|终止| E1([END])
@@ -92,6 +99,11 @@ graph LR
     CSE --> SR
     SR -->|done| S
 
+    CSA -->|tools| CST[case_retrieval_tools]
+    CST --> CRE[collect_case_retrieval_evidence]
+    CRE --> CSA
+    CSA -->|done| S
+
     LC -->|tools| LCT[legal_consult_tools]
     LCT --> CVE[collect_consult_evidence]
     CVE --> LC
@@ -99,11 +111,15 @@ graph LR
 
     CA -->|超限| TLE[tool_limit_exceeded]
     SR -->|超限| TLE
+    CSA -->|超限| TLE
     LC -->|超限| TLE
     TLE --> S
 
+    RV -->|repair ×1| RR[repair_router]
+    RR --> S
+    RR --> AG[answer_generator]
     RV -->|replan ×1| P
-    RV --> AG[answer_generator]
+    RV --> AG
     AG --> E2([END])
 ```
 
@@ -132,15 +148,21 @@ FastAPI 提供 RESTful 接口，核心是 `/api/chat` 端点通过 SSE（Server-
 
 ### LangGraph Agent
 
-19 节点的 StateGraph，采用 Plan-and-Execute 而非单层 ReAct：
+27 个业务节点的 StateGraph，采用 Plan-and-Execute 而非单层 ReAct：
 
-- `intent_router` 判定意图；
-- `planner` 生成最多 `MAX_PLAN_STEPS`（6）步计划；
-- `supervisor` 逐步分派给三个 Specialist；
-- 每个 Specialist 自成一个有界 ReAct 小环，单任务最多 `MAX_TOOL_CALLS`（5）次工具调用，
-  超限走 `tool_limit_exceeded` 写入观察后回到 `supervisor`；
-- `result_verifier` 校验证据，最多触发一次 replan；
-- `answer_generator` 生成最终回答。
+- `intent_router` 判定意图，`fact_analysis` 整理事实与缺口；个案结论所需事实不足时经
+  `clarification` 中断补问，用户补充后由 `fact_merge` 合并再重新分析；
+- `complexity_router` 定档：simple 直接写入两步固定计划交给 `supervisor`，跳过 Planner；
+- `planner` 生成最多 `MAX_PLAN_STEPS`（6）步计划，模型不可用时兜底并标记 `planner_degraded`；
+- `supervisor` 逐步分派给四个 Specialist（事实分析、法规检索、按需类案检索、法律推理）；
+- 每个 Specialist 自成一个有界 ReAct 小环，单个 Agent 任务最多 `MAX_TOOL_CALLS_PER_AGENT`（2）次
+  工具调用，超限走 `tool_limit_exceeded` 写入观察后回到 `supervisor`；证据到量、重复检索签名、
+  上一轮零增益属于软停止，Agent 直接用已有证据出报告；一次请求累计还受
+  `MAX_TOOL_CALLS_PER_REQUEST`（3）约束，跨步骤与修复轮不重置，耗尽后同样按软停止处理；
+  检索结果经 Evidence Normalizer 归一化、去重并限量；
+- `result_verifier` 先做 Python 确定性引用核验，再由 LLM 补充语义 issue；失败时优先
+  `repair_router` 局部修复（最多一轮），落不到执行单元时才 replan（最多一次）；
+- `answer_generator` 只从已核验证据生成最终回答。
 
 Router、Planner、Verifier 与格式化步骤都是确定性节点，不额外套一层 Agent。
 

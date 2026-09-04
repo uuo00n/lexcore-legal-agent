@@ -53,7 +53,7 @@ data: {"content": "先检索本地法条，确认押金退还的请求权基础.
 
 ```
 event: context_status
-data: {"message_count": 6, "compactable_messages": 0, "estimated_tokens": 3120, "token_budget": 12000, "usage_ratio": 0.26, "should_compact": false}
+data: {"message_count": 6, "compactable_messages": 0, "estimated_tokens": 3120, "token_budget": 64000, "usage_ratio": 0.0488, "should_compact": false}
 ```
 
 ### tool_start — 工具调用开始
@@ -120,9 +120,11 @@ curl -N -X POST http://localhost:8000/api/chat \
 
 ## 行为说明
 
-- 每个 Specialist 任务最多执行 5 次工具调用（`MAX_TOOL_CALLS` 环境变量控制），超限走 `tool_limit_exceeded` 分支回到 Supervisor
-- Result Verifier 核验失败时最多触发一次 replan，之后仍会进入 `answer_generator` 输出答案
-- 最终回答末尾会附加检索到的法条引用（如 `【引用法条】《劳动合同法》第四十六条`），未被本轮检索支撑的引用会被剔除
+- 每个 Agent 任务最多执行 2 次工具调用（`MAX_TOOL_CALLS_PER_AGENT` 环境变量控制），超限走 `tool_limit_exceeded` 分支回到 Supervisor；证据到量 / 重复检索 / 零增益按软停止处理，直接用已有证据出报告
+- 一次请求内所有 Agent、计划步骤和修复轮累计最多 3 次工具调用（`MAX_TOOL_CALLS_PER_REQUEST`）；耗尽后按软停止处理（`reason=request_budget_exhausted`），且不再发起需要重新检索的局部修复
+- Result Verifier 核验失败时优先由 Repair Router 局部修复（最多一轮，只重跑受影响的 Agent 步骤），问题落不到执行单元时才触发一次 replan；预算用尽后仍会进入 `answer_generator` 基于已核验证据输出答案
+- 简单问题（如单一法条咨询）走固定两步计划，不进 Planner、不查类案；个案结论所需事实不足时本轮以澄清问题结束，用户在同一 `thread_id` 补充后续跑
+- 最终回答只引用本轮核验通过的法条（如 `【引用法条】《劳动合同法》第四十六条`），由已核验证据重新生成，不会出现「引用已移除」之类的内部提示
 - 对话结束后在后台异步执行记忆提取，不阻塞响应
 - 如果 `doc_id` 有效，文档内容会作为 SystemMessage 注入上下文；`evidence_id` 注入视频证据摘要
 - 命中响应缓存或检索缓存时会在 trace 时间线上记 `cache_hit` 事件，被限流则记 `rate_limited`

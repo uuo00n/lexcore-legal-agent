@@ -45,7 +45,7 @@ graph TB
     end
 
     subgraph 短期["Conversation Memory"]
-        SW[近期消息窗口<br/>CONTEXT_RECENT_MESSAGE_COUNT=12]
+        SW[近期消息窗口<br/>按档位 12 / 19 / 30 条]
     end
 
     subgraph 中期["Summary Memory"]
@@ -88,11 +88,13 @@ graph TB
 
 ### 近期消息窗口（Conversation Memory）
 
-- 注入模型的条数：`CONTEXT_RECENT_MESSAGE_COUNT`，默认 12，并受 recent-message token 预算双重限制
+- 注入模型的条数：基准 `CONTEXT_RECENT_MESSAGE_COUNT`（12）按上下文档位放大（standard 12 /
+  complex 19 / long 30），并受 recent-message token 预算双重限制
 - 只注入协议完整的消息，不会把半截的 tool_call 序列送进模型
 - 超阈值时在图入口 `context_compaction` 节点触发压缩：旧消息压成摘要后用 `RemoveMessage`
   从 checkpoint state 删除；压缩失败则不删除原消息
-- 压缩时保留的最近条数为 `SLIDING_WINDOW_SIZE`（8），与注入条数是两个不同的量
+- 压缩时保留的最近条数为 `CONTEXT_COMPACT_KEEP_RECENT`（默认 30，对齐最大档位；下限为
+  `SLIDING_WINDOW_SIZE`=8），与单次注入条数是两个不同的量
 
 ### 滚动摘要（Summary Memory）
 

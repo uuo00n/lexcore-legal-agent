@@ -62,8 +62,13 @@ sequenceDiagram
     LG->>LG: supervisor → result_verifier
 
     Note over LG: result_verifier
-    LG->>LLM: 校验证据是否支撑结论
-    LLM-->>LG: 通过 / 需要重规划（最多一次 replan）
+    LG->>LG: Python 确定性核验引用（canonical_law_id + article_no）
+    LG->>LLM: 语义核验（不可用时 verification_degraded，不中断）
+    LLM-->>LG: 通过 / 结构化 issue
+
+    Note over LG: repair_router（核验失败时）
+    LG->>LG: 按 issue 类型只重开受影响步骤，保留已核验证据（最多一轮）
+    LG->>LG: 落不到执行单元时才 replan（最多一次）
 
     Note over LG: answer_generator
     LG->>LLM: 汇总证据生成最终回答
@@ -115,8 +120,11 @@ sequenceDiagram
 | `legal_consult_agent` | `retrieve_local_law_tool`、`search_law_tool` |
 
 每个 Specialist 自成一个 `agent → *_tools → collect_*_evidence → agent` 的 ReAct 小环，
-单个任务最多调用 `MAX_TOOL_CALLS`（5）次工具；超限时走 `tool_limit_exceeded` 写入一条说明性
-观察，再回到 `supervisor` 继续下一步，而不是无限重试。
+单个 Agent 任务最多调用 `MAX_TOOL_CALLS_PER_AGENT`（2）次工具；超限时走 `tool_limit_exceeded`
+写入一条说明性观察，再回到 `supervisor` 继续下一步，而不是无限重试。证据已到量、重复同一
+`query_signature`、上一轮 `evidence_gain` 为 0 属于软停止：不记步骤失败，Agent 直接用已有证据出报告。
+一次请求累计还受 `MAX_TOOL_CALLS_PER_REQUEST`（3）约束——单任务计数每次分派步骤、每轮修复都会
+归零，只有 `tool_call_total` 按请求存活；耗尽后同样按软停止处理，并且不再发起需要重新检索的局部修复。
 
 工具由 Agent 直接调用进程内 Service Layer（RAG 检索、得理开放平台），**不经过 MCP Client**。
 

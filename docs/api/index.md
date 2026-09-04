@@ -87,7 +87,7 @@
 
 ```
 event: context_status
-data: {"message_count": 6, "estimated_tokens": 3120, "token_budget": 12000, "usage_ratio": 0.26, "should_compact": false}
+data: {"message_count": 6, "estimated_tokens": 3120, "token_budget": 64000, "usage_ratio": 0.0488, "should_compact": false}
 
 event: thought
 data: {"content": "正在检索相关法条..."}

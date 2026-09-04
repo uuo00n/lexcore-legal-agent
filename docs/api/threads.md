@@ -80,14 +80,14 @@ checkpoint 快照，读不到快照时按空消息列表返回。
 
 ```json
 {
-  "message_count": 18,
-  "compactable_messages": 6,
-  "estimated_tokens": 9640,
-  "token_budget": 12000,
-  "usage_ratio": 0.8033,
+  "message_count": 46,
+  "compactable_messages": 16,
+  "estimated_tokens": 49640,
+  "token_budget": 64000,
+  "usage_ratio": 0.7756,
   "auto_compact_ratio": 0.75,
-  "auto_compact_messages": 16,
-  "keep_recent": 12,
+  "auto_compact_messages": 40,
+  "keep_recent": 30,
   "should_compact": true,
   "thread_id": "abc123"
 }
@@ -98,11 +98,11 @@ checkpoint 快照，读不到快照时按空消息列表返回。
 | `message_count` | checkpoint 中的消息总数 |
 | `compactable_messages` | 保留最近 `keep_recent` 条之外、可被压缩的消息数 |
 | `estimated_tokens` | 估算的上下文 token 数 |
-| `token_budget` | `CONTEXT_WINDOW_TOKEN_BUDGET` |
+| `token_budget` | `CONTEXT_WINDOW_TOKEN_BUDGET`，默认与单次任务输入预算同口径（64K） |
 | `usage_ratio` | `estimated_tokens / token_budget` |
 | `auto_compact_ratio` | `CONTEXT_AUTO_COMPACT_RATIO`，达到即自动压缩 |
 | `auto_compact_messages` | `CONTEXT_AUTO_COMPACT_MESSAGES`，超过即自动压缩 |
-| `keep_recent` | `CONTEXT_RECENT_MESSAGE_COUNT`，压缩时保留的最近消息数 |
+| `keep_recent` | `CONTEXT_COMPACT_KEEP_RECENT`，压缩时保留的最近消息数；默认对齐最大上下文档位的近期消息上限（30） |
 | `should_compact` | 是否已满足自动压缩条件 |
 
 ### 示例
@@ -126,10 +126,10 @@ curl http://localhost:8000/api/threads/abc123/context
   "thread_id": "abc123",
   "compacted": true,
   "context_status": {
-    "message_count": 12,
-    "estimated_tokens": 4210,
-    "token_budget": 12000,
-    "usage_ratio": 0.3508,
+    "message_count": 30,
+    "estimated_tokens": 21400,
+    "token_budget": 64000,
+    "usage_ratio": 0.3344,
     "should_compact": false,
     "thread_id": "abc123"
   }

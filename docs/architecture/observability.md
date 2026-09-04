@@ -92,8 +92,18 @@ flowchart LR
 PostgreSQL 的 `agent_traces`、`agent_events` 和 `llm_call_logs` 支持后台页面与时间线；
 `agent_runs` 和 `tool_calls` 保存运行状态与工具调用的权威业务记录。
 
-`/metrics` 输出 Prometheus 文本，包含请求量、延迟、缓存命中、Redis 降级等指标。`/admin` 和
+`/metrics` 输出 Prometheus 文本，包含请求量、延迟、缓存命中、Redis 降级等指标。工作流层面的
+指标统一由 `services/workflow_metrics.py` 产出（前缀 `legal_workflow_`）：节点耗时与成败、
+Complexity Router 定档、澄清结果、Planner 降级、工具调用量与软停止原因、证据归一化保留 / 丢弃 /
+增量、核验结论与 `verification_degraded`、引用状态、局部修复与 replan、答案生成、整轮耗时。
+完整清单见 `PROJECT_INFO.md` 的「Prometheus 指标」小节。`/admin` 和
 相关 API 从观测镜像生成成功率、平均延迟、最近 Trace、LLM 调用与检索时间线。
+
+Trace 上与重构相关的新事件：`complexity_route`、`clarification_required`、`clarification_resumed`、
+`planner_degraded`、`tool_loop_stopped`、`evidence_normalized`、`evidence_deduplicated`、
+`verification_complete`、`verification_issue`、`repair_started`、`repair_skipped`、`replan_skipped`。
+`verification_degraded` 与 `planner_degraded`
+只出现在 Trace 与指标里，不进入用户可见的 SSE 事件。
 
 ## SSE 可见事件
 

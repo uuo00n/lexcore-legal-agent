@@ -70,7 +70,7 @@ run_mcp.py
 
 ### LangGraph 拓扑
 
-19 个节点、15 条静态边、5 组条件边，定义在 `agent/graph.py`：
+27 个业务节点、19 条静态边、9 组条件边，定义在 `agent/graph.py`：
 
 ```text
 START
@@ -78,17 +78,26 @@ START
   -> memory
   -> inject_doc
   -> query_rewrite
+  -> fact_merge                          # 合并用户补充的事实（澄清续跑）
   -> intent_router
-  -> planner
-  -> supervisor                          # should_execute_next
+  -> fact_analysis                       # should_after_fact_analysis
+       -> clarification -> END           # 个案结论 + 事实不足：中断补问
+       -> complexity_router              # should_after_complexity
+            -> supervisor                # simple：固定两步计划，跳过 planner
+            -> planner -> supervisor     # medium / complex
+  supervisor                             # should_execute_next
        -> case_analysis_agent            # should_continue
             -> case_analysis_tools -> collect_case_evidence -> case_analysis_agent
             -> tool_limit_exceeded -> supervisor
             -> supervisor
        -> statute_retrieval_agent        # 同构：statute_retrieval_tools -> collect_statute_evidence
+       -> case_retrieval_agent           # 同构：case_retrieval_tools -> collect_case_retrieval_evidence（按需）
        -> legal_consult_agent            # 同构：legal_consult_tools -> collect_consult_evidence
        -> result_verifier                # should_after_verifier
-            -> planner                   # 最多一次 replan
+            -> repair_router             # 局部修复（最多一轮）  # should_after_repair
+                 -> supervisor           # 重开受影响步骤
+                 -> answer_generator     # 只重写答案
+            -> planner                   # 问题落不到执行单元时才整体 replan（最多一次）
             -> answer_generator -> END
        -> END                            # 计划终止
 ```
@@ -96,12 +105,24 @@ START
 关键点：
 
 - `intent_router` 与 `planner` 负责意图识别和任务拆分，`supervisor` 只推进计划与调度 Specialist。
-- `case_analysis_agent` 负责案件结构化与事实缺口，不再保留旧 `fact_agent` 节点名。
+- `fact_analysis` 只整理事实与缺口，不检索法规；`complexity_router` 定档 simple/medium/complex，
+  simple 直接写入「法规检索 → 法律推理」两步计划，不查类案、不进 Planner。
+- `case_analysis_agent` 负责案件结构化与事实缺口；`case_retrieval_agent` 是独立的类案检索单元，
+  只在 Planner 生成类案步骤或 Repair Router 判定类案证据不足时运行（`needs_case_retrieval`）。
+  §四 的规范职责名（`fact_analysis_agent`/`law_retrieval_agent`/`legal_reasoning_agent`）经
+  `agent/agent_names.py` 解析到图内节点名，节点名本身不改。
 - `contract_agent` 暂未接入默认 Graph，但合同报告 API 和独立 workflow 仍保留。
-- `result_verifier` 只做核验，最终用户回答由 `answer_generator` 生成。
-- 三个预算：`MAX_PLAN_STEPS=6`（`agent/nodes/planner.py`）、`MAX_TOOL_CALLS=5`（`agent/tool_loop.py`，
-  可用环境变量覆盖）、`MAX_AGENT_REPLAN_RETRIES=1`（`agent/replan.py`）。工具超限走
-  `tool_limit_exceeded` 写入观察后回到 `supervisor`，不是直接报错。
+- `result_verifier` 先跑 Python 确定性引用核验，再由 LLM 补充语义 issue；LLM 不可用时
+  `verification_degraded = true`，不抛 500。核验失败优先 `repair_router` 局部修复，
+  只重开受影响步骤并保留第一轮已核验证据；最终用户回答由 `answer_generator` 只从
+  `verified_evidence` 生成，`answer_score` 由 `services/final_quality.py` 唯一产出。
+- 五个预算：`MAX_PLAN_STEPS=6`（`agent/nodes/planner.py`）、`MAX_TOOL_CALLS_PER_AGENT=2`
+  与 `MAX_TOOL_CALLS_PER_REQUEST=3`（`agent/tool_loop.py`，均可用环境变量覆盖）、
+  `MAX_REPAIR_ROUNDS=1`（`agent/repair.py`）、`MAX_AGENT_REPLAN_RETRIES=1`（`agent/replan.py`）。
+  工具超限走 `tool_limit_exceeded` 写入观察后回到 `supervisor`，不是直接报错；证据已到量、
+  重复检索签名、上一轮零增益属于软停止，Agent 直接用已有证据出报告，不记步骤失败。
+  单任务计数在分派步骤、局部修复与整体重排时归零，只有全请求累计值 `tool_call_total` 按请求
+  存活；耗尽后同样按软停止处理，且 `repair_router` 不再发起需要重新检索的局部修复。
 
 ### 聊天请求链路
 
@@ -171,7 +192,7 @@ Legal/
 │   ├── nodes/                      # context、memory、document、query、routing、planner、supervisor、verifier、answer
 │   ├── agents/                     # case_analysis / statute_retrieval / legal_consult / contract
 │   ├── tools/                      # 3 个 Agent 工具，直调进程内 Service Layer
-│   ├── tool_loop.py                # 单任务 ReAct 次数预算（MAX_TOOL_CALLS）
+│   ├── tool_loop.py                # ReAct 预算与软停止（单任务 + 全请求上限、query_signature）
 │   ├── replan.py                   # replan 次数预算（MAX_AGENT_REPLAN_RETRIES）
 │   ├── node_utils.py               # 节点公共工具
 │   ├── reports.py                  # 合同审查报告组装
@@ -322,7 +343,7 @@ MCP Client**，所以 MCP 是否运行不影响问答可用性。
 | --- | --- | --- |
 | `retrieve_local_law_tool` | `services.search.search_local_law_service` → HybridRetriever | 三个 Specialist |
 | `search_law_tool` | 得理开放平台正式法规检索 | 三个 Specialist |
-| `search_case_tool` | 得理开放平台类案检索 | 仅 `case_analysis_agent` |
+| `search_case_tool` | 得理开放平台类案检索 | `case_analysis_agent`、`case_retrieval_agent` |
 
 绑定关系见 `agent/tools/__init__.py`：
 
@@ -364,12 +385,24 @@ CASE_ANALYSIS_TOOLS     = [search_case_tool, search_law_tool, retrieve_local_law
 两个容易混淆的窗口常量（`services/memory.py`）：
 
 - `SLIDING_WINDOW_SIZE=8` 与 `MAX_WINDOW_TOKENS=3000` 是**摘要与压缩的边界**，决定保留多少条近期消息不做摘要。
-- 真正注入模型的近期消息条数是 `CONTEXT_RECENT_MESSAGE_COUNT=12`（`services/context_builder.py`），
-  并另受 recent-message token 预算限制。
+- 真正注入模型的近期消息条数由上下文档位决定：基准 `CONTEXT_RECENT_MESSAGE_COUNT=12`
+  （`services/context_builder.py`）按档位放大为 12 / 19 / 30 条，并另受 recent-message token 预算限制。
 
 每次模型调用由 `services.context_builder.build_model_context` 按 system、relevant memory
 （含用户画像与 `viking_context`）、conversation summary、current plan、retrieved evidence、
 current task、recent messages 分层分配 token。
+
+预算按本轮需要分三档定档（确定性判断，不调用模型），档位与结论写入 `context_build` trace：
+
+| 档位 | 场景 | 输入预算 | 输出预留 | 目标使用量 | 法条 / 类案 Top-N | 近期消息 |
+| --- | --- | --- | --- | --- | --- | --- |
+| `standard` | 普通法律问答 | 32K | 8K | 16K～32K | 6 / 4 | 12 |
+| `complex` | 复杂案件分析（默认档） | 64K | 12K | 32K～64K | 10 / 6 | 19 |
+| `long` | 长合同 / 多份证据 / 大量类案 | 128K | 16K | 64K～128K | 15 / 10 | 30 |
+
+三档由 `CONTEXT_INPUT_TOKEN_BUDGET=64000` 与 `CONTEXT_OUTPUT_TOKEN_RESERVE=8000` 按比例推导，
+统一被 `CONTEXT_MODEL_MAX_TOKENS=128000` 夹住；升到 `long` 由材料 token 数或类案条数触发。
+详见 [Context Engineering 与 Memory](docs/architecture/context-engineering-memory.md#上下文档位)。
 
 OpenViking 上下文只做定位和流程提示，不可作为法条依据。法条依据必须来自本轮 `retrieve_local_law_tool` / `search_law_tool` 的返回。
 
@@ -396,6 +429,20 @@ Prometheus 指标：
 - `legal_cache_lookups_total{namespace,outcome}`：outcome 为 hit / miss / degraded
 - `legal_rate_limit_decisions_total{scope,outcome}`：outcome 为 allow / block / degraded / disabled
 - `legal_redis_degraded_total{op}`：Redis 降级次数
+
+工作流指标统一由 `services/workflow_metrics.py` 产出（前缀 `legal_workflow_`）：
+
+- `legal_workflow_node_latency_ms` / `legal_workflow_node_total{node,status}`：每个图节点的耗时与成败
+- `legal_workflow_route_total{complexity_level,execution_mode,needs_case_retrieval}`：Complexity Router 定档
+- `legal_workflow_clarification_total{outcome,blocking}`：澄清闸门结果
+- `legal_workflow_planner_degraded_total`：Planner 兜底次数
+- `legal_workflow_tool_calls_total{agent}` / `legal_workflow_agent_tool_calls{agent}`：工具调用量
+- `legal_workflow_tool_loop_stopped_total{agent,reason}`：软停止原因（证据到量 / 重复查询 / 零增益）
+- `legal_workflow_evidence_kept{kind}` / `legal_workflow_evidence_gain` / `legal_workflow_evidence_dropped_total`：Evidence Normalizer 结果
+- `legal_workflow_verification_total{result,degraded}` / `legal_workflow_verification_degraded_total` / `legal_workflow_citations_total{status}`：核验结论与引用状态
+- `legal_workflow_repair_total{target}` / `legal_workflow_recovery_total{strategy}`：局部修复与 replan / replan_skipped
+- `legal_workflow_answer_total{outcome}` / `legal_workflow_answer_attempts`：答案生成
+- `legal_workflow_latency_ms{execution_mode,status}`：整轮工作流耗时
 
 缓存命中同时写入 trace：命中记 `cache_hit`，未命中记 `cache_miss`，被限流记 `rate_limited`，
 payload 只有命名空间、摘要 key 与 `degraded` 标记，不含缓存值。
@@ -427,17 +474,21 @@ LLM_ROUTE_LONG_MODEL=deepseek-v4-pro
 
 # 节点/Agent 专用模型；未设置时按注释里的回退链取值
 SUPERVISOR_PROVIDER=deepseek
-SUPERVISOR_MODEL=deepseek-v4-flash-vision-exp
+SUPERVISOR_MODEL=deepseek-v4-flash
 PLANNER_PROVIDER=deepseek                     # 回退 SUPERVISOR_PROVIDER
-PLANNER_MODEL=deepseek-v4-flash-vision-exp    # 回退 SUPERVISOR_MODEL
+PLANNER_MODEL=deepseek-v4-flash               # 回退 SUPERVISOR_MODEL
 VERIFIER_PROVIDER=deepseek                    # 回退 SUPERVISOR_PROVIDER
-VERIFIER_MODEL=deepseek-v4-flash-vision-exp   # 回退 SUPERVISOR_MODEL
-ANSWER_GENERATOR_PROVIDER=deepseek            # 回退 VERIFIER_PROVIDER
-ANSWER_GENERATOR_MODEL=deepseek-v4-flash-vision-exp
+VERIFIER_MODEL=deepseek-v4-pro                # 回退 SUPERVISOR_MODEL
+ANSWER_GENERATOR_PROVIDER=deepseek            # 回退 VERIFIER_PROVIDER → SUPERVISOR_PROVIDER
+ANSWER_GENERATOR_MODEL=deepseek-v4-pro        # 回退 VERIFIER_MODEL → SUPERVISOR_MODEL
 CASE_ANALYSIS_AGENT_PROVIDER=deepseek         # 回退旧名 FACT_AGENT_PROVIDER
-CASE_ANALYSIS_AGENT_MODEL=deepseek-v4-flash-vision-exp
+CASE_ANALYSIS_AGENT_MODEL=deepseek-v4-pro     # 回退旧名 FACT_AGENT_MODEL
+FACT_ANALYSIS_AGENT_PROVIDER=deepseek         # 回退旧名 FACT_AGENT_PROVIDER
+FACT_ANALYSIS_AGENT_MODEL=deepseek-v4-flash   # 回退旧名 FACT_AGENT_MODEL
 STATUTE_RETRIEVAL_AGENT_PROVIDER=deepseek
-STATUTE_RETRIEVAL_AGENT_MODEL=deepseek-v4-flash-vision-exp
+STATUTE_RETRIEVAL_AGENT_MODEL=deepseek-v4-pro
+CASE_RETRIEVAL_AGENT_PROVIDER=deepseek
+CASE_RETRIEVAL_AGENT_MODEL=deepseek-v4-pro
 CONTRACT_AGENT_PROVIDER=deepseek
 CONTRACT_AGENT_MODEL=deepseek-v4-pro
 
@@ -445,6 +496,21 @@ CONTRACT_AGENT_MODEL=deepseek-v4-pro
 MEMORY_EXTRACTOR_MODEL=deepseek-v4-flash
 CONTEXT_COMPACTION_MODEL=deepseek-v4-flash
 ```
+
+模型 / Provider 的解析口径集中在 `services/model_defaults.py`，节点不再自带模型名。
+优先级从高到低：节点专属变量（含上表的多级回退）→ 档位变量 `LLM_ROUTE_{FAST,STRONG,LONG}_*`
+→ 全局 `LLM_MODEL` / `LLM_PROVIDER` → 档位内置默认模型（`fast=deepseek-v4-flash`，
+`strong`/`long=deepseek-v4-pro`）。空字符串按未配置处理。
+
+档位分配：Supervisor、Planner、Fact Analysis、Case Analysis 的追问分支、Contract 未上传文档时的提示走
+`fast`；Result Verifier、Answer Generator、Case Analysis 主分析、Statute Retrieval、
+Case Retrieval、Contract 报告摘要走 `strong`；`select_model_route` 在文档超过 6000 字时走 `long`。
+Planner 只产出结构化步骤清单，走 `fast` 档省 token；结构化输出失败时已有降级兜底计划，
+并记 `legal_workflow_planner_degraded_total`。
+
+主链全部是纯文本推理节点，不要给它们配视觉 / 多模态模型（名字含 `vision`、`-vl`、`vl-`）；
+视觉模型只用于识别用户上传的图片与扫描件。误配时 `services.model_defaults` 会打一条 WARNING
+提示，但不会自动改写配置。
 
 ### RAG 与向量存储
 
@@ -472,7 +538,11 @@ RETRIEVAL_MIN_RESULTS=1
 # 历史版本/已废止条文是否参与召回；默认关闭
 RETRIEVAL_INCLUDE_SUPERSEDED=false
 RRF_K=60
-MAX_TOOL_CALLS=5
+MAX_TOOL_CALLS_PER_AGENT=2
+MAX_TOOL_CALLS_PER_REQUEST=3
+EVIDENCE_LAW_TARGET=5
+EVIDENCE_CASE_TARGET=3
+EVIDENCE_GAIN_STOP_THRESHOLD=0
 ```
 
 ### 查询增强与 LoRA
@@ -497,23 +567,24 @@ HYDE_HF_TEMPERATURE=0.2
 ### Context Engineering 与 Memory
 
 ```bash
-CONTEXT_INPUT_TOKEN_BUDGET=12000
-CONTEXT_OUTPUT_TOKEN_RESERVE=2000
-CONTEXT_SYSTEM_TOKEN_BUDGET=1800
-CONTEXT_MEMORY_TOKEN_BUDGET=900
-CONTEXT_SUMMARY_TOKEN_BUDGET=700
-CONTEXT_RECENT_MESSAGES_TOKEN_BUDGET=2600
-CONTEXT_PLAN_TOKEN_BUDGET=700
-CONTEXT_EVIDENCE_TOKEN_BUDGET=2400
-CONTEXT_CURRENT_TASK_TOKEN_BUDGET=900
+# 模型最大允许上下文（取已配置路由中窗口最小的模型），所有档位都被它夹住
+CONTEXT_MODEL_MAX_TOKENS=128000
+# 单次任务默认输入预算与最终回答预留；三档按比例从这两个基准推导
+CONTEXT_INPUT_TOKEN_BUDGET=64000
+CONTEXT_OUTPUT_TOKEN_RESERVE=8000
+# 升到 long 档的阈值：材料 token 数 / 类案条数
+CONTEXT_LONG_MATERIAL_TOKENS=4000
+CONTEXT_LONG_CASE_COUNT=8
 CONTEXT_RECENT_MESSAGE_COUNT=12
-CONTEXT_TOOL_RESULT_TOKEN_BUDGET=500
 CONTEXT_RETRIEVED_LAW_TOP_N=6
 CONTEXT_RETRIEVED_CASE_TOP_N=4
+# 各层软预算默认按 prompt 预算比例分配；CONTEXT_*_TOKEN_BUDGET 为可选的绝对值覆盖（会关掉档位缩放）
+# 单档位覆盖：CONTEXT_TIER_<STANDARD|COMPLEX|LONG>_{INPUT_TOKENS,OUTPUT_RESERVE,RECENT_MESSAGE_COUNT,LAW_TOP_N,CASE_TOP_N}
 # 长会话 checkpoint 压缩阈值
-CONTEXT_WINDOW_TOKEN_BUDGET=12000
+CONTEXT_WINDOW_TOKEN_BUDGET=64000
 CONTEXT_AUTO_COMPACT_RATIO=0.75
-CONTEXT_AUTO_COMPACT_MESSAGES=16
+CONTEXT_AUTO_COMPACT_MESSAGES=40
+CONTEXT_COMPACT_KEEP_RECENT=30
 ```
 
 ### OpenViking
@@ -683,7 +754,7 @@ pytest tests/test_cache.py tests/test_quota.py tests/test_reports_api.py -q
    `mcp_server/tools/` 都是薄封装。Web 链路进程内直调，不经过 MCP Client，因此 MCP 是否运行不影响问答。
 2. **Plan-and-Execute 而非单层 ReAct**：Router 判意图、Planner 拆计划、Supervisor 逐步分派、
    Verifier 校验、Answer Generator 成稿；Router/Planner/Verifier 与格式化步骤保持确定性节点。
-3. **有界执行**：计划步数（6）、单任务工具调用次数（5）、replan 次数（1）、上下文 token 都有显式预算，
+3. **有界执行**：计划步数（6）、单任务工具调用次数（2）、局部修复轮次（1）、replan 次数（1）、上下文 token 都有显式预算，
    超限走 `tool_limit_exceeded` 记录观察后继续，而不是抛错终止。
 4. **事实不足先追问**：短且缺核心事实的法律问题先补事实，降低错误法律结论风险。
 5. **OpenViking 是 Context Layer**：用于 Resource / Memory / Skill 定位和 trace 可解释，不替代
@@ -708,7 +779,9 @@ pytest tests/test_cache.py tests/test_quota.py tests/test_reports_api.py -q
 - 不要把默认模型写成智谱；默认 provider 是 `deepseek`，HyDE 默认 `deepseek-v4-flash`。
 - 不要提 `services/mcp_client.py`、`agent/nodes.py`、`services/vectorstore/`、ChromaDB 或 SQLite——
   这些都已不存在；向量存储只有 Qdrant，关系库只有 PostgreSQL。
-- 不要把 `SLIDING_WINDOW_SIZE`（8）当成模型输入窗口；模型窗口是 `CONTEXT_RECENT_MESSAGE_COUNT`（12）。
+- 不要把 `SLIDING_WINDOW_SIZE`（8）当成模型输入窗口；模型窗口是 `CONTEXT_RECENT_MESSAGE_COUNT`（基准 12，
+  按上下文档位放大为 12 / 19 / 30）。
+- 不要说上下文预算是一个固定值；它按 standard / complex / long 三档定档，默认档为 complex（64K）。
 - 不要把 OpenViking 简化成“数据库替代品”；它在本项目里主要是上下文组织、检索前路由和决策辅助。
 - 不要把 OpenViking 命中当成法条来源；法条依据必须来自 `retrieve_local_law_tool` / `search_law_tool`。
 - 不要声称已有完整生产级认证；当前只有可选 admin API key，普通用户身份仍以 thread_id 近似。
