@@ -43,3 +43,14 @@ def latest_human_message(state: AgentState) -> str:
         if isinstance(item, HumanMessage):
             return item.content
     return ""
+
+
+def effective_question(state: AgentState) -> str:
+    """本轮实际需要处理的问题文本。
+
+    普通轮次等价于 ``latest_human_message``；澄清恢复轮次里 Fact Merge 会把原始
+    问题与用户补充合并后写入 ``rewritten_query``，此时必须用合并后的问题做意图与
+    事实判定——否则一句「3 年」会被当成闲聊或全新问题（§八）。
+    """
+    merged = str(state.get("rewritten_query") or "").strip()
+    return merged or latest_human_message(state).strip()
