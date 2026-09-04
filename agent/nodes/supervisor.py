@@ -7,27 +7,33 @@ from typing import Any
 
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 
-from agent.node_utils import compatibility_dependency, latest_human_message, record_trace_event
+from agent.agent_names import DISPATCHABLE_AGENTS, same_agent
+from agent.node_utils import (
+    compatibility_dependency,
+    effective_question,
+    latest_human_message,
+    record_trace_event,
+)
 from agent.prompts import SUPERVISOR_DIRECT_PROMPT
 from agent.reports import report_agent_name
 from agent.state import AgentState, PlanStep
 from services.answer_format import strip_answer_markdown
-from services.legal_analysis import classify_legal_intent, score_legal_answer
+from services.final_quality import measure_final_answer
+from services.legal_analysis import classify_legal_intent
 from services.llm import get_llm
+from services.model_defaults import FAST, resolve_model, resolve_provider
 from services.supervisor import route_user_request_with_llm
 
 
-SPECIALIST_AGENTS = {
-    "case_analysis_agent",
-    "statute_retrieval_agent",
-    "legal_consult_agent",
-}
+# §四：计划里允许出现的执行单元名——图内节点名与规范职责名都接受，由
+# ``agent.agent_names`` 统一解析，Supervisor 自己不维护第二份名单。
+SPECIALIST_AGENTS = set(DISPATCHABLE_AGENTS)
 MAX_STEP_RETRIES = int(os.getenv("MAX_STEP_RETRIES", "1"))
 
 
 def _last_report_from(state: AgentState, agent_name: str) -> dict[str, Any] | None:
     for report in reversed(state.get("agent_reports", []) or []):
-        if report_agent_name(report) == agent_name:
+        if same_agent(report_agent_name(report), agent_name):
             return report
     return None
 
@@ -56,7 +62,7 @@ def _report_for_running_step(
     reports = list(state.get("agent_reports", []) or [])
     for report in reversed(reports):
         task_id = str(report.get("task_id") or report.get("step_id") or "")
-        if task_id == step_id and report_agent_name(report) == assigned_agent:
+        if task_id == step_id and same_agent(report_agent_name(report), assigned_agent):
             return report
 
     used_report_ids = {
@@ -67,7 +73,7 @@ def _report_for_running_step(
         if isinstance(result, dict)
     }
     for report in reversed(reports):
-        if report_agent_name(report) != assigned_agent:
+        if not same_agent(report_agent_name(report), assigned_agent):
             continue
         report_id = str(report.get("report_id") or "")
         if report_id and report_id in used_report_ids:
@@ -252,8 +258,8 @@ async def _llm_supervisor_direct_response(state: AgentState, reason: str) -> str
     try:
         llm_factory = compatibility_dependency("get_llm", get_llm)
         llm = llm_factory(
-            provider=os.getenv("SUPERVISOR_PROVIDER", "deepseek"),
-            model=os.getenv("SUPERVISOR_MODEL", "deepseek-v4-flash-vision-exp"),
+            provider=resolve_provider("SUPERVISOR_PROVIDER", tier=FAST),
+            model=resolve_model("SUPERVISOR_MODEL", tier=FAST),
             model_route="supervisor_agent",
             trace_id=state.get("trace_id"),
             thread_id=state.get("thread_id"),
@@ -289,7 +295,7 @@ async def intent_router_node(state: AgentState) -> dict[str, Any]:
         }
 
     reports = state.get("agent_reports", []) or []
-    if reports:
+    if reports and not state.get("clarification_resumed"):
         from agent.nodes.answer import _llm_verifier_final_response
 
         final_content = await _llm_verifier_final_response(state)
@@ -300,7 +306,10 @@ async def intent_router_node(state: AgentState) -> dict[str, Any]:
             "messages": [AIMessage(content=final_content)],
         }
 
-    latest_query = latest_human_message(state)
+    # 澄清恢复轮次必须用「原始问题 + 用户补充」判定意图：用户可能只回了「3 年」，
+    # 单看这一句会被判成闲聊，从而丢掉整个待处理的法律问题（§八）。
+    resumed = bool(state.get("clarification_resumed"))
+    latest_query = effective_question(state) if resumed else latest_human_message(state)
     route_request = compatibility_dependency(
         "route_user_request_with_llm",
         route_user_request_with_llm,
@@ -321,17 +330,20 @@ async def intent_router_node(state: AgentState) -> dict[str, Any]:
             "reason": decision.reason,
             "complexity": decision.complexity,
             "need_tools": decision.need_tools,
+            "clarification_resumed": resumed,
         },
     )
-    if decision.route == "final":
+    if decision.route == "final" and not resumed:
         final_content = await _llm_supervisor_direct_response(state, decision.reason)
+        # 闲聊/非法律直答也是一次最终答复，评分同样走唯一产出口（§P2）。
+        metrics = measure_final_answer(latest_query, final_content, [])
         record_trace_event(
             state.get("trace_id"),
             "final_answer",
             name="supervisor_agent",
             payload={
                 "content_preview": final_content[:500],
-                "answer_score": score_legal_answer(latest_query, final_content, []),
+                "answer_score": metrics.as_dict(),
             },
         )
         return {
@@ -339,6 +351,7 @@ async def intent_router_node(state: AgentState) -> dict[str, Any]:
             "intent": "non_legal",
             "intent_confidence": 0.0,
             "task_complexity": decision.complexity,
+            "answer_score": metrics.as_dict(),
             "supervisor_route": "end",
             "supervisor_reason": decision.reason,
             "supervisor_finalized": True,

@@ -2,19 +2,19 @@
 from __future__ import annotations
 
 import json
-import os
 from typing import Any
 
-from agent.node_utils import compatibility_dependency, latest_human_message, record_trace_event
+from agent.node_utils import compatibility_dependency, effective_question, record_trace_event
 from agent.prompts import CASE_ANALYSIS_SYSTEM_PROMPT
 from agent.reports import build_agent_report
 from agent.state import AgentState
-from agent.tool_loop import apply_tool_call_budget
+from agent.tool_loop import admit_tool_calls
 from agent.tools import CASE_ANALYSIS_TOOLS
 from services.answer_format import strip_answer_markdown
 from services.context_builder import build_model_context
 from services.legal_analysis import build_follow_up_response, classify_legal_intent, should_ask_follow_up
 from services.llm import get_llm, supports_tools
+from services.model_defaults import FAST, STRONG, resolve_model, resolve_provider
 
 
 def _extract_json(content: str) -> dict[str, Any] | None:
@@ -62,8 +62,10 @@ async def _llm_case_follow_up(
     try:
         llm_factory = compatibility_dependency("get_llm", get_llm)
         llm = llm_factory(
-            provider=os.getenv("CASE_ANALYSIS_AGENT_PROVIDER", os.getenv("FACT_AGENT_PROVIDER", "deepseek")),
-            model=os.getenv("CASE_ANALYSIS_AGENT_MODEL", os.getenv("FACT_AGENT_MODEL", "deepseek-v4-flash-vision-exp")),
+            provider=resolve_provider(
+                "CASE_ANALYSIS_AGENT_PROVIDER", "FACT_AGENT_PROVIDER", tier=FAST
+            ),
+            model=resolve_model("CASE_ANALYSIS_AGENT_MODEL", "FACT_AGENT_MODEL", tier=FAST),
             model_route="case_analysis_agent",
             trace_id=state.get("trace_id"),
             thread_id=state.get("thread_id"),
@@ -88,7 +90,7 @@ async def _llm_case_follow_up(
 
 async def case_analysis_agent_node(state: AgentState) -> dict[str, Any]:
     """Extract and structure a case without taking over final consultation."""
-    latest_query = latest_human_message(state)
+    latest_query = effective_question(state)
     if not latest_query:
         return {"needs_follow_up": False}
 
@@ -106,7 +108,16 @@ async def case_analysis_agent_node(state: AgentState) -> dict[str, Any]:
         )
         return {"needs_follow_up": False, "agent_reports": [report]}
 
-    decision = should_ask_follow_up(latest_query, has_uploaded_doc=bool(state.get("uploaded_doc_text")))
+    # 事实充分性已经由计划之前的 Fact Analysis 闸门判定过（§七、§八）：真正需要补问的
+    # 请求根本不会走到这里。计划执行到一半再改判「要问用户」会把澄清循环和执行链路搅在
+    # 一起，所以闸门跑过之后本节点只做结构化分析。没有 case_facts 说明是旧链路或直接
+    # 调用本节点的调用方，保留原有行为。
+    gate_already_ran = state.get("case_facts") is not None
+    decision: dict[str, Any] = (
+        {"should_ask": False}
+        if gate_already_ran
+        else should_ask_follow_up(latest_query, has_uploaded_doc=bool(state.get("uploaded_doc_text")))
+    )
     if decision["should_ask"]:
         response = await _llm_case_follow_up(state, latest_query, decision)
         questions = decision.get("questions", [])
@@ -134,13 +145,15 @@ async def case_analysis_agent_node(state: AgentState) -> dict[str, Any]:
     context = {
         "task_id": state.get("current_step") or state.get("trace_id") or "current-request:case_analysis_agent",
         "query": latest_query,
-        "uploaded_document": (state.get("uploaded_doc_text") or "")[:12000],
+        # 上传文档由 build_model_context 统一按档位预算注入证据区，这里不再重复裁剪。
         "existing_reports": state.get("agent_reports", []) or [],
     }
     llm_factory = compatibility_dependency("get_llm", get_llm)
     llm = llm_factory(
-        provider=os.getenv("CASE_ANALYSIS_AGENT_PROVIDER", "deepseek"),
-        model=os.getenv("CASE_ANALYSIS_AGENT_MODEL", "deepseek-v4-flash-vision-exp"),
+        provider=resolve_provider(
+            "CASE_ANALYSIS_AGENT_PROVIDER", "FACT_AGENT_PROVIDER", tier=STRONG
+        ),
+        model=resolve_model("CASE_ANALYSIS_AGENT_MODEL", "FACT_AGENT_MODEL", tier=STRONG),
         model_route="case_analysis_agent",
         trace_id=state.get("trace_id"),
         thread_id=state.get("thread_id"),
@@ -158,19 +171,10 @@ async def case_analysis_agent_node(state: AgentState) -> dict[str, Any]:
         payload=built.status,
     )
     response = await llm.ainvoke(built.messages)
-    if getattr(response, "tool_calls", None):
-        response, tool_call_count, failure = apply_tool_call_budget(
-            response,
-            state,
-            agent_name="case_analysis_agent",
-        )
-        return {
-            "messages": [response],
-            "tool_call_count": tool_call_count,
-            "tool_loop_failure": failure,
-            "context_build_status": built.status,
-        }
-
+    step = admit_tool_calls(response, state, agent_name="case_analysis_agent")
+    if step.continue_loop:
+        return {**step.updates, "context_build_status": built.status}
+    # 软停止时直接用已有证据整理事实与争议结构（§P1-2、§P1-3）。
     parsed = _extract_json(response.content or "") or {}
     findings = parsed.get("findings")
     if not isinstance(findings, dict):

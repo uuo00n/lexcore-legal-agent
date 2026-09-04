@@ -36,24 +36,43 @@ def test_legal_consult_agent_has_trusted_source_tools():
     assert tool_names == ["search_law_tool", "retrieve_local_law_tool"]
 
 
-def test_specialist_tool_loop_default_is_five():
+def test_specialist_tool_loop_default_is_two():
     """
     函数作用：
-        每个 Specialist 任务的工具调用默认上限应为 5，避免无限循环。
+        每个 Specialist 任务的工具调用默认上限应为 2（§P1-2），避免无意义重复检索。
     输入参数：
         - 无
     输出参数：
         - 未标注
     """
     from agent.nodes import MAX_TOOL_CALLS
+    from agent.tool_loop import MAX_TOOL_CALLS_PER_AGENT
 
-    assert MAX_TOOL_CALLS == 5
+    assert MAX_TOOL_CALLS_PER_AGENT == 2
+    assert MAX_TOOL_CALLS == MAX_TOOL_CALLS_PER_AGENT
 
 
-def test_guard_law_citations_removes_unretrieved_reference():
+def test_request_tool_loop_budget_default_is_three():
     """
     函数作用：
-        未出现在本轮检索结果里的法条引用不应原样留在最终回答中。
+        一次请求内所有 Agent / 计划步骤 / 修复轮累计的工具调用上限应为 3。单任务计数
+        会在分派步骤、局部修复和整体重排时归零，只有这个累计值按请求存活。
+    输入参数：
+        - 无
+    输出参数：
+        - 未标注
+    """
+    from agent.nodes import MAX_TOOL_CALLS_PER_REQUEST as facade_budget
+    from agent.tool_loop import MAX_TOOL_CALLS_PER_REQUEST
+
+    assert MAX_TOOL_CALLS_PER_REQUEST == 3
+    assert facade_budget == MAX_TOOL_CALLS_PER_REQUEST
+
+
+def test_guard_law_citations_drops_unretrieved_reference_without_marker():
+    """
+    函数作用：
+        未出现在本轮检索结果里的法条引用应整句丢弃，且不得留下「已移除」标记（§P2）。
     输入参数：
         - 无
     输出参数：
@@ -74,7 +93,38 @@ def test_guard_law_citations_removes_unretrieved_reference():
 
     assert "《民法典》第五百七十七条" in guarded
     assert "《刑法》第二百六十四条" not in guarded
-    assert "未在本轮检索结果中确认" in guarded
+    # §P2：用户不该看到核验留下的疤痕，只该看到完整可读的句子。
+    assert "未在本轮检索结果中确认" not in guarded
+    assert guarded == "可以主张违约责任，依据《民法典》第五百七十七条。"
+
+
+def test_legal_agent_report_keeps_model_citations_for_verifier():
+    """
+    函数作用：
+        专家报告不得自行删除可疑引用，否则 Citation Verifier 无法判出 citation_invalid。
+    输入参数：
+        - 无
+    输出参数：
+        - 未标注
+    """
+    from agent.agents.legal_consult_agent import _build_legal_agent_report
+
+    state = {
+        "messages": [HumanMessage(content="公司拖欠工资怎么办？")],
+        "retrieved_laws": [{"law_name": "劳动合同法", "article_no": "第八十五条"}],
+    }
+    content = json.dumps(
+        {
+            "summary": "可以要求支付工资",
+            "findings": {"analysis": "依据《劳动合同法》第九十九条，可以要求赔偿。"},
+        },
+        ensure_ascii=False,
+    )
+
+    report = _build_legal_agent_report(content, state)
+
+    assert "《劳动合同法》第九十九条" in report["findings"]["analysis"]
+    assert "已移除" not in report["findings"]["analysis"]
 
 
 def test_prompt_requires_plain_inline_law_format():

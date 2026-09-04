@@ -177,7 +177,13 @@ async def test_graph_returns_to_supervisor_after_case_analysis_report(monkeypatc
     async def fake_supervisor(state):
         supervisor_calls.append(state.get("agent_reports", []))
         if len(supervisor_calls) == 1:
-            return {"supervisor_route": "case_analysis_agent", "supervisor_reason": "测试路由"}
+            # 案件分析优先的计划属于复杂路径；简单问题会被 Complexity Router
+            # 直接换成「法规检索 → 法律推理」的固定最小计划（§P1-1）。
+            return {
+                "supervisor_route": "case_analysis_agent",
+                "supervisor_reason": "测试路由",
+                "task_complexity": "high",
+            }
         return {
             "supervisor_route": "end",
             "messages": [AIMessage(content="主控整理后的追问。")],

@@ -11,7 +11,7 @@ from agent.node_utils import compatibility_dependency, record_trace_event
 from agent.prompts import LEGAL_SYSTEM_PROMPT, LEGAL_SYSTEM_PROMPT_NO_TOOLS
 from agent.reports import build_agent_report, report_agent_name
 from agent.state import AgentState
-from agent.tool_loop import apply_tool_call_budget
+from agent.tool_loop import admit_tool_calls
 from agent.tools import LEGAL_CONSULT_TOOLS
 from services.answer_format import strip_answer_markdown
 from services.case_retrieval import search_similar_cases
@@ -23,6 +23,8 @@ _LAW_CITATION_RE = re.compile(
     r"《([^》]+)》\s*"
     r"(第[一二三四五六七八九十百千万亿零〇两\d]+条(?:之[一二三四五六七八九十百千万亿零〇两\d]+)?)"
 )
+# 句末标点与换行都算句子边界；切分后保留标点，便于原样重组。
+_SENTENCE_SPLIT_RE = re.compile(r"(?<=[。；;！!？?\n])")
 
 
 def _normalize_law_name(name: str) -> str:
@@ -34,7 +36,16 @@ def _law_key(law_name: str, article_no: str) -> tuple[str, str]:
 
 
 def _guard_law_citations(content: str, laws: list[dict]) -> str:
-    """Remove explicit law citations unsupported by this turn's retrieval."""
+    """兼容保留的法条引用过滤器：整句丢弃未检索到的引用（§P2）。
+
+    旧实现把未命中的引用替换成「（未在本轮检索结果中确认的法条引用已移除）」，
+    用户于是在答复里看到一条疤痕，而不是一句可读的话（§二 问题 10）。现在改成
+    整句丢弃——句子是能保持语义完整的最小单位。
+
+    专家报告本身不再调用它：报告必须如实保留模型写下的引用，才能让确定性
+    Citation Verifier 判出 ``citation_invalid`` 并交给 Repair Router 局部修复
+    （§十四、§P0-5）；用户侧的保护改由 Answer Generator 的引用审计负责。
+    """
     if not content:
         return content
     allowed = {
@@ -42,16 +53,19 @@ def _guard_law_citations(content: str, laws: list[dict]) -> str:
         for item in laws
         if item.get("law_name") and item.get("article_no")
     }
-    if not allowed:
-        return _LAW_CITATION_RE.sub("", content)
 
-    def replace_if_unverified(match: re.Match[str]) -> str:
-        law_name, article_no = match.group(1), match.group(2)
-        if _law_key(law_name, article_no) in allowed:
-            return match.group(0)
-        return "（未在本轮检索结果中确认的法条引用已移除）"
+    def is_grounded(sentence: str) -> bool:
+        return all(
+            _law_key(law_name, article_no) in allowed
+            for law_name, article_no in _LAW_CITATION_RE.findall(sentence)
+        )
 
-    return _LAW_CITATION_RE.sub(replace_if_unverified, content)
+    kept = [
+        sentence
+        for sentence in _SENTENCE_SPLIT_RE.split(content)
+        if sentence.strip() and is_grounded(sentence)
+    ]
+    return "".join(kept).strip()
 
 
 def _format_law_sources(laws: list[dict]) -> str:
@@ -109,10 +123,10 @@ def _law_basis_from_retrieval(laws: list[dict]) -> list[dict[str, str]]:
 def _build_legal_agent_report(content: str, state: AgentState) -> dict[str, Any]:
     retrieved = state.get("retrieved_laws", []) or []
     parsed = _extract_json_object(content)
+    # 报告如实保留模型写下的引用：删掉可疑引用会让 Citation Verifier 看不到问题，
+    # 也就无法判出 citation_invalid 并触发局部修复（§十四、§P0-5、§二 问题 10）。
     if parsed is None:
         analysis = strip_answer_markdown(content)
-        if retrieved:
-            analysis = strip_answer_markdown(_guard_law_citations(analysis, retrieved))
         detail: dict[str, Any] = {
             "status": "analysis_ready",
             "legal_issues": [],
@@ -132,10 +146,7 @@ def _build_legal_agent_report(content: str, state: AgentState) -> dict[str, Any]
         detail.setdefault("next_steps", [])
         detail.setdefault("confidence", parsed.get("confidence", "medium"))
         if isinstance(detail.get("analysis"), str):
-            analysis = strip_answer_markdown(detail["analysis"])
-            if retrieved:
-                analysis = strip_answer_markdown(_guard_law_citations(analysis, retrieved))
-            detail["analysis"] = analysis
+            detail["analysis"] = strip_answer_markdown(detail["analysis"])
         detail["raw_response"] = content
     detail["retrieved_law_count"] = len(retrieved)
     detail.setdefault(
@@ -282,25 +293,23 @@ async def legal_consult_agent_node(state: AgentState) -> dict[str, Any]:
     response = await llm.ainvoke(built.messages)
     if getattr(response, "tool_calls", None):
         response = _limit_tool_calls(response)
-        response, tool_call_count, failure = apply_tool_call_budget(
-            response,
-            state,
-            agent_name="legal_consult_agent",
-        )
-        result: dict[str, Any] = {
-            "messages": [response],
-            "tool_call_count": tool_call_count,
-            "tool_loop_failure": failure,
-            "context_build_status": built.status,
-        }
+    step = admit_tool_calls(response, state, agent_name="legal_consult_agent")
+    if step.continue_loop:
+        result: dict[str, Any] = {**step.updates, "context_build_status": built.status}
         record_trace_event(
             state.get("trace_id"),
             "agent_tool_request",
             name="legal_consult_agent",
-            payload={"tools": [call.get("name", "") for call in response.tool_calls]},
+            payload={
+                "tools": [
+                    call.get("name", "")
+                    for call in (getattr(result["messages"][0], "tool_calls", None) or [])
+                ]
+            },
         )
         return result
 
+    # 软停止时不再检索，直接基于已有证据给出法律分析（§P1-2、§P1-3）。
     report = _build_legal_agent_report(response.content or "", state)
     record_trace_event(
         state.get("trace_id"),

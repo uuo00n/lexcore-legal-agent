@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import json
-import os
 import re
 from typing import Any
 
@@ -10,9 +9,10 @@ from agent.node_utils import compatibility_dependency, latest_human_message, rec
 from agent.prompts import STATUTE_RETRIEVAL_SYSTEM_PROMPT
 from agent.reports import build_agent_report
 from agent.state import AgentState, StatuteReport
-from agent.tool_loop import apply_tool_call_budget
+from agent.tool_loop import admit_tool_calls
 from agent.tools import STATUTE_RETRIEVAL_TOOLS
 from services.llm import get_llm, supports_tools
+from services.model_defaults import STRONG, resolve_model, resolve_provider
 from services.context_builder import build_model_context
 
 
@@ -93,8 +93,8 @@ async def statute_retrieval_agent_node(state: AgentState) -> dict[str, Any]:
     }
     llm_factory = compatibility_dependency("get_llm", get_llm)
     llm = llm_factory(
-        provider=os.getenv("STATUTE_RETRIEVAL_AGENT_PROVIDER", "deepseek"),
-        model=os.getenv("STATUTE_RETRIEVAL_AGENT_MODEL", "deepseek-v4-flash-vision-exp"),
+        provider=resolve_provider("STATUTE_RETRIEVAL_AGENT_PROVIDER", tier=STRONG),
+        model=resolve_model("STATUTE_RETRIEVAL_AGENT_MODEL", tier=STRONG),
         model_route="statute_retrieval_agent",
         trace_id=state.get("trace_id"),
         thread_id=state.get("thread_id"),
@@ -115,19 +115,11 @@ async def statute_retrieval_agent_node(state: AgentState) -> dict[str, Any]:
         payload=built.status,
     )
     response = await llm.ainvoke(built.messages)
-    if getattr(response, "tool_calls", None):
-        response, tool_call_count, failure = apply_tool_call_budget(
-            response,
-            state,
-            agent_name="statute_retrieval_agent",
-        )
-        return {
-            "messages": [response],
-            "tool_call_count": tool_call_count,
-            "tool_loop_failure": failure,
-            "context_build_status": built.status,
-        }
-
+    step = admit_tool_calls(response, state, agent_name="statute_retrieval_agent")
+    if step.continue_loop:
+        return {**step.updates, "context_build_status": built.status}
+    # 软停止（证据够用 / 重复检索 / 零增益）时 step.stop_reason 非空：不再调用工具，
+    # 直接用已有证据写报告，模型这条带 tool_calls 的响应不进消息历史（§P1-2、§P1-3）。
     parsed = _extract_json(response.content or "") or {}
     parsed_findings = parsed.get("findings")
     if not isinstance(parsed_findings, dict):
