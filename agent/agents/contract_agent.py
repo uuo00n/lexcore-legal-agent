@@ -1,7 +1,6 @@
 """Contract review agent node."""
 from __future__ import annotations
 
-import os
 from typing import Any
 
 from langchain_core.messages import HumanMessage, SystemMessage
@@ -16,6 +15,7 @@ from services.contract_agent.formatter import render_chat_summary
 from services.contract_agent.schema import ContractReviewResult
 from services.contract_report import save_contract_report
 from services.llm import get_llm
+from services.model_defaults import FAST, STRONG, resolve_model, resolve_provider
 
 
 async def _llm_contract_summary(state: AgentState, markdown: str) -> str:
@@ -23,8 +23,8 @@ async def _llm_contract_summary(state: AgentState, markdown: str) -> str:
     try:
         llm_factory = compatibility_dependency("get_llm", get_llm)
         llm = llm_factory(
-            provider=os.getenv("CONTRACT_AGENT_PROVIDER", "deepseek"),
-            model=os.getenv("CONTRACT_AGENT_MODEL", "deepseek-v4-pro"),
+            provider=resolve_provider("CONTRACT_AGENT_PROVIDER", tier=STRONG),
+            model=resolve_model("CONTRACT_AGENT_MODEL", tier=STRONG),
             model_route="contract_agent",
             trace_id=state.get("trace_id"),
             thread_id=state.get("thread_id"),
@@ -55,8 +55,8 @@ async def contract_agent_node(state: AgentState) -> dict[str, Any]:
         try:
             llm_factory = compatibility_dependency("get_llm", get_llm)
             llm = llm_factory(
-                provider=os.getenv("CONTRACT_AGENT_PROVIDER", "zhipu"),
-                model=os.getenv("CONTRACT_AGENT_MODEL", "glm-4.7"),
+                provider=resolve_provider("CONTRACT_AGENT_PROVIDER", tier=FAST),
+                model=resolve_model("CONTRACT_AGENT_MODEL", tier=FAST),
                 model_route="contract_agent",
                 trace_id=state.get("trace_id"),
                 thread_id=state.get("thread_id"),

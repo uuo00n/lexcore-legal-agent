@@ -6,11 +6,11 @@
 """
 from __future__ import annotations
 
-import os
 from dataclasses import dataclass
 from typing import Any
 
 from services.legal_analysis import analyze_legal_message
+from services.model_defaults import resolve_model, resolve_provider
 
 
 @dataclass(frozen=True)
@@ -29,41 +29,28 @@ COMPLEX_KEYWORDS = [
 ]
 
 
-def _env(name: str) -> str | None:
-    """
-    函数作用：
-        读取非空环境变量。
-    输入参数：
-        - name: str
-    输出参数：
-        - str | None
-    """
-    value = os.getenv(name)
-    return value.strip() if value and value.strip() else None
-
-
 def _route_provider(route_name: str) -> str | None:
     """
     函数作用：
-        读取指定路由的 provider 配置。
+        读取指定路由的 provider 配置，与节点档位共用 services.model_defaults 口径。
     输入参数：
         - route_name: str
     输出参数：
         - str | None
     """
-    return _env(f"LLM_ROUTE_{route_name.upper()}_PROVIDER")
+    return resolve_provider(tier=route_name)
 
 
-def _route_model(route_name: str) -> str | None:
+def _route_model(route_name: str) -> str:
     """
     函数作用：
-        读取指定路由的 model 配置。
+        读取指定路由的 model 配置；环境变量都没配时落到档位内置默认模型。
     输入参数：
         - route_name: str
     输出参数：
-        - str | None
+        - str
     """
-    return _env(f"LLM_ROUTE_{route_name.upper()}_MODEL")
+    return resolve_model(tier=route_name)
 
 
 def select_model_route(

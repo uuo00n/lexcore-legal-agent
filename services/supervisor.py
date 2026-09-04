@@ -5,7 +5,6 @@
 from __future__ import annotations
 
 import json
-import os
 import re
 from dataclasses import dataclass
 from typing import Literal
@@ -14,6 +13,7 @@ from langchain_core.messages import HumanMessage, SystemMessage
 
 from services.legal_analysis import classify_legal_intent, should_ask_follow_up
 from services.llm import get_llm
+from services.model_defaults import FAST, resolve_model, resolve_provider
 
 
 AgentRoute = Literal["case_analysis_agent", "statute_retrieval_agent", "legal_consult_agent", "final"]
@@ -163,8 +163,8 @@ async def route_user_request_with_llm(
     }
     try:
         llm = get_llm(
-            provider=os.getenv("SUPERVISOR_PROVIDER", "deepseek"),
-            model=os.getenv("SUPERVISOR_MODEL", "deepseek-v4-flash-vision-exp"),
+            provider=resolve_provider("SUPERVISOR_PROVIDER", tier=FAST),
+            model=resolve_model("SUPERVISOR_MODEL", tier=FAST),
             model_route="supervisor_agent",
             trace_id=trace_id,
             thread_id=thread_id,
