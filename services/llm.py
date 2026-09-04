@@ -1,18 +1,21 @@
 """LLM 客户端工厂 —— 多 Provider 抽象。
 
 DeepSeek / 通义千问 / Ollama 都暴露 OpenAI 兼容协议，
-统一通过 langchain_openai.ChatOpenAI + base_url 切换。
+统一通过 services.chat_compat.CompatChatOpenAI（ChatOpenAI 的思考模式兼容子类）
++ base_url 切换。
 """
 from __future__ import annotations
 
 import os
 from typing import Any
 
-from langchain_openai import ChatOpenAI
-
+from services.chat_compat import CompatChatOpenAI
 from services.gateway import GatewayChatModel, LLMClientConfig
 
 
+# thinking_compat：Provider 默认开启思考模式，需要 services/chat_compat.py 接管
+# reasoning_content 回传与结构化输出方式，否则工具循环第二轮和 with_structured_output
+# 都会被 provider 以 400 拒绝。
 PROVIDERS: dict[str, dict[str, Any]] = {
     "zhipu": {
         "base_url": "https://open.bigmodel.cn/api/paas/v4",
@@ -25,6 +28,7 @@ PROVIDERS: dict[str, dict[str, Any]] = {
         "default_model": "deepseek-v4-pro",
         "api_key_env": "DEEPSEEK_API_KEY",
         "supports_tools": True,
+        "thinking_compat": True,
     },
     "qwen": {
         "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
@@ -88,12 +92,13 @@ def _build_chat_client(name: str, overrides: dict[str, Any], *, model_route: str
     client_overrides = dict(overrides)
     client_overrides.pop("model", None)
 
-    client = ChatOpenAI(
+    client = CompatChatOpenAI(
         base_url=base_url,
         model=model,
         api_key=api_key,
         temperature=client_overrides.pop("temperature", 0.3),
         streaming=client_overrides.pop("streaming", True),
+        thinking_compat=bool(cfg.get("thinking_compat", False)),
         **client_overrides,
     )
     return LLMClientConfig(provider=name, model=model, base_url=base_url, model_route=model_route, client=client)
