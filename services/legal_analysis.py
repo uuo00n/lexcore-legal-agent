@@ -8,6 +8,8 @@ from __future__ import annotations
 import re
 from typing import Any
 
+from agent.evidence import canonical_article_no, canonical_law_id
+
 
 LEGAL_KEYWORDS = {
     "labor": ["劳动", "工资", "加班", "辞退", "工伤", "社保", "劳动合同", "离职"],
@@ -156,25 +158,45 @@ def check_fact_completeness(text: str) -> dict[str, Any]:
 def _citation_key(law_name: str, article_no: str) -> tuple[str, str]:
     """
     函数作用：
-        生成法条引用比对 key。
+        生成法条引用比对 key，与 Citation Verifier 共用同一套 canonical 口径（P0-1、P0-2）。
+        这样「《劳动合同法》第八十五条」与证据「中华人民共和国劳动合同法(2012修正) 第八十五条」
+        会归一到同一个 key，不会被误判为未支持引用。
     输入参数：
         - law_name: str
         - article_no: str
     输出参数：
         - tuple[str, str]
     """
-    law = re.sub(r"\s+", "", law_name).replace("中华人民共和国", "")
-    article = re.sub(r"\s+", "", article_no)
-    return law, article
+    return canonical_law_id(law_name), canonical_article_no(article_no)
+
+
+def _evidence_citation_key(item: dict[str, Any]) -> tuple[str, str]:
+    """
+    函数作用：
+        读取证据自带的 canonical 标识；未归一化的旧数据现算，保持口径一致。
+    输入参数：
+        - item: dict[str, Any]
+    输出参数：
+        - tuple[str, str]
+    """
+    law_id = str(item.get("canonical_law_id") or "").strip()
+    article = str(item.get("canonical_article_no") or "").strip()
+    if law_id and article:
+        return law_id, article
+    name = item.get("display_law_name") or item.get("law_name") or item.get("title") or ""
+    return (
+        law_id or canonical_law_id(str(name)),
+        article or canonical_article_no(str(item.get("article_no") or "")),
+    )
 
 
 def validate_citations(answer: str, retrieved_laws: list[dict[str, Any]]) -> dict[str, Any]:
     """
     函数作用：
-        校验回答中的明确法条引用是否来自本轮检索结果。
+        校验回答中的明确法条引用是否来自本轮已核验证据。
     输入参数：
         - answer: str
-        - retrieved_laws: list[dict[str, Any]]
+        - retrieved_laws: list[dict[str, Any]]，应传入 verified_evidence 中的法条
     输出参数：
         - dict[str, Any]
     """
@@ -183,9 +205,10 @@ def validate_citations(answer: str, retrieved_laws: list[dict[str, Any]]) -> dic
         for match in _LAW_CITATION_RE.finditer(answer or "")
     ]
     allowed = {
-        _citation_key(item.get("law_name", ""), item.get("article_no", ""))
+        _evidence_citation_key(item)
         for item in retrieved_laws
-        if item.get("law_name") and item.get("article_no")
+        if (item.get("law_name") or item.get("display_law_name") or item.get("title"))
+        and item.get("article_no")
     }
     verified = []
     unsupported = []
@@ -242,7 +265,12 @@ def build_evidence_checklist(text: str) -> list[str]:
     return scenario.get(category, common) + common
 
 
-def analyze_legal_message(text: str, answer: str = "", retrieved_laws: list[dict[str, Any]] | None = None) -> dict[str, Any]:
+def analyze_legal_message(
+    text: str,
+    answer: str = "",
+    retrieved_laws: list[dict[str, Any]] | None = None,
+    answer_score: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     """
     函数作用：
         汇总法律意图、事实完整性、风险、证据和引用校验结果。
@@ -250,6 +278,8 @@ def analyze_legal_message(text: str, answer: str = "", retrieved_laws: list[dict
         - text: str
         - answer: str，默认值 ''
         - retrieved_laws: list[dict[str, Any]] | None，默认值 None
+        - answer_score: dict[str, Any] | None，默认值 None；生成答复的节点已算好的评分，
+          按 §P2 直接复用，避免同一份答复出现两套评分（§二 问题 12）。
     输出参数：
         - dict[str, Any]
     """
@@ -260,7 +290,8 @@ def analyze_legal_message(text: str, answer: str = "", retrieved_laws: list[dict
         "risk": assess_risk_level(text),
         "evidence_checklist": build_evidence_checklist(text),
         "citations": validate_citations(answer, retrieved_laws),
-        "answer_score": score_legal_answer(text, answer, retrieved_laws),
+        # 只有拿不到节点评分的旧链路（例如缓存命中直接返回）才在这里现算。
+        "answer_score": dict(answer_score) if answer_score else score_legal_answer(text, answer, retrieved_laws),
     }
 
 
